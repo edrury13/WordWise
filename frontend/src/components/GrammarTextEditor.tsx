@@ -135,7 +135,7 @@ const GrammarTextEditor: React.FC = () => {
       const after = result.substring(offset + length)
       
       const className = getErrorClassName(type)
-      const highlightedSpan = `<span class="${className}" data-suggestion-id="${id}" style="cursor: pointer; pointer-events: auto;" onclick="window.handleSuggestionClick && window.handleSuggestionClick('${id}', event)">${errorText}</span>`
+      const highlightedSpan = `<span class="${className}" data-suggestion-id="${id}" data-offset="${offset}" data-length="${length}" onmouseenter="window.handleSuggestionHover && window.handleSuggestionHover('${id}', event)" onmouseleave="window.handleSuggestionLeave && window.handleSuggestionLeave()" onclick="window.handleSuggestionClick && window.handleSuggestionClick(${offset}, event)">${errorText}</span>`
       
       result = before + highlightedSpan + after
     })
@@ -244,23 +244,109 @@ const GrammarTextEditor: React.FC = () => {
     setShowTooltip(null)
   }, [dispatch])
 
-  // Set up global click handler for suggestion spans
+  // Set up global hover handlers for suggestion spans
   useEffect(() => {
-    const globalHandler = (suggestionId: string, event: MouseEvent) => {
+    const hoverHandler = (suggestionId: string, event: MouseEvent) => {
       const target = event.target as HTMLElement
       const rect = target.getBoundingClientRect()
       setTooltipPosition({ x: rect.left, y: rect.bottom + 5 })
       setShowTooltip(suggestionId)
     }
     
-    // Make handler available globally for inline onclick handlers
-    ;(window as any).handleSuggestionClick = globalHandler
+    const leaveHandler = () => {
+      // Add a delay before hiding to allow moving to tooltip
+      setTimeout(() => {
+        // Only hide if not hovering over tooltip
+        if (!document.querySelector('.suggestion-tooltip:hover')) {
+          setShowTooltip(null)
+        }
+      }, 150)
+    }
+
+    // Handle clicks on highlighted text to position cursor
+    const clickHandler = (offset: number, event: MouseEvent) => {
+      if (editorRef.current) {
+        const target = event.target as HTMLElement
+        const rect = target.getBoundingClientRect()
+        const clickX = event.clientX - rect.left
+        
+        // Get the text content of the clicked span
+        const spanText = target.textContent || ''
+        
+        // Create a temporary element to measure character positions
+        const measurer = document.createElement('span')
+        measurer.style.visibility = 'hidden'
+        measurer.style.position = 'absolute'
+        measurer.style.whiteSpace = 'pre'
+        measurer.style.font = getComputedStyle(target).font
+        measurer.style.fontSize = getComputedStyle(target).fontSize
+        measurer.style.fontFamily = getComputedStyle(target).fontFamily
+        document.body.appendChild(measurer)
+        
+        // Find the character position by measuring text width
+        let characterPosition = 0
+        for (let i = 0; i <= spanText.length; i++) {
+          measurer.textContent = spanText.substring(0, i)
+          const width = measurer.getBoundingClientRect().width
+          
+          if (width >= clickX) {
+            // If we're closer to the previous character, use that position
+            if (i > 0) {
+              measurer.textContent = spanText.substring(0, i - 1)
+              const prevWidth = measurer.getBoundingClientRect().width
+              const midPoint = (prevWidth + width) / 2
+              characterPosition = clickX < midPoint ? i - 1 : i
+            } else {
+              characterPosition = i
+            }
+            break
+          }
+          characterPosition = i
+        }
+        
+        // Clean up the temporary element
+        document.body.removeChild(measurer)
+        
+        // Calculate the final cursor position
+        const finalPosition = offset + characterPosition
+        
+        // Focus the textarea and set cursor position
+        editorRef.current.focus()
+        editorRef.current.setSelectionRange(finalPosition, finalPosition)
+        
+        // Prevent event bubbling to avoid interfering with tooltip
+        event.stopPropagation()
+      }
+    }
+
+    // Handle clicks outside tooltip to close it (but don't interfere with text editing)
+    const handleGlobalClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      const isTooltip = target.closest('.suggestion-tooltip')
+      const isSuggestionSpan = target.closest('[data-suggestion-id]')
+      
+      // Only close tooltip if clicking outside both tooltip and suggestion spans
+      if (!isTooltip && !isSuggestionSpan && showTooltip) {
+        setShowTooltip(null)
+      }
+    }
+    
+    // Make handlers available globally for inline event handlers
+    ;(window as any).handleSuggestionHover = hoverHandler
+    ;(window as any).handleSuggestionLeave = leaveHandler
+    ;(window as any).handleSuggestionClick = clickHandler
+    
+    // Add global click listener
+    document.addEventListener('click', handleGlobalClick)
     
     return () => {
       // Cleanup
+      delete (window as any).handleSuggestionHover
+      delete (window as any).handleSuggestionLeave
       delete (window as any).handleSuggestionClick
+      document.removeEventListener('click', handleGlobalClick)
     }
-  }, [])
+  }, [showTooltip])
 
   // Initialize content from current document
   useEffect(() => {
@@ -425,7 +511,7 @@ const GrammarTextEditor: React.FC = () => {
         {/* Overlay for highlights */}
         <div
           ref={overlayRef}
-          className="absolute inset-0 p-4 pointer-events-none font-serif text-lg leading-relaxed text-transparent"
+          className="grammar-overlay absolute inset-0 p-4 font-serif text-lg leading-relaxed text-transparent"
           style={{ 
             fontFamily: 'ui-serif, Georgia, serif',
             whiteSpace: 'pre-wrap',
@@ -438,18 +524,21 @@ const GrammarTextEditor: React.FC = () => {
       {/* Suggestion Tooltip */}
       {activeSuggestion && showTooltip && (
         <>
-          {/* Backdrop */}
-          <div 
-            className="fixed inset-0 z-40"
-            onClick={() => setShowTooltip(null)}
-          />
+          {/* Backdrop - removed to keep text editable */}
           
           {/* Tooltip */}
           <div 
-            className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-xl p-4 max-w-sm"
+            className="suggestion-tooltip fixed z-50 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-xl p-4 max-w-sm"
             style={{
               left: tooltipPosition.x,
               top: tooltipPosition.y
+            }}
+            onMouseEnter={() => {
+              // Keep tooltip open when hovering over it
+            }}
+            onMouseLeave={() => {
+              // Hide tooltip when leaving it
+              setTimeout(() => setShowTooltip(null), 100)
             }}
           >
             <div className="space-y-3">

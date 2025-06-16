@@ -93,4 +93,26 @@
   --foreground: 0 0% 98%;
   --border: 240 3.7% 15.9%;
   --ring: 240 4.9% 83.9%;
+}
+
+/* Grammar error highlighting styles */
+.grammar-overlay {
+  pointer-events: none;
+}
+
+.grammar-overlay span[data-suggestion-id] {
+  pointer-events: auto;
+  position: relative;
+  cursor: text;
+}
+
+/* Ensure the overlay spans don't interfere with text selection */
+.grammar-overlay span[data-suggestion-id]:hover {
+  z-index: 1;
+}
+
+/* Improve tooltip positioning */
+.suggestion-tooltip {
+  pointer-events: auto;
+  z-index: 9999;
 } 
