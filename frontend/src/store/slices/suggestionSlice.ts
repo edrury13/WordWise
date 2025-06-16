@@ -1,0 +1,163 @@
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
+import { checkGrammarAndSpelling, analyzeReadability } from '../../services/languageService'
+
+export interface Suggestion {
+  id: string
+  type: 'grammar' | 'spelling' | 'style' | 'clarity' | 'engagement' | 'delivery'
+  message: string
+  replacements?: string[]
+  offset: number
+  length: number
+  context: string
+  explanation?: string
+  category: string
+  severity: 'low' | 'medium' | 'high'
+}
+
+export interface ReadabilityScore {
+  fleschKincaid: number
+  readabilityLevel: string
+  averageWordsPerSentence: number
+  averageSyllablesPerWord: number
+  totalSentences: number
+  passiveVoicePercentage: number
+  longSentences: number
+}
+
+interface SuggestionState {
+  suggestions: Suggestion[]
+  readabilityScore: ReadabilityScore | null
+  activeSuggestion: Suggestion | null
+  loading: boolean
+  error: string | null
+  debounceTimer: number | null
+  lastCheckTime: Date | null
+  ignoredSuggestions: string[]
+}
+
+const initialState: SuggestionState = {
+  suggestions: [],
+  readabilityScore: null,
+  activeSuggestion: null,
+  loading: false,
+  error: null,
+  debounceTimer: null,
+  lastCheckTime: null,
+  ignoredSuggestions: [],
+}
+
+// Async thunks
+export const checkText = createAsyncThunk(
+  'suggestions/checkText',
+  async ({ text, language = 'en-US' }: { text: string; language?: string }) => {
+    const [grammarResults, readabilityResults] = await Promise.all([
+      checkGrammarAndSpelling(text, language),
+      analyzeReadability(text),
+    ])
+    
+    return {
+      suggestions: grammarResults,
+      readabilityScore: readabilityResults,
+    }
+  }
+)
+
+export const recheckText = createAsyncThunk(
+  'suggestions/recheckText',
+  async ({ text, language = 'en-US' }: { text: string; language?: string }, { dispatch }) => {
+    // Clear existing suggestions
+    dispatch(clearSuggestions())
+    
+    // Wait a moment to avoid too frequent API calls
+    await new Promise(resolve => setTimeout(resolve, 300))
+    
+    return dispatch(checkText({ text, language }))
+  }
+)
+
+const suggestionSlice = createSlice({
+  name: 'suggestions',
+  initialState,
+  reducers: {
+    setActiveSuggestion: (state, action: PayloadAction<Suggestion | null>) => {
+      state.activeSuggestion = action.payload
+    },
+    applySuggestion: (state, action: PayloadAction<{ suggestionId: string; replacement: string }>) => {
+      const { suggestionId } = action.payload
+      state.suggestions = state.suggestions.filter(s => s.id !== suggestionId)
+      state.activeSuggestion = null
+    },
+    ignoreSuggestion: (state, action: PayloadAction<string>) => {
+      const suggestionId = action.payload
+      state.suggestions = state.suggestions.filter(s => s.id !== suggestionId)
+      state.ignoredSuggestions.push(suggestionId)
+      state.activeSuggestion = null
+    },
+    ignoreAllSuggestions: (state, action: PayloadAction<string>) => {
+      const suggestionType = action.payload
+      const toIgnore = state.suggestions.filter(s => s.type === suggestionType)
+      toIgnore.forEach(suggestion => {
+        state.ignoredSuggestions.push(suggestion.id)
+      })
+      state.suggestions = state.suggestions.filter(s => s.type !== suggestionType)
+      state.activeSuggestion = null
+    },
+    clearSuggestions: (state) => {
+      state.suggestions = []
+      state.activeSuggestion = null
+    },
+    clearError: (state) => {
+      state.error = null
+    },
+    setDebounceTimer: (state, action: PayloadAction<number | null>) => {
+      state.debounceTimer = action.payload
+    },
+    clearIgnoredSuggestions: (state) => {
+      state.ignoredSuggestions = []
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      // Check text
+      .addCase(checkText.pending, (state) => {
+        state.loading = true
+        state.error = null
+      })
+      .addCase(checkText.fulfilled, (state, action) => {
+        state.loading = false
+        state.suggestions = action.payload.suggestions.filter(
+          s => !state.ignoredSuggestions.includes(s.id)
+        )
+        state.readabilityScore = action.payload.readabilityScore
+        state.lastCheckTime = new Date()
+      })
+      .addCase(checkText.rejected, (state, action) => {
+        state.loading = false
+        state.error = action.error.message || 'Failed to check text'
+      })
+      // Recheck text
+      .addCase(recheckText.pending, (state) => {
+        state.loading = true
+      })
+      .addCase(recheckText.fulfilled, (state) => {
+        state.loading = false
+      })
+      .addCase(recheckText.rejected, (state, action) => {
+        state.loading = false
+        state.error = action.error.message || 'Failed to recheck text'
+      })
+  },
+})
+
+export const {
+  setActiveSuggestion,
+  applySuggestion,
+  ignoreSuggestion,
+  ignoreAllSuggestions,
+  clearSuggestions,
+  clearError,
+  setDebounceTimer,
+  clearIgnoredSuggestions,
+} = suggestionSlice.actions
+
+export default suggestionSlice.reducer 

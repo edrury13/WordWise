@@ -1,0 +1,149 @@
+import React, { useEffect } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { useSelector, useDispatch } from 'react-redux'
+import { supabase } from './config/supabase'
+import { setAuth, getCurrentUser } from './store/slices/authSlice'
+import { RootState, AppDispatch } from './store'
+
+// Components
+import LoginPage from './pages/LoginPage'
+import RegisterPage from './pages/RegisterPage'
+import Dashboard from './pages/Dashboard'
+import EditorPage from './pages/EditorPage'
+import LoadingSpinner from './components/LoadingSpinner'
+import ProtectedRoute from './components/ProtectedRoute'
+import GrammarTestPanel from './components/GrammarTestPanel'
+import AuthDebug from './components/AuthDebug'
+
+function App() {
+  const dispatch = useDispatch<AppDispatch>()
+  const { isAuthenticated, loading: authLoading } = useSelector((state: RootState) => state.auth)
+  const [initialLoading, setInitialLoading] = React.useState(true)
+
+  useEffect(() => {
+    // Get initial session
+    const getInitialSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        dispatch(setAuth({ user: session.user, session }))
+      }
+      setInitialLoading(false)
+    }
+
+    getInitialSession()
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          dispatch(setAuth({ user: session?.user || null, session }))
+        } else if (event === 'SIGNED_OUT') {
+          dispatch(setAuth({ user: null, session: null }))
+        }
+      }
+    )
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [dispatch])
+
+  if (initialLoading || authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingSpinner size="large" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="App">
+      <Routes>
+        {/* Public routes */}
+        <Route 
+          path="/login" 
+          element={
+            isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />
+          } 
+        />
+        <Route 
+          path="/register" 
+          element={
+            isAuthenticated ? <Navigate to="/dashboard" replace /> : <RegisterPage />
+          } 
+        />
+
+        {/* Protected routes */}
+        <Route 
+          path="/dashboard" 
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/editor/:id" 
+          element={
+            <ProtectedRoute>
+              <EditorPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/editor" 
+          element={
+            <ProtectedRoute>
+              <EditorPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/test-grammar" 
+          element={
+            <ProtectedRoute>
+              <GrammarTestPanel />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/debug-auth" 
+          element={<AuthDebug />} 
+        />
+
+        {/* Redirect root to appropriate page */}
+        <Route 
+          path="/" 
+          element={
+            <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+          } 
+        />
+
+        {/* Catch all route */}
+        <Route 
+          path="*" 
+          element={
+            <div className="min-h-screen flex items-center justify-center">
+              <div className="text-center">
+                <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+                  404 - Page Not Found
+                </h1>
+                <p className="text-gray-600 dark:text-gray-400 mb-6">
+                  The page you're looking for doesn't exist.
+                </p>
+                <button 
+                  onClick={() => window.history.back()}
+                  className="btn btn-primary"
+                >
+                  Go Back
+                </button>
+              </div>
+            </div>
+          } 
+        />
+      </Routes>
+    </div>
+  )
+}
+
+export default App 
