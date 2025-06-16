@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
-import { checkText, setActiveSuggestion, ignoreSuggestion, clearSuggestions } from '../store/slices/suggestionSlice'
+import { checkText, setActiveSuggestion, ignoreSuggestion, clearSuggestions, acceptAllSuggestions, ignoreAllCurrentSuggestions } from '../store/slices/suggestionSlice'
 import { setContent, setLastSaved } from '../store/slices/editorSlice'
 import { updateDocument, updateCurrentDocumentContent } from '../store/slices/documentSlice'
 import { Suggestion } from '../store/slices/suggestionSlice'
@@ -194,6 +194,56 @@ const GrammarTextEditor: React.FC = () => {
     setShowTooltip(null)
   }, [dispatch])
 
+  // Accept all suggestions
+  const handleAcceptAllSuggestions = useCallback(() => {
+    if (suggestions.length === 0) return
+    
+    // Apply all suggestions to the content, starting from the end to preserve offsets
+    let newContent = content
+    const sortedSuggestions = [...suggestions].sort((a, b) => b.offset - a.offset)
+    const acceptedSuggestions: Array<{ id: string, replacement: string }> = []
+    
+    sortedSuggestions.forEach(suggestion => {
+      if (suggestion.replacements && suggestion.replacements.length > 0) {
+        const replacement = suggestion.replacements[0] // Use first replacement
+        const before = newContent.substring(0, suggestion.offset)
+        const after = newContent.substring(suggestion.offset + suggestion.length)
+        
+        newContent = before + replacement + after
+        acceptedSuggestions.push({ id: suggestion.id, replacement })
+      }
+    })
+    
+    // Update content
+    setContentState(newContent)
+    if (editorRef.current) {
+      editorRef.current.value = newContent
+    }
+    
+    // Update Redux state
+    dispatch(setContent([{
+      type: 'paragraph',
+      children: [{ text: newContent }]
+    }]))
+    
+    // Update current document content
+    dispatch(updateCurrentDocumentContent(newContent))
+    
+    // Remove accepted suggestions from store
+    dispatch(acceptAllSuggestions({ acceptedSuggestions }))
+    
+    // Trigger grammar check and auto-save for the new content
+    checkGrammar(newContent)
+    autoSave(newContent)
+    setShowTooltip(null)
+  }, [suggestions, content, dispatch, checkGrammar, autoSave])
+
+  // Ignore all suggestions
+  const handleIgnoreAllSuggestions = useCallback(() => {
+    dispatch(ignoreAllCurrentSuggestions())
+    setShowTooltip(null)
+  }, [dispatch])
+
   // Set up global click handler for suggestion spans
   useEffect(() => {
     const globalHandler = (suggestionId: string, event: MouseEvent) => {
@@ -320,9 +370,36 @@ const GrammarTextEditor: React.FC = () => {
         
         <div className="flex items-center space-x-2 text-sm">
           {suggestions.length > 0 && (
-            <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded">
-              {suggestions.length} issue{suggestions.length !== 1 ? 's' : ''}
-            </span>
+            <>
+              <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded">
+                {suggestions.length} issue{suggestions.length !== 1 ? 's' : ''}
+              </span>
+              
+              {/* Bulk Action Buttons */}
+              <div className="flex items-center space-x-2 ml-3">
+                <button
+                  onClick={handleAcceptAllSuggestions}
+                  className="px-3 py-1 bg-green-100 hover:bg-green-200 text-green-800 text-xs rounded transition-colors flex items-center space-x-1"
+                  title="Accept all suggestions"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Accept All</span>
+                </button>
+                
+                <button
+                  onClick={handleIgnoreAllSuggestions}
+                  className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs rounded transition-colors flex items-center space-x-1"
+                  title="Ignore all suggestions"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  <span>Ignore All</span>
+                </button>
+              </div>
+            </>
           )}
           {suggestions.length === 0 && content.length > 0 && !loading && (
             <span className="px-2 py-1 bg-green-100 text-green-800 rounded">
@@ -434,9 +511,36 @@ const GrammarTextEditor: React.FC = () => {
       {/* Suggestions Panel */}
       {suggestions.length > 0 && (
         <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-            Writing Suggestions ({suggestions.length})
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              Writing Suggestions ({suggestions.length})
+            </h3>
+            
+            {/* Bulk Actions in Panel */}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={handleAcceptAllSuggestions}
+                className="px-3 py-1 bg-green-100 hover:bg-green-200 dark:bg-green-900 dark:hover:bg-green-800 text-green-800 dark:text-green-200 text-xs rounded transition-colors flex items-center space-x-1"
+                title="Accept all suggestions"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Accept All ({suggestions.length})</span>
+              </button>
+              
+              <button
+                onClick={handleIgnoreAllSuggestions}
+                className="px-3 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs rounded transition-colors flex items-center space-x-1"
+                title="Ignore all suggestions"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                <span>Ignore All</span>
+              </button>
+            </div>
+          </div>
           <div className="space-y-2 max-h-48 overflow-y-auto">
             {suggestions.slice(0, 5).map((suggestion) => (
               <div 

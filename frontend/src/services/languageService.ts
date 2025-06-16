@@ -86,14 +86,39 @@ export const checkGrammarAndSpelling = async (
       style: suggestions.filter((s: Suggestion) => s.type === 'style').length,
     })
 
-    // If no grammar suggestions found, add basic client-side checks as fallback
-    if (suggestions.filter((s: Suggestion) => s.type === 'grammar').length === 0) {
-      console.log('🔄 Adding client-side grammar fallback')
-      const clientSideGrammarSuggestions = performClientSideGrammarCheck(text)
-      suggestions.push(...clientSideGrammarSuggestions)
-    }
+    // Always run client-side grammar checks to catch patterns the API might miss
+    console.log('🔄 Adding client-side grammar checks')
+    const clientSideGrammarSuggestions = performClientSideGrammarCheck(text)
+    
+    // Merge client-side suggestions with API suggestions, avoiding duplicates
+    const mergedSuggestions = [...suggestions]
+    
+    clientSideGrammarSuggestions.forEach(clientSuggestion => {
+      // Check if there's already a suggestion covering this text range
+      const hasOverlappingSuggestion = suggestions.some((apiSuggestion: Suggestion) => {
+        const clientStart = clientSuggestion.offset
+        const clientEnd = clientSuggestion.offset + clientSuggestion.length
+        const apiStart = apiSuggestion.offset
+        const apiEnd = apiSuggestion.offset + apiSuggestion.length
+        
+        // Check for overlap: ranges overlap if one starts before the other ends
+        return (clientStart < apiEnd && clientEnd > apiStart)
+      })
+      
+      // Only add client-side suggestion if there's no overlapping API suggestion
+      if (!hasOverlappingSuggestion) {
+        mergedSuggestions.push(clientSuggestion)
+      }
+    })
 
-    return suggestions
+    console.log('📋 Final suggestions after merge:', {
+      total: mergedSuggestions.length,
+      fromAPI: suggestions.length,
+      fromClient: clientSideGrammarSuggestions.length,
+      added: mergedSuggestions.length - suggestions.length
+    })
+
+    return mergedSuggestions
   } catch (error) {
     console.error('❌ Grammar check failed:', {
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -119,6 +144,7 @@ function performClientSideGrammarCheck(text: string): Suggestion[] {
   
   // Basic grammar rules
   const grammarRules = [
+    // Subject-verb agreement errors
     {
       pattern: /\b(I|you|we|they)\s+was\b/gi,
       message: "Subject-verb disagreement. Use 'were' instead of 'was' with plural subjects.",
@@ -165,6 +191,97 @@ function performClientSideGrammarCheck(text: string): Suggestion[] {
       pattern: /\b(he|she|it)\s+have\b/gi,
       message: "Subject-verb disagreement. Use 'has' instead of 'have' with singular subjects.",
       replacement: (match: string) => match.replace(/have/, 'has'),
+      type: 'grammar' as const
+    },
+    
+    // Incomplete sentences with gerunds (missing auxiliary verbs)
+    {
+      pattern: /\b(The|A|An)\s+\w+\s+(running|walking|jumping|swimming|flying|sleeping|eating|drinking|playing|working|studying|reading|writing|talking|singing|dancing|cooking|driving|sitting|standing|lying|moving|coming|going|looking|watching|listening|thinking|feeling|being|doing|getting|making|taking|giving|seeing|knowing|saying|telling|asking|helping|learning|teaching|buying|selling|building|cleaning|washing|fixing|painting|opening|closing|starting|stopping|continuing|beginning|ending|finishing|trying|wanting|needing|loving|liking|hating|hoping|believing|understanding|remembering|forgetting|choosing|deciding|planning|preparing|organizing|managing|controlling|leading|following|supporting|encouraging|celebrating|enjoying|suffering|struggling|fighting|winning|losing|competing|practicing|training|exercising|relaxing|resting|sleeping|waking|dreaming)\b(?![.,!?;:])/gi,
+      message: "This appears to be an incomplete sentence. Consider adding 'is', 'was', 'are', or 'were' before the verb.",
+      replacement: (match: string) => {
+        const parts = match.split(/\s+/)
+        const article = parts[0]
+        const noun = parts[1]
+        const verb = parts[2]
+        
+        // Determine if singular or plural
+        const isPlural = article.toLowerCase() === 'the' && (noun.endsWith('s') || noun.endsWith('es'))
+        const auxVerb = isPlural ? 'are' : 'is'
+        
+        return `${article} ${noun} ${auxVerb} ${verb}`
+      },
+      type: 'grammar' as const
+    },
+    
+    // Incomplete sentences starting with pronouns + gerunds
+    {
+      pattern: /\b(He|She|It|I|You|We|They)\s+(running|walking|jumping|swimming|flying|sleeping|eating|drinking|playing|working|studying|reading|writing|talking|singing|dancing|cooking|driving|sitting|standing|lying|moving|coming|going|looking|watching|listening|thinking|feeling|being|doing|getting|making|taking|giving|seeing|knowing|saying|telling|asking|helping|learning|teaching|buying|selling|building|cleaning|washing|fixing|painting|opening|closing|starting|stopping|continuing|beginning|ending|finishing|trying|wanting|needing|loving|liking|hating|hoping|believing|understanding|remembering|forgetting|choosing|deciding|planning|preparing|organizing|managing|controlling|leading|following|supporting|encouraging|celebrating|enjoying|suffering|struggling|fighting|winning|losing|competing|practicing|training|exercising|relaxing|resting|sleeping|waking|dreaming)\b(?![.,!?;:])/gi,
+      message: "This appears to be an incomplete sentence. Consider adding 'is', 'was', 'are', or 'were' before the verb.",
+      replacement: (match: string) => {
+        const parts = match.split(/\s+/)
+        const pronoun = parts[0].toLowerCase()
+        const verb = parts[1]
+        
+        // Determine correct auxiliary verb based on pronoun
+        let auxVerb = 'is'
+        if (pronoun === 'i') {
+          auxVerb = 'am'
+        } else if (pronoun === 'you' || pronoun === 'we' || pronoun === 'they') {
+          auxVerb = 'are'
+        }
+        
+        return `${parts[0]} ${auxVerb} ${verb}`
+      },
+      type: 'grammar' as const
+    },
+    
+    // Missing articles before nouns
+    {
+      pattern: /(?:^|\s)(cat|dog|bird|car|house|book|table|chair|computer|phone|tree|flower|person|man|woman|child|student|teacher|doctor|nurse|engineer|artist|writer|musician|actor|singer|dancer|athlete|chef|farmer|driver|pilot|scientist|researcher|manager|director|president|minister|judge|lawyer|police|soldier|firefighter|paramedic|mechanic|electrician|plumber|carpenter|painter|cleaner|waiter|waitress|cashier|salesperson|customer|client|patient|visitor|guest|friend|family|parent|mother|father|brother|sister|son|daughter|husband|wife|boyfriend|girlfriend|neighbor|colleague|classmate|teammate|partner|boss|employee|worker|volunteer|member|leader|follower|speaker|listener|reader|writer|viewer|player|performer|participant|competitor|winner|loser|expert|beginner|professional|amateur|specialist|generalist)\s+(running|walking|jumping|swimming|flying|sleeping|eating|drinking|playing|working|studying|reading|writing|talking|singing|dancing|cooking|driving|sitting|standing|lying|moving|coming|going|looking|watching|listening|thinking|feeling|being|doing|getting|making|taking|giving|seeing|knowing|saying|telling|asking|helping|learning|teaching|buying|selling|building|cleaning|washing|fixing|painting|opening|closing|starting|stopping|continuing|beginning|ending|finishing|trying|wanting|needing|loving|liking|hating|hoping|believing|understanding|remembering|forgetting|choosing|deciding|planning|preparing|organizing|managing|controlling|leading|following|supporting|encouraging|celebrating|enjoying|suffering|struggling|fighting|winning|losing|competing|practicing|training|exercising|relaxing|resting|sleeping|waking|dreaming)\b/gi,
+      message: "Consider adding an article ('the', 'a', or 'an') before the noun, and a helping verb ('is', 'are', 'was', 'were') before the action.",
+      replacement: (match: string) => {
+        const trimmed = match.trim()
+        const parts = trimmed.split(/\s+/)
+        const noun = parts[0]
+        const verb = parts[1]
+        
+        // Choose article
+        const article = /^[aeiou]/i.test(noun) ? 'An' : 'A'
+        
+        return ` ${article} ${noun} is ${verb}`
+      },
+      type: 'grammar' as const
+    },
+    
+    // Common contractions errors
+    {
+      pattern: /\b(should|would|could|might|must|can|will|shall)\s+of\b/gi,
+      message: "Use 'have' instead of 'of' after modal verbs.",
+      replacement: (match: string) => match.replace(/\s+of/, ' have'),
+      type: 'grammar' as const
+    },
+    
+    // Double negatives
+    {
+      pattern: /\b(don't|doesn't|didn't|won't|wouldn't|shouldn't|couldn't|can't|mustn't)\s+\w*\s+(no|nobody|nothing|nowhere|never|none)\b/gi,
+      message: "Avoid double negatives. Use either the negative verb or the negative word, not both.",
+      replacement: (match: string) => {
+        // Simplified correction - replace don't with do
+        return match.replace(/(don't|doesn't|didn't|won't|wouldn't|shouldn't|couldn't|can't|mustn't)/, (neg) => {
+          const positives: { [key: string]: string } = {
+            "don't": "do",
+            "doesn't": "does", 
+            "didn't": "did",
+            "won't": "will",
+            "wouldn't": "would",
+            "shouldn't": "should",
+            "couldn't": "could",
+            "can't": "can",
+            "mustn't": "must"
+          }
+          return positives[neg.toLowerCase()] || neg
+        })
+      },
       type: 'grammar' as const
     }
   ]

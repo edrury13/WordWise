@@ -102,6 +102,31 @@ const suggestionSlice = createSlice({
       state.suggestions = state.suggestions.filter(s => s.type !== suggestionType)
       state.activeSuggestion = null
     },
+    acceptAllSuggestions: (state, action: PayloadAction<{ 
+      acceptedSuggestions: Array<{ id: string, replacement: string }> 
+    }>) => {
+      // Remove all accepted suggestions from the list
+      const acceptedIds = action.payload.acceptedSuggestions.map(s => s.id)
+      state.suggestions = state.suggestions.filter(s => !acceptedIds.includes(s.id))
+      state.activeSuggestion = null
+    },
+    ignoreAllCurrentSuggestions: (state) => {
+      // Ignore all current suggestions regardless of type
+      state.suggestions.forEach(suggestion => {
+        state.ignoredSuggestions.push(suggestion.id)
+      })
+      state.suggestions = []
+      state.activeSuggestion = null
+    },
+    ignoreAllSuggestionsByType: (state, action: PayloadAction<string>) => {
+      const suggestionType = action.payload
+      const toIgnore = state.suggestions.filter(s => s.type === suggestionType)
+      toIgnore.forEach(suggestion => {
+        state.ignoredSuggestions.push(suggestion.id)
+      })
+      state.suggestions = state.suggestions.filter(s => s.type !== suggestionType)
+      state.activeSuggestion = null
+    },
     clearSuggestions: (state) => {
       state.suggestions = []
       state.activeSuggestion = null
@@ -154,6 +179,9 @@ export const {
   applySuggestion,
   ignoreSuggestion,
   ignoreAllSuggestions,
+  acceptAllSuggestions,
+  ignoreAllCurrentSuggestions,
+  ignoreAllSuggestionsByType,
   clearSuggestions,
   clearError,
   setDebounceTimer,

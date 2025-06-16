@@ -64,7 +64,13 @@ router.post('/check', async (req: AuthenticatedRequest, res) => {
       language,
       enabledOnly: 'false',
       // Level of checking (1 = default, 2 = picky)
-      level: 'picky'
+      level: 'picky',
+      // Enable specific grammar categories that catch sentence fragments
+      enabledCategories: 'GRAMMAR,SENTENCE_WHITESPACE,MISC,COMPOUNDING,SEMANTICS',
+      // Enable specific rules for incomplete sentences and missing verbs
+      enabledRules: 'FRAGMENT_SENTENCE,MISSING_VERB,INCOMPLETE_SENTENCE,SENTENCE_FRAGMENT,GRAMMAR_AGREEMENT,VERB_FORM',
+      // Disable some overly aggressive style suggestions to focus on grammar
+      disabledCategories: 'STYLE,COLLOQUIALISMS,REDUNDANCY'
     })
 
     console.log('Checking text with LanguageTool:', text.substring(0, 100) + '...')
@@ -323,14 +329,17 @@ router.post('/test', async (req: AuthenticatedRequest, res) => {
     }
 
     // Test text with known grammar and spelling errors
-    const testText = "I has many errors in this sentence. Teh cat are running to the tree. She dont like it when they goes there."
+    const testText = "I has many errors in this sentence. Teh cat are running to the tree. She dont like it when they goes there. The cat running. The dog jumping."
     const languageToolUrl = process.env.LANGUAGETOOL_API_URL || 'https://api.languagetool.org/v2'
     
     const params = new URLSearchParams({
       text: testText,
       language: 'en-US',
       enabledOnly: 'false',
-      level: 'picky'
+      level: 'picky',
+      enabledCategories: 'GRAMMAR,SENTENCE_WHITESPACE,MISC,COMPOUNDING,SEMANTICS',
+      enabledRules: 'FRAGMENT_SENTENCE,MISSING_VERB,INCOMPLETE_SENTENCE,SENTENCE_FRAGMENT,GRAMMAR_AGREEMENT,VERB_FORM',
+      disabledCategories: 'STYLE,COLLOQUIALISMS,REDUNDANCY'
     })
 
     const response = await axios.post<LanguageToolResponse>(
