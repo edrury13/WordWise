@@ -175,24 +175,29 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <header className="shadow" style={{ backgroundColor: '#ab2408' }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div>
-              <h1 className="text-3xl font-bold text-white">
-                WordWise
-              </h1>
-              <p className="text-gray-200">
-                Welcome back, {user?.email}
-              </p>
+    <div className="min-h-screen bg-cream dark:bg-gray-900">
+      {/* Academic Header */}
+      <header className="bg-white border-b-4 border-navy shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-navy rounded-full flex items-center justify-center">
+                <span className="text-white font-bold text-xl academic-serif">W</span>
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold academic-serif text-navy">
+                  Research Dashboard
+                </h1>
+                <p className="text-academic-gray academic-sans">
+                  {user?.email} • Academic Writing Environment
+                </p>
+              </div>
             </div>
             
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-6">
               <button
                 onClick={() => dispatch(toggleDarkMode())}
-                className="p-2 text-gray-200 hover:text-white transition-colors"
+                className="p-2 text-navy hover:text-burgundy transition-colors"
               >
                 {isDarkMode ? (
                   <Sun className="h-5 w-5" />
@@ -203,56 +208,88 @@ const Dashboard: React.FC = () => {
               
               <button
                 onClick={handleLogout}
-                className="flex items-center space-x-2 px-4 py-2 text-gray-200 hover:text-white transition-colors"
+                className="flex items-center space-x-2 px-4 py-2 text-navy hover:text-burgundy transition-colors academic-sans font-medium"
               >
                 <LogOut className="h-4 w-4" />
-                <span>Logout</span>
+                <span>Sign Out</span>
               </button>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-            <div className="flex items-center">
-              <FileText className="h-8 w-8 text-blue-500" />
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Total Documents
-                </p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {documents.length}
-                </p>
+      {/* Main Content - Academic Layout */}
+      <main className="max-w-7xl mx-auto px-6 py-8">
+        {/* Research Overview */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold academic-serif text-navy mb-6">Research Overview</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-navy">
+              <div className="flex items-center">
+                <div className="w-12 h-12 bg-navy rounded-lg flex items-center justify-center">
+                  <FileText className="h-6 w-6 text-white" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-academic-gray academic-sans">
+                    Research Documents
+                  </p>
+                  <p className="text-2xl font-bold academic-serif text-navy">
+                    {documents.length}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-          
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-            <div className="flex items-center">
-              <Edit className="h-8 w-8 text-green-500" />
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Total Words
-                </p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {documents.reduce((total: number, doc: any) => total + doc.word_count, 0).toLocaleString()}
-                </p>
+            
+            <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-burgundy">
+              <div className="flex items-center">
+                <div className="w-12 h-12 bg-burgundy rounded-lg flex items-center justify-center">
+                  <Edit className="h-6 w-6 text-white" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-academic-gray academic-sans">
+                    Total Words Written
+                  </p>
+                  <p className="text-2xl font-bold academic-serif text-navy">
+                    {documents.reduce((total: number, doc: any) => total + doc.word_count, 0).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-gold">
+              <div className="flex items-center">
+                <div className="w-12 h-12 bg-gold rounded-lg flex items-center justify-center">
+                  <Calendar className="h-6 w-6 text-white" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-academic-gray academic-sans">
+                    Active Projects
+                  </p>
+                  <p className="text-2xl font-bold academic-serif text-navy">
+                    {documents.filter((doc: any) => {
+                      const lastUpdated = new Date(doc.updated_at)
+                      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+                      return lastUpdated > weekAgo
+                    }).length}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Documents Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        {/* Document Library Section */}
+        <div className="bg-white rounded-lg shadow-lg border border-gray-200">
+          <div className="px-6 py-6 border-b border-gray-200">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Your Documents
-              </h2>
+              <div>
+                <h2 className="text-2xl font-bold academic-serif text-navy">
+                  Document Library
+                </h2>
+                <p className="text-academic-gray academic-sans mt-1">
+                  Manage your research papers and academic writing projects
+                </p>
+              </div>
               
               <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
                 {/* Sort Controls */}
@@ -301,29 +338,33 @@ const Dashboard: React.FC = () => {
                 
                 <button
                   onClick={() => setShowNewDocModal(true)}
-                  className="btn btn-primary flex items-center justify-center space-x-2"
+                  className="btn btn-primary flex items-center justify-center space-x-2 academic-sans font-semibold"
                 >
                   <Plus className="h-4 w-4" />
-                  <span>New Document</span>
+                  <span>New Research Document</span>
                 </button>
               </div>
             </div>
           </div>
 
           {documents.length === 0 ? (
-            <div className="p-12 text-center">
-              <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                No documents yet
+            <div className="p-16 text-center">
+              <div className="w-20 h-20 bg-cream rounded-full flex items-center justify-center mx-auto mb-6">
+                <FileText className="h-10 w-10 text-navy" />
+              </div>
+              <h3 className="text-xl font-semibold academic-serif text-navy mb-3">
+                Your Research Library Awaits
               </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Create your first document to get started with WordWise
+              <p className="text-academic-gray academic-sans mb-8 max-w-md mx-auto leading-relaxed">
+                Begin your academic writing journey by creating your first research document. 
+                Our advanced analysis tools will help refine your scholarly work.
               </p>
               <button
                 onClick={() => setShowNewDocModal(true)}
-                className="btn btn-primary flex items-center justify-center"
+                className="btn btn-primary flex items-center justify-center mx-auto academic-sans font-semibold"
               >
-                Create Document
+                <Plus className="h-4 w-4 mr-2" />
+                Create Your First Document
               </button>
             </div>
           ) : (
@@ -332,27 +373,35 @@ const Dashboard: React.FC = () => {
                 {getSortedDocuments().map((document: any) => (
                   <div
                     key={document.id}
-                    className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow"
+                    className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg hover:border-navy transition-all duration-200"
                   >
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
-                        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                          {document.title}
-                        </h3>
-                        <div className="space-y-1">
-                          <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
-                            <span>{document.word_count} words</span>
-                            <span>{document.character_count} characters</span>
+                        <div className="flex items-start space-x-3 mb-3">
+                          <div className="w-10 h-10 bg-navy rounded-lg flex items-center justify-center flex-shrink-0">
+                            <FileText className="h-5 w-5 text-white" />
                           </div>
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-1 sm:space-y-0 text-xs text-gray-500 dark:text-gray-500">
-                            <span className="flex items-center">
-                              <Calendar className="h-3 w-3 mr-1" />
-                              Created: {formatDate(document.created_at)}
-                            </span>
-                            <span className="flex items-center">
-                              <Edit className="h-3 w-3 mr-1" />
-                              Modified: {formatDateTime(document.updated_at)}
-                            </span>
+                          <div className="flex-1">
+                            <h3 className="text-lg font-semibold academic-serif text-navy mb-1">
+                              {document.title}
+                            </h3>
+                            <div className="flex items-center space-x-4 text-sm text-academic-gray academic-sans">
+                              <span className="flex items-center">
+                                <Edit className="h-3 w-3 mr-1" />
+                                {document.word_count} words
+                              </span>
+                              <span>{document.character_count} characters</span>
+                            </div>
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-1 sm:space-y-0 text-xs text-academic-gray academic-sans mt-2">
+                              <span className="flex items-center">
+                                <Calendar className="h-3 w-3 mr-1" />
+                                Created: {formatDate(document.created_at)}
+                              </span>
+                              <span className="flex items-center">
+                                <Edit className="h-3 w-3 mr-1" />
+                                Modified: {formatDateTime(document.updated_at)}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -360,14 +409,14 @@ const Dashboard: React.FC = () => {
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => navigate(`/editor/${document.id}`)}
-                          className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                          className="p-2 text-navy hover:text-burgundy transition-colors"
                           title="Edit document"
                         >
                           <Edit className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handleDeleteDocument(document.id)}
-                          className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                          className="p-2 text-academic-gray hover:text-red-600 transition-colors"
                           title="Delete document"
                         >
                           <Trash2 className="h-4 w-4" />

@@ -7,6 +7,14 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Academic color palette
+        navy: '#1e3a8a',
+        burgundy: '#7c2d12',
+        cream: '#fefce8',
+        gold: '#d97706',
+        'academic-gray': '#64748b',
+        
+        // Original colors for compatibility
         primary: {
           50: '#f0f9ff',
           500: '#3b82f6',

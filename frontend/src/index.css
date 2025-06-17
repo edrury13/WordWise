@@ -1,11 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&family=Source+Sans+Pro:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   body {
-    @apply bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100;
+    @apply bg-cream text-navy dark:bg-gray-900 dark:text-gray-100;
+    font-family: 'Source Sans Pro', sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Crimson Text', serif;
+    @apply text-navy dark:text-gray-100;
+  }
+  
+  .academic-serif {
+    font-family: 'Crimson Text', serif;
+  }
+  
+  .academic-sans {
+    font-family: 'Source Sans Pro', sans-serif;
   }
   
   /* Custom scrollbar */
@@ -32,11 +48,15 @@
   }
   
   .btn-primary {
-    @apply bg-primary-600 text-white hover:bg-primary-700;
+    @apply bg-navy text-white hover:bg-burgundy transition-all duration-200 shadow-md hover:shadow-lg;
   }
   
   .btn-secondary {
-    @apply bg-gray-200 text-gray-900 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600;
+    @apply bg-cream border-2 border-navy text-navy hover:bg-navy hover:text-white transition-all duration-200 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600;
+  }
+  
+  .btn-academic {
+    @apply bg-gold text-white hover:bg-amber-600 transition-all duration-200 shadow-md hover:shadow-lg;
   }
   
   .btn-ghost {

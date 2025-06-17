@@ -164,18 +164,27 @@ const RegisterPage: React.FC = () => {
   const passwordStrength = getPasswordStrength(formData.password)
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-cream dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
+        {/* Academic Header */}
+        <div className="text-center">
+          <div className="flex justify-center mb-6">
+            <div className="w-16 h-16 bg-navy rounded-full flex items-center justify-center">
+              <span className="text-white font-bold text-2xl academic-serif">W</span>
+            </div>
+          </div>
+          <h2 className="text-4xl font-bold academic-serif text-navy mb-2">
             Join WordWise
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-            Create your account to start writing with intelligent assistance
+          <h3 className="text-xl academic-serif text-burgundy mb-4">
+            Academic Writing Community
+          </h3>
+          <p className="text-sm text-academic-gray academic-sans">
+            Begin your scholarly writing journey with research-grade tools
           </p>
         </div>
         
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <form className="mt-8 space-y-6 bg-white p-8 rounded-lg shadow-lg border border-gray-200" onSubmit={handleSubmit}>
           {error && (
             <div className="bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 text-red-700 dark:text-red-200 px-4 py-3 rounded">
               <div className="flex justify-between items-start">

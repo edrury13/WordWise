@@ -129,58 +129,80 @@ const EditorPage: React.FC = () => {
   }
 
   return (
-    <div className="h-screen flex flex-col">
-      {/* Header */}
-      <div className="shadow-sm border-b border-gray-200 dark:border-gray-700 flex-shrink-0" style={{ backgroundColor: '#ab2408' }}>
-        <div className="w-full px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* Left side - Back button moved to far left */}
-            <button
-              onClick={() => navigateRef.current('/dashboard')}
-              className="text-gray-200 hover:text-white mr-6"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
+    <div className="h-screen flex flex-col bg-cream">
+      {/* Academic Header */}
+      <div className="bg-white border-b-4 border-navy shadow-sm flex-shrink-0">
+        <div className="w-full px-6 lg:px-8">
+          <div className="flex items-center justify-between h-20">
+            {/* Left side - Back button and branding */}
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => navigateRef.current('/dashboard')}
+                className="text-navy hover:text-burgundy transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-navy rounded-full flex items-center justify-center">
+                  <span className="text-white font-bold text-lg academic-serif">W</span>
+                </div>
+                <div>
+                  <h1 className="text-lg font-bold academic-serif text-navy">Academic Editor</h1>
+                  <p className="text-xs text-academic-gray academic-sans">Research Writing Environment</p>
+                </div>
+              </div>
+            </div>
             
-            {/* Center - Title */}
-            <div className="flex items-center space-x-4 flex-1">
+            {/* Center - Document Title */}
+            <div className="flex-1 max-w-2xl mx-8">
               <input
                 type="text"
                 value={documentTitle}
                 onChange={handleTitleChange}
-                className="text-xl font-semibold bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-white rounded px-2 py-1 text-white placeholder-gray-200"
-                placeholder="Document title..."
+                className="w-full text-xl font-bold academic-serif text-navy bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-navy focus:ring-opacity-20 rounded px-3 py-2 placeholder-academic-gray text-center"
+                placeholder="Research Paper Title..."
               />
               
               {isNewDocument && (
-                <span className="text-sm text-gray-200 font-medium">
-                  New Document
-                </span>
+                <div className="text-center mt-1">
+                  <span className="text-sm text-gold academic-sans font-medium bg-yellow-50 px-2 py-1 rounded">
+                    Draft Document
+                  </span>
+                </div>
               )}
             </div>
 
-            {/* Right side - Status and actions */}
-            <div className="flex items-center space-x-4">
-              {/* Grammar Status */}
-              <div className="flex items-center space-x-2 text-sm text-gray-200">
+            {/* Right side - Academic Status and actions */}
+            <div className="flex items-center space-x-6">
+              {/* Writing Analysis Status */}
+              <div className="flex items-center space-x-3 text-sm academic-sans">
                 {suggestions.length > 0 && (
-                  <div className="flex items-center space-x-1">
-                    <div className="w-2 h-2 bg-orange-300 rounded-full"></div>
-                    <span>{suggestions.length} suggestion{suggestions.length !== 1 ? 's' : ''}</span>
+                  <div className="flex items-center space-x-2 bg-yellow-50 px-3 py-1 rounded-full">
+                    <div className="w-2 h-2 bg-gold rounded-full"></div>
+                    <span className="text-navy font-medium">
+                      {suggestions.length} analysis point{suggestions.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                )}
+                
+                {currentDocument && (
+                  <div className="text-academic-gray">
+                    {currentDocument.word_count || 0} words
                   </div>
                 )}
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-3">
                 <button
                   onClick={handleSaveDocument}
                   disabled={!currentDocument || saving}
-                  className="px-3 py-1 bg-white bg-opacity-20 hover:bg-opacity-30 text-white rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-2 bg-navy text-white hover:bg-burgundy rounded-lg text-sm font-medium academic-sans disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                 >
-                  {saving ? 'Saving...' : 'Save'}
+                  {saving ? 'Saving...' : 'Save Document'}
                 </button>
               </div>
             </div>
@@ -188,9 +210,16 @@ const EditorPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Editor Area - Full Screen */}
-      <div className="flex-1 min-h-0">
-        <GrammarTextEditor />
+      {/* Academic Editor Layout - Full Width */}
+      <div className="flex-1 min-h-0 p-6">
+        <div className="h-full mx-auto" style={{ maxWidth: 'calc(100vw - 3rem)' }}>
+          <div className="bg-white rounded-lg shadow-lg border border-gray-200 h-full overflow-hidden">
+            {/* Academic Paper Layout */}
+            <div className="h-full p-8 academic-sans">
+              <GrammarTextEditor />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

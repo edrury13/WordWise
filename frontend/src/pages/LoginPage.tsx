@@ -100,18 +100,27 @@ const LoginPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-cream dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
-            Welcome to WordWise
+        {/* Academic Header */}
+        <div className="text-center">
+          <div className="flex justify-center mb-6">
+            <div className="w-16 h-16 bg-navy rounded-full flex items-center justify-center">
+              <span className="text-white font-bold text-2xl academic-serif">W</span>
+            </div>
+          </div>
+          <h2 className="text-4xl font-bold academic-serif text-navy mb-2">
+            WordWise
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-            Sign in to your account to continue writing
+          <h3 className="text-xl academic-serif text-burgundy mb-4">
+            Academic Writing Platform
+          </h3>
+          <p className="text-sm text-academic-gray academic-sans">
+            Access your research library and continue your scholarly work
           </p>
         </div>
         
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <form className="mt-8 space-y-6 bg-white p-8 rounded-lg shadow-lg border border-gray-200" onSubmit={handleSubmit}>
           {error && (
             <div className="bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 text-red-700 dark:text-red-200 px-4 py-3 rounded">
               <div className="flex justify-between items-start">
@@ -203,12 +212,12 @@ const LoginPage: React.FC = () => {
             <button
               type="submit"
               disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn btn-primary w-full academic-sans font-semibold"
             >
               {loading ? (
                 <LoadingSpinner size="small" />
               ) : (
-                'Sign in'
+                'Access Research Library'
               )}
             </button>
           </div>
@@ -244,22 +253,22 @@ const LoginPage: React.FC = () => {
           </div>
 
           <div className="text-center">
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              Don't have an account?{' '}
+            <span className="text-sm text-academic-gray academic-sans">
+              New to the academic community?{' '}
               <Link
                 to="/register"
-                className="font-medium text-primary-600 hover:text-primary-500"
+                className="font-medium text-navy hover:text-burgundy transition-colors"
               >
-                Sign up
+                Join WordWise
               </Link>
             </span>
             <div className="mt-2">
               <button
                 type="button"
                 onClick={() => setShowForgotPassword(true)}
-                className="text-sm text-primary-600 hover:text-primary-500"
+                className="text-sm text-navy hover:text-burgundy transition-colors academic-sans"
               >
-                Forgot your password?
+                Reset your password
               </button>
             </div>
           </div>
