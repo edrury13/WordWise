@@ -79,9 +79,7 @@ export const checkGrammarAndSpelling = async (
         enabledOnly: 'false',
         level: 'picky',
         // Enable all grammar-related categories including incomplete sentences
-        enabledCategories: 'GRAMMAR,SENTENCE_WHITESPACE,MISC,COMPOUNDING,SEMANTICS,PUNCTUATION,CASING,TYPOS,CONFUSED_WORDS,LOGIC,TYPOGRAPHY',
-        // Only disable purely stylistic categories
-        disabledCategories: 'STYLE,COLLOQUIALISMS,REDUNDANCY,WORDINESS,CREATIVE_WRITING'
+        enabledCategories: 'GRAMMAR,SENTENCE_WHITESPACE,MISC,COMPOUNDING,SEMANTICS,PUNCTUATION,CASING,TYPOS,CONFUSED_WORDS,LOGIC,TYPOGRAPHY,PRONOUN_AGREEMENT,SUBJECT_VERB_AGREEMENT,STYLE,COLLOQUIALISMS,REDUNDANCY,WORDINESS,CREATIVE_WRITING'
       })
 
       console.log('📡 LanguageTool API request:', {
@@ -99,6 +97,7 @@ export const checkGrammarAndSpelling = async (
 
       console.log('✅ LanguageTool API response:', {
         matches: ltResponse.data.matches?.length || 0,
+        textSnippet: text.substring(0, 50) + (text.length > 50 ? '...' : ''),
         rawMatches: ltResponse.data.matches?.map((match: any) => ({
           rule: match.rule.id,
           category: match.rule.category.id,
@@ -537,6 +536,28 @@ function performSupplementalGrammarCheck(text: string): Suggestion[] {
   
   // Specific rules for common errors that LanguageTool might not catch
   const supplementalRules = [
+    // "The dog run" - singular noun with base form verb (missing 's')
+    {
+      pattern: /\b(the|a|an)\s+([a-zA-Z]+?(?<!s))\s+(run|walk|jump|swim|fly|sleep|eat|drink|play|work|study|read|write|talk|sing|dance|cook|drive|sit|stand|lie|move|come|go|look|watch|listen|think|feel|be|do|get|make|take|give|see|know|say|tell|ask|help|learn|teach|buy|sell|build|clean|wash|fix|paint|open|close|start|stop|continue|begin|end|finish|try|want|need|love|like|hate|hope|believe|understand|remember|forget|choose|decide|plan|prepare|organize|manage|control|lead|follow|support|encourage|celebrate|enjoy|suffer|struggle|fight|win|lose|compete|practice|train|exercise|relax|rest|wake|dream)\b(?!\w)/gi,
+      message: "Subject-verb disagreement. Singular nouns require verbs ending in 's'.",
+      replacement: (match: string) => {
+        const parts = match.trim().split(/\s+/)
+        const article = parts[0]
+        const noun = parts[1]
+        const verb = parts[2]
+        
+        // Add 's' to the verb for singular subjects
+        const correctedVerb = verb === 'go' ? 'goes' :
+                            verb === 'do' ? 'does' :
+                            verb === 'have' ? 'has' :
+                            verb === 'be' ? 'is' :
+                            verb.endsWith('s') ? verb : verb + 's'
+        
+        return `${article} ${noun} ${correctedVerb}`
+      },
+      type: 'grammar' as const
+    },
+    
     // "The dog running in the park" - incomplete sentence missing auxiliary verb
     {
       pattern: /\b(the|a|an)\s+(\w+)\s+(running|walking|jumping|swimming|flying|sleeping|eating|drinking|playing|working|studying|reading|writing|talking|singing|dancing|cooking|driving|sitting|standing|moving|coming|going|looking|watching|listening|thinking|feeling|getting|making|taking|giving|seeing|knowing|saying|telling|asking|helping|learning|teaching|buying|selling|building|cleaning|washing|fixing|painting|opening|closing|starting|stopping|continuing|beginning|ending|finishing|trying|wanting|needing|loving|liking|hating|hoping|believing|understanding|remembering|forgetting|choosing|deciding|planning|preparing|organizing|managing|controlling|leading|following|supporting|encouraging|celebrating|enjoying|suffering|struggling|fighting|winning|losing|competing|practicing|training|exercising|relaxing|resting|waking|dreaming)\b(?:\s+\w+)*(?:\.|$)/gi,
@@ -613,6 +634,35 @@ function performSupplementalGrammarCheck(text: string): Suggestion[] {
       pattern: /\b(runs?|walks?|jumps?|swims?|flies?|works?|plays?|drives?|moves?|looks?|sounds?|feels?|smells?|tastes?)\s+good\b/gi,
       message: "Use 'well' instead of 'good' to modify verbs.",
       replacement: (match: string) => match.replace(/good/gi, 'well'),
+      type: 'grammar' as const
+    },
+    
+    // Missing article before singular countable nouns - "I want bottle" -> "I want a bottle"
+    {
+      pattern: /\b(I|you|we|they|he|she|it)\s+(want|need|have|see|buy|get|take|find|like|love|hate|prefer|choose|pick|grab|hold|carry|bring|give|show|use|eat|drink|wear|own|lose|break|fix|make|build|create|design|paint|draw|write|read|watch|play|hear|listen|smell|taste|feel|touch|know|understand|remember|forget|learn|teach|study|practice|try|attempt|start|begin|finish|complete|stop|continue|avoid|prevent|cause|create|destroy|damage|repair|clean|wash|organize|arrange|move|place|put|set|leave|keep|store|save|throw|drop|catch|hit|kick|push|pull|lift|carry|drag|slide|roll|spin|turn|twist|bend|fold|cut|slice|chop|\w+ed|\w+ing)\s+(bottle|book|car|house|phone|computer|chair|table|pen|pencil|paper|bag|box|cup|glass|plate|bowl|knife|fork|spoon|shirt|dress|shoe|hat|coat|jacket|watch|ring|necklace|bracelet|key|door|window|lamp|mirror|picture|photo|flower|tree|plant|animal|dog|cat|bird|fish|horse|cow|pig|sheep|chicken|apple|banana|orange|lemon|tomato|potato|carrot|onion|bread|cake|cookie|sandwich|pizza|burger|salad|soup|coffee|tea|water|juice|milk|beer|wine|song|movie|game|sport|job|work|school|college|university|hospital|restaurant|store|shop|bank|library|museum|park|beach|mountain|river|lake|ocean|city|town|village|street|road|bridge|building|office|room|kitchen|bathroom|bedroom|garden|yard|garage|basement|attic|roof|wall|floor|ceiling|stairs|elevator|bus|train|plane|boat|ship|truck|bike|motorcycle|radio|television|camera|clock|calendar|magazine|newspaper|letter|email|message|website|internet|computer|laptop|tablet|smartphone)\b(?!\w)/gi,
+      message: "Singular countable nouns usually need an article ('a', 'an', or 'the').",
+      replacement: (match: string) => {
+        const parts = match.trim().split(/\s+/)
+        const subject = parts[0]
+        const verb = parts[1]
+        const noun = parts[2]
+        
+        // Determine if we should use 'a' or 'an'
+        const startsWithVowelSound = /^[aeiou]/i.test(noun)
+        const article = startsWithVowelSound ? 'an' : 'a'
+        
+        return `${subject} ${verb} ${article} ${noun}`
+      },
+      type: 'grammar' as const
+    },
+    
+    // "Me want" -> "I want" (incorrect subject pronoun)
+    {
+      pattern: /\bMe\s+(want|need|have|like|love|hate|see|know|think|believe|feel|understand|remember|forget|hope|wish|prefer|choose|decide|plan|try|attempt|start|begin|finish|complete|stop|continue|work|study|learn|teach|read|write|speak|talk|say|tell|ask|answer|help|support|encourage|celebrate|enjoy|play|sing|dance|cook|eat|drink|sleep|wake|rest|relax|exercise|run|walk|jump|swim|fly|drive|ride|travel|go|come|stay|leave|arrive|depart|return|visit|meet|greet|welcome|invite|join|participate|compete|win|lose|succeed|fail|achieve|accomplish|create|make|build|design|paint|draw|fix|repair|clean|wash|organize|arrange|buy|sell|pay|spend|save|earn|invest|donate|give|receive|take|get|obtain|acquire|find|search|look|watch|listen|hear|smell|taste|touch|feel|hold|carry|lift|push|pull|throw|catch|hit|kick|open|close|lock|unlock|turn|move|place|put|set|remove|delete|add|include|exclude|choose|select|pick|grab|release|drop|fall|rise|climb|descend|enter|exit|pass|cross|follow|lead|guide|direct|control|manage|operate|use|apply|install|remove|replace|change|modify|adjust|improve|enhance|develop|grow|expand|increase|decrease|reduce|minimize|maximize|optimize|solve|resolve|address|handle|deal|cope|struggle|fight|defend|protect|attack|destroy|damage|harm|hurt|heal|cure|treat|diagnose|prevent|avoid|escape|hide|reveal|show|display|demonstrate|prove|confirm|verify|check|test|examine|inspect|investigate|research|study|analyze|evaluate|assess|judge|rate|rank|compare|contrast|distinguish|identify|recognize|realize|discover|explore|experiment|innovate|invent|create)\b/gi,
+      message: "Use 'I' instead of 'Me' as the subject of a sentence.",
+      replacement: (match: string) => {
+        return match.replace(/^Me\b/i, 'I')
+      },
       type: 'grammar' as const
     }
   ]
