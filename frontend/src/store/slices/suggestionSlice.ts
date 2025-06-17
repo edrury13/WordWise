@@ -53,30 +53,42 @@ const initialState: SuggestionState = {
 export const checkText = createAsyncThunk(
   'suggestions/checkText',
   async ({ text, language = 'en-US' }: { text: string; language?: string }, { rejectWithValue }) => {
+    let grammarResults: { suggestions: Suggestion[], apiStatus: 'api' | 'client-fallback' | 'mixed' } = { 
+      suggestions: [], 
+      apiStatus: 'client-fallback' as const 
+    }
+    let readabilityResults = null
+
+    // Try grammar checking
     try {
-      const [grammarResults, readabilityResults] = await Promise.all([
-        checkGrammarAndSpelling(text, language),
-        analyzeReadability(text),
-      ])
-      
-      return {
-        suggestions: grammarResults.suggestions,
-        readabilityScore: readabilityResults,
-        apiStatus: grammarResults.apiStatus,
-      }
-    } catch (error) {
-      // Handle rate limiting gracefully
-      if (error instanceof Error && error.message.includes('Rate limit')) {
-        return rejectWithValue('Rate limited. Please wait a moment before trying again.')
-      }
-      
-      // For other errors, still return empty results rather than failing completely
-      console.warn('Grammar check failed, returning empty results:', error)
-      return {
-        suggestions: [],
-        readabilityScore: null,
-        apiStatus: 'client-fallback' as const,
-      }
+      grammarResults = await checkGrammarAndSpelling(text, language)
+      console.log('✅ Grammar check completed:', grammarResults.suggestions.length, 'suggestions')
+    } catch (grammarError) {
+      console.warn('⚠️ Grammar check failed:', grammarError)
+      // Keep default empty results
+    }
+
+    // Try readability analysis separately - this should almost never fail
+    try {
+      readabilityResults = await analyzeReadability(text)
+      console.log('✅ Readability analysis completed:', readabilityResults)
+    } catch (readabilityError) {
+      console.error('❌ Readability analysis failed:', readabilityError)
+      // readabilityResults stays null
+    }
+
+    // Handle rate limiting specifically
+    if (grammarResults.apiStatus === 'client-fallback' && 
+        grammarResults.suggestions.length === 0 && 
+        text.trim().length > 0) {
+      // This might indicate a rate limit or API failure
+      console.warn('🚨 Possible rate limiting or API failure detected')
+    }
+
+    return {
+      suggestions: grammarResults.suggestions,
+      readabilityScore: readabilityResults,
+      apiStatus: grammarResults.apiStatus,
     }
   }
 )

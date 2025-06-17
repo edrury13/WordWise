@@ -680,10 +680,17 @@ export const analyzeReadability = async (text: string): Promise<ReadabilityScore
     throw new Error('Text is required for readability analysis')
   }
 
-  console.log('📊 Analyzing readability client-side for text:', text.substring(0, 50) + '...')
+  console.log('📊 Starting readability analysis for text:', text.substring(0, 50) + '...')
   
-  // Use client-side readability analysis directly - it's fast, reliable, and doesn't require API calls
-  return performClientSideReadabilityAnalysis(text)
+  try {
+    // Use client-side readability analysis directly - it's fast, reliable, and doesn't require API calls
+    const result = performClientSideReadabilityAnalysis(text)
+    console.log('📊 Readability analysis result:', result)
+    return result
+  } catch (error) {
+    console.error('❌ Readability analysis failed:', error)
+    throw error
+  }
 }
 
 // const getSuggestionType = (categoryId: string, issueType: string): Suggestion['type'] => {
@@ -740,11 +747,16 @@ const getReadabilityLevel = (score: number): string => {
 
 // Client-side readability analysis as fallback
 function performClientSideReadabilityAnalysis(text: string): ReadabilityScore {
-  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0)
-  const words = text.split(/\s+/).filter(w => w.trim().length > 0)
-  const totalSentences = sentences.length
-  const totalWords = words.length
-  const averageWordsPerSentence = totalWords / Math.max(totalSentences, 1)
+  try {
+    console.log('📊 Processing text for readability:', { textLength: text.length })
+    
+    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0)
+    const words = text.split(/\s+/).filter(w => w.trim().length > 0)
+    const totalSentences = Math.max(sentences.length, 1) // Ensure at least 1 to avoid division by zero
+    const totalWords = Math.max(words.length, 1) // Ensure at least 1 to avoid division by zero
+    const averageWordsPerSentence = totalWords / totalSentences
+
+    console.log('📊 Basic text stats:', { totalSentences, totalWords, averageWordsPerSentence })
 
   // Estimate syllables
   const syllables = words.reduce((total, word) => {
@@ -791,6 +803,20 @@ function performClientSideReadabilityAnalysis(text: string): ReadabilityScore {
   }
 
   return readabilityScore
+  } catch (error) {
+    console.error('❌ Error in performClientSideReadabilityAnalysis:', error)
+    // Return a basic fallback readability score
+    return {
+      fleschKincaid: 10.0,
+      fleschReadingEase: 60.0,
+      readabilityLevel: 'High School',
+      averageWordsPerSentence: 15.0,
+      averageSyllablesPerWord: 1.5,
+      totalSentences: 1,
+      passiveVoicePercentage: 0.0,
+      longSentences: 0,
+    }
+  }
 }
 
 export const analyzeSentences = async (text: string) => {
