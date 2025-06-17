@@ -64,7 +64,7 @@ export const checkGrammarAndSpelling = async (
     await new Promise(resolve => setTimeout(resolve, 100))
 
     // Use backend API instead of directly calling LanguageTool
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')
     
     // Get auth token from Supabase session (more reliable than localStorage)
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -347,7 +347,7 @@ function performClientSideGrammarCheck(text: string): Suggestion[] {
 // Test function to check if LanguageTool API is working
 export const testLanguageAPI = async (): Promise<any> => {
   try {
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')
     const { data: { session } } = await supabase.auth.getSession()
     const token = session?.access_token
 
@@ -381,7 +381,7 @@ export const analyzeReadability = async (text: string): Promise<ReadabilityScore
 
   try {
     // Use backend API for readability analysis
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')
     const { data: { session } } = await supabase.auth.getSession()
     const token = session?.access_token
 
@@ -509,7 +509,7 @@ export const analyzeSentences = async (text: string) => {
     await new Promise(resolve => setTimeout(resolve, 200))
     
     // Use backend API with Supabase authentication
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')
     
     // Get auth token from Supabase session (consistent with other functions)
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -577,7 +577,7 @@ export const analyzeSentences = async (text: string) => {
 export const rewriteTone = async (text: string, tone: string) => {
   try {
     // Use backend API with Supabase authentication
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')
     
     // Get auth token from Supabase session (consistent with other functions)
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
