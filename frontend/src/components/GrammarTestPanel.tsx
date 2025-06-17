@@ -27,11 +27,13 @@ const GrammarTestPanel: React.FC = () => {
     
     setLoading(true)
     try {
-      const suggestions = await checkGrammarAndSpelling(customText)
+      const result = await checkGrammarAndSpelling(customText)
+      const suggestions = result.suggestions
       setCustomResult({
         success: true,
         text: customText,
         suggestions,
+        apiStatus: result.apiStatus,
         stats: {
           total: suggestions.length,
           grammar: suggestions.filter(s => s.type === 'grammar').length,
@@ -137,6 +139,35 @@ const GrammarTestPanel: React.FC = () => {
               
               {customResult.success && (
                 <div className="space-y-3">
+                  {/* API Status Indicator */}
+                  {customResult.apiStatus && (
+                    <div className="mb-4">
+                      <div className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-medium ${
+                        customResult.apiStatus === 'api' 
+                          ? 'bg-green-50 text-green-700'
+                          : customResult.apiStatus === 'mixed'
+                          ? 'bg-blue-50 text-blue-700'
+                          : 'bg-orange-50 text-orange-700'
+                      }`}>
+                        <div className={`w-1.5 h-1.5 rounded-full ${
+                          customResult.apiStatus === 'api' 
+                            ? 'bg-green-500'
+                            : customResult.apiStatus === 'mixed'
+                            ? 'bg-blue-500'
+                            : 'bg-orange-500'
+                        }`}></div>
+                        <span>
+                          {customResult.apiStatus === 'api' 
+                            ? 'Advanced AI (LanguageTool)'
+                            : customResult.apiStatus === 'mixed'
+                            ? 'AI + Local Rules'
+                            : 'Local Analysis Only'
+                          }
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-4 gap-4 text-sm">
                     <div className="bg-blue-100 dark:bg-blue-900 p-2 rounded">
                       <div className="font-medium">Total Issues</div>

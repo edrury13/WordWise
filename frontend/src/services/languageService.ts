@@ -63,46 +63,113 @@ export const checkGrammarAndSpelling = async (
     // Add a small delay to prevent rapid API calls
     await new Promise(resolve => setTimeout(resolve, 100))
 
-    // Use backend API instead of directly calling LanguageTool
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')
-    
-    // Get auth token from Supabase session (more reliable than localStorage)
+    // Get auth token from Supabase session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
     const token = session?.access_token
 
     console.log('🔍 Grammar check:', {
       textLength: text.length,
       hasToken: !!token,
-      sessionError: sessionError?.message
+      sessionError: sessionError?.message,
+      isProd: import.meta.env.PROD
     })
 
     if (!token) {
-      console.warn('🚨 No authentication token available for grammar check')
-      // Fallback to client-side checking when not authenticated
+      console.warn('🚨 No authentication token available - using client-side checking')
       return { suggestions: performClientSideGrammarCheck(text), apiStatus: 'client-fallback' }
     }
 
-    console.log('📡 Making grammar API call...', text.substring(0, 50) + '...')
+    // Try backend API first (only in production or when explicitly configured)
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : null)
+    
+    if (API_BASE_URL) {
+      try {
+        console.log('📡 Trying backend API...', text.substring(0, 50) + '...')
 
-    const response = await axios.post(
-      `${API_BASE_URL}/language-check`,
-      { text, language },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 30000
+        const response = await axios.post(
+          `${API_BASE_URL}/language-check`,
+          { text, language },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            timeout: 15000
+          }
+        )
+
+        console.log('✅ Backend API response:', {
+          success: response.data.success,
+          suggestionsCount: response.data.suggestions?.length || 0
+        })
+
+        const suggestions = response.data.suggestions || []
+        
+        // Still add client-side checks for comprehensive coverage
+        const clientSideGrammarSuggestions = performClientSideGrammarCheck(text)
+        const mergedSuggestions = [...suggestions]
+        
+        clientSideGrammarSuggestions.forEach(clientSuggestion => {
+          const hasOverlappingSuggestion = suggestions.some((apiSuggestion: Suggestion) => {
+            const clientStart = clientSuggestion.offset
+            const clientEnd = clientSuggestion.offset + clientSuggestion.length
+            const apiStart = apiSuggestion.offset
+            const apiEnd = apiSuggestion.offset + apiSuggestion.length
+            return (clientStart < apiEnd && clientEnd > apiStart)
+          })
+          
+          if (!hasOverlappingSuggestion) {
+            mergedSuggestions.push(clientSuggestion)
+          }
+        })
+
+        const apiStatus = suggestions.length > 0 
+          ? (clientSideGrammarSuggestions.length > 0 ? 'mixed' : 'api')
+          : 'client-fallback'
+
+        return { suggestions: mergedSuggestions, apiStatus }
+      } catch (backendError) {
+        console.warn('🔄 Backend API failed, trying LanguageTool directly:', 
+          axios.isAxiosError(backendError) ? backendError.response?.status : backendError)
       }
-    )
+    }
 
-    console.log('✅ Grammar API response:', {
-      success: response.data.success,
-      suggestionsCount: response.data.suggestions?.length || 0,
-      stats: response.data.stats
+    // Fallback to direct LanguageTool API call
+    console.log('📡 Calling LanguageTool API directly...')
+    
+    const languageToolUrl = 'https://api.languagetool.org/v2'
+    const params = new URLSearchParams({
+      text,
+      language,
+      enabledOnly: 'false',
+      level: 'picky',
+      enabledCategories: 'GRAMMAR,SENTENCE_WHITESPACE,MISC,COMPOUNDING,SEMANTICS,PUNCTUATION,CASING,TYPOS',
+      disabledCategories: 'STYLE,COLLOQUIALISMS,REDUNDANCY,WORDINESS'
     })
 
-    const suggestions = response.data.suggestions || []
+    const ltResponse = await axios.post(`${languageToolUrl}/check`, params, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      timeout: 30000,
+    })
+
+    console.log('✅ LanguageTool API response:', {
+      matches: ltResponse.data.matches?.length || 0
+    })
+
+    const suggestions = ltResponse.data.matches.map((match: any, index: number) => ({
+      id: `lt-${match.rule.id}-${match.offset}-${index}`,
+      type: getSuggestionType(match.rule.category.id, match.rule.issueType),
+      message: match.message,
+      replacements: match.replacements.map((r: any) => r.value),
+      offset: match.offset,
+      length: match.length,
+      context: match.context.text,
+      explanation: match.shortMessage || match.message,
+      category: match.rule.category.name,
+      severity: getSeverity(match.rule.issueType),
+    })) || []
     
     console.log('📋 Received suggestions:', {
       total: suggestions.length,
@@ -171,6 +238,39 @@ export const checkGrammarAndSpelling = async (
     
     throw new Error('Failed to check grammar and spelling')
   }
+}
+
+// Helper functions for LanguageTool API response processing
+function getSuggestionType(categoryId: string, issueType: string): Suggestion['type'] {
+  if (categoryId.includes('TYPOS') || issueType === 'misspelling') {
+    return 'spelling'
+  }
+  if (categoryId.includes('GRAMMAR') || issueType === 'grammar') {
+    return 'grammar'
+  }
+  if (categoryId.includes('STYLE') || issueType === 'style') {
+    return 'style'
+  }
+  if (categoryId.includes('CLARITY')) {
+    return 'clarity'
+  }
+  if (categoryId.includes('ENGAGEMENT')) {
+    return 'engagement'
+  }
+  if (categoryId.includes('DELIVERY')) {
+    return 'delivery'
+  }
+  return 'style'
+}
+
+function getSeverity(issueType: string): Suggestion['severity'] {
+  if (issueType === 'misspelling' || issueType === 'grammar') {
+    return 'high'
+  }
+  if (issueType === 'style') {
+    return 'medium'
+  }
+  return 'low'
 }
 
 // Client-side basic grammar checking as fallback
@@ -472,39 +572,6 @@ function performClientSideGrammarCheck(text: string): Suggestion[] {
 }
 
 // Test function to check if LanguageTool API is working
-export const testAPIConnection = async (): Promise<any> => {
-  try {
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')
-    
-    // Get auth token from Supabase session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    const token = session?.access_token
-
-    console.log('🧪 Testing API connection:', {
-      API_BASE_URL,
-      hasToken: !!token,
-      sessionError: sessionError?.message
-    })
-
-    const response = await axios.get(`${API_BASE_URL}/test`, {
-      headers: {
-        'Authorization': token ? `Bearer ${token}` : ''
-      },
-      timeout: 10000
-    })
-
-    console.log('✅ API test successful:', response.data)
-    return response.data
-  } catch (error) {
-    console.error('❌ API test failed:', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      isAxiosError: axios.isAxiosError(error),
-      status: axios.isAxiosError(error) ? error.response?.status : null,
-      data: axios.isAxiosError(error) ? error.response?.data : null
-    })
-    throw error
-  }
-}
 
 export const testLanguageAPI = async (): Promise<any> => {
   try {

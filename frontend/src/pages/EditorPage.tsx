@@ -6,7 +6,6 @@ import { fetchDocument, createDocument, updateDocument } from '../store/slices/d
 import { setLastSaved } from '../store/slices/editorSlice'
 import GrammarTextEditor from '../components/GrammarTextEditor'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { testAPIConnection } from '../services/languageService'
 
 const EditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -90,14 +89,7 @@ const EditorPage: React.FC = () => {
     }
   }, [currentDocument, user, documentTitle])
 
-  const handleTestAPI = useCallback(async () => {
-    try {
-      const result = await testAPIConnection()
-      alert(`API Test Success: ${JSON.stringify(result, null, 2)}`)
-    } catch (error) {
-      alert(`API Test Failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
-  }, [])
+
 
   if (loading || isCreatingDocument) {
     return (
@@ -234,12 +226,6 @@ const EditorPage: React.FC = () => {
 
               {/* Action Buttons */}
               <div className="flex items-center space-x-3">
-                <button
-                  onClick={handleTestAPI}
-                  className="px-3 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg text-xs font-medium academic-sans transition-colors shadow-sm"
-                >
-                  Test API
-                </button>
                 <button
                   onClick={handleSaveDocument}
                   disabled={!currentDocument || saving}
