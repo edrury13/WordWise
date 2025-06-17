@@ -4,12 +4,6 @@ import GrammarTextEditor from './GrammarTextEditor'
 const GrammarDemo: React.FC = () => {
   const [showDemo, setShowDemo] = useState(false)
 
-  const demoText = `This is a example of text with several grammar and spelling errors. The quick brown fox jumps over the lazy dog, but it did not jumped correctly. There is also a missspelled word in this sentence. The writting could be more clear and more concise too.
-
-Some sentences are way too long and should be broken down into smaller parts because they are difficult to read and understand when they go on and on without proper punctuation or structure which makes the text hard to follow.
-
-Passive voice is used by many writers. The document was written by me. These sentences could be improved by using active voice instead.`
-
   if (!showDemo) {
     return (
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700 rounded-lg p-6 border border-blue-200 dark:border-gray-600">

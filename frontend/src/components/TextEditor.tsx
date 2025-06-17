@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
-import { checkText, setActiveSuggestion, ignoreSuggestion } from '../store/slices/suggestionSlice'
+import { checkText, ignoreSuggestion } from '../store/slices/suggestionSlice'
 import { setContent, setLastSaved } from '../store/slices/editorSlice'
 import { updateDocument } from '../store/slices/documentSlice'
 import { Suggestion } from '../store/slices/suggestionSlice'
@@ -27,7 +27,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const { autoSaveEnabled } = useSelector((state: RootState) => state.editor)
   
   const [content, setContentState] = useState(initialContent)
-  const [selectionRange, setSelectionRange] = useState<{ start: number; end: number } | null>(null)
+  const [, setSelectionRange] = useState<{ start: number; end: number } | null>(null)
   const [showSuggestionTooltip, setShowSuggestionTooltip] = useState<string | null>(null)
   const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
   
@@ -103,7 +103,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
     const selection = window.getSelection()
     if (selection && selection.rangeCount > 0) {
       const range = selection.getRangeAt(0)
-      const textContent = editorRef.current.textContent || ''
+      // const textContent = editorRef.current.textContent || ''
       
       let start = 0
       let end = 0
@@ -286,7 +286,6 @@ const TextEditor: React.FC<TextEditorProps> = ({
           }}
           onInput={handleContentChange}
           dangerouslySetInnerHTML={{ __html: renderHighlightedText() }}
-          placeholder={readOnly ? '' : 'Start writing your document...'}
         />
       </div>
 

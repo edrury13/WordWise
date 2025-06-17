@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
-import { checkText, setActiveSuggestion, ignoreSuggestion, clearSuggestions, acceptAllSuggestions, ignoreAllCurrentSuggestions, clearError } from '../store/slices/suggestionSlice'
+import { checkText, ignoreSuggestion, clearSuggestions, acceptAllSuggestions, ignoreAllCurrentSuggestions, clearError } from '../store/slices/suggestionSlice'
 import { setContent, setLastSaved, setAutoSave } from '../store/slices/editorSlice'
 import { updateDocument, updateCurrentDocumentContent } from '../store/slices/documentSlice'
 import { Suggestion } from '../store/slices/suggestionSlice'
@@ -231,13 +231,7 @@ const GrammarTextEditor: React.FC = () => {
     autoSave(rewrittenText)
   }, [dispatch, checkGrammar, checkSentenceStructure, autoSave])
 
-  // Handle keyboard shortcuts (defined after undoLastSuggestion)
-  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.ctrlKey && event.key === 's') {
-      event.preventDefault()
-      manualSave()
-    }
-  }, [manualSave])
+  // Keyboard shortcuts are handled by handleKeyDownEnhanced below
 
   // Handle content changes
   const handleContentChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {

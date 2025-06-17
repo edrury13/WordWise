@@ -2,7 +2,7 @@ import React, { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { supabase } from './config/supabase'
-import { setAuth, getCurrentUser } from './store/slices/authSlice'
+import { setAuth } from './store/slices/authSlice'
 import { RootState, AppDispatch } from './store'
 
 // Components

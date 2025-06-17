@@ -2,54 +2,54 @@ import axios from 'axios'
 import { supabase } from '../config/supabase'
 import { Suggestion, ReadabilityScore } from '../store/slices/suggestionSlice'
 
-const LANGUAGETOOL_API_URL = import.meta.env.VITE_LANGUAGETOOL_API_URL || 'https://api.languagetool.org/v2'
+// const LANGUAGETOOL_API_URL = import.meta.env.VITE_LANGUAGETOOL_API_URL || 'https://api.languagetool.org/v2'
 
 // Simple rate limiter to prevent too many simultaneous API calls
-class RateLimiter {
-  private lastCallTime: number = 0
-  private minInterval: number = 1000 // Minimum 1 second between calls
+// class RateLimiter {
+//   private lastCallTime: number = 0
+//   private minInterval: number = 1000 // Minimum 1 second between calls
 
-  async throttle(): Promise<void> {
-    const now = Date.now()
-    const timeSinceLastCall = now - this.lastCallTime
+//   async throttle(): Promise<void> {
+//     const now = Date.now()
+//     const timeSinceLastCall = now - this.lastCallTime
     
-    if (timeSinceLastCall < this.minInterval) {
-      const waitTime = this.minInterval - timeSinceLastCall
-      console.log(`⏳ Rate limiting: waiting ${waitTime}ms before API call`)
-      await new Promise(resolve => setTimeout(resolve, waitTime))
-    }
+//     if (timeSinceLastCall < this.minInterval) {
+//       const waitTime = this.minInterval - timeSinceLastCall
+//       console.log(`⏳ Rate limiting: waiting ${waitTime}ms before API call`)
+//       await new Promise(resolve => setTimeout(resolve, waitTime))
+//     }
     
-    this.lastCallTime = Date.now()
-  }
-}
+//     this.lastCallTime = Date.now()
+//   }
+// }
 
-const grammarRateLimiter = new RateLimiter()
-const sentenceRateLimiter = new RateLimiter()
+// const grammarRateLimiter = new RateLimiter()
+// const sentenceRateLimiter = new RateLimiter()
 
-interface LanguageToolMatch {
-  offset: number
-  length: number
-  message: string
-  shortMessage?: string
-  replacements: Array<{ value: string }>
-  context: {
-    text: string
-    offset: number
-    length: number
-  }
-  rule: {
-    id: string
-    category: {
-      id: string
-      name: string
-    }
-    issueType: string
-  }
-}
+// interface LanguageToolMatch {
+//   offset: number
+//   length: number
+//   message: string
+//   shortMessage?: string
+//   replacements: Array<{ value: string }>
+//   context: {
+//     text: string
+//     offset: number
+//     length: number
+//   }
+//   rule: {
+//     id: string
+//     category: {
+//       id: string
+//       name: string
+//     }
+//     issueType: string
+//   }
+// }
 
-interface LanguageToolResponse {
-  matches: LanguageToolMatch[]
-}
+// interface LanguageToolResponse {
+//   matches: LanguageToolMatch[]
+// }
 
 export const checkGrammarAndSpelling = async (
   text: string,
@@ -171,7 +171,7 @@ export const checkGrammarAndSpelling = async (
 // Client-side basic grammar checking as fallback
 function performClientSideGrammarCheck(text: string): Suggestion[] {
   const suggestions: Suggestion[] = []
-  let offset = 0
+  // let offset = 0
   
   // Basic grammar rules
   const grammarRules = [
@@ -410,37 +410,37 @@ export const analyzeReadability = async (text: string): Promise<ReadabilityScore
   }
 }
 
-const getSuggestionType = (categoryId: string, issueType: string): Suggestion['type'] => {
-  if (categoryId.includes('TYPOS') || issueType === 'misspelling') {
-    return 'spelling'
-  }
-  if (categoryId.includes('GRAMMAR') || issueType === 'grammar') {
-    return 'grammar'
-  }
-  if (categoryId.includes('STYLE') || issueType === 'style') {
-    return 'style'
-  }
-  if (categoryId.includes('CLARITY')) {
-    return 'clarity'
-  }
-  if (categoryId.includes('ENGAGEMENT')) {
-    return 'engagement'
-  }
-  if (categoryId.includes('DELIVERY')) {
-    return 'delivery'
-  }
-  return 'style'
-}
+// const getSuggestionType = (categoryId: string, issueType: string): Suggestion['type'] => {
+//   if (categoryId.includes('TYPOS') || issueType === 'misspelling') {
+//     return 'spelling'
+//   }
+//   if (categoryId.includes('GRAMMAR') || issueType === 'grammar') {
+//     return 'grammar'
+//   }
+//   if (categoryId.includes('STYLE') || issueType === 'style') {
+//     return 'style'
+//   }
+//   if (categoryId.includes('CLARITY')) {
+//     return 'clarity'
+//   }
+//   if (categoryId.includes('ENGAGEMENT')) {
+//     return 'engagement'
+//   }
+//   if (categoryId.includes('DELIVERY')) {
+//     return 'delivery'
+//   }
+//   return 'style'
+// }
 
-const getSeverity = (issueType: string): Suggestion['severity'] => {
-  if (issueType === 'misspelling' || issueType === 'grammar') {
-    return 'high'
-  }
-  if (issueType === 'style') {
-    return 'medium'
-  }
-  return 'low'
-}
+// const getSeverity = (issueType: string): Suggestion['severity'] => {
+//   if (issueType === 'misspelling' || issueType === 'grammar') {
+//     return 'high'
+//   }
+//   if (issueType === 'style') {
+//     return 'medium'
+//   }
+//   return 'low'
+// }
 
 const countSyllables = (word: string): number => {
   word = word.toLowerCase()
