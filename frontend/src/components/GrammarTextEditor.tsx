@@ -27,68 +27,109 @@ const GrammarTextEditor: React.FC = () => {
   const [combinedSuggestions, setCombinedSuggestions] = useState<Suggestion[]>([])
   const [showToneRewritePanel, setShowToneRewritePanel] = useState(false)
   
+  // Undo functionality state
+  const [lastAppliedSuggestion, setLastAppliedSuggestion] = useState<{
+    originalText: string
+    replacement: string
+    offset: number
+    length: number
+    fullContentBefore: string
+  } | null>(null)
+  
   const editorRef = useRef<HTMLTextAreaElement>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<NodeJS.Timeout>()
   const autoSaveRef = useRef<NodeJS.Timeout>()
   const currentDocumentIdRef = useRef<string | null>(null)
   const sentenceDebounceRef = useRef<NodeJS.Timeout>()
+  
+  // Rate limiting tracking
+  const grammarCallTimesRef = useRef<number[]>([])
+  const sentenceCallTimesRef = useRef<number[]>([])
 
-  // Debounced grammar checking with increased delay to reduce API calls
+  // Helper function to check if we can make an API call based on recent activity
+  const canMakeApiCall = useCallback((callTimes: number[], maxCallsPerMinute: number = 15) => {
+    const now = Date.now()
+    const oneMinuteAgo = now - 60000
+    
+    // Remove old calls
+    const recentCalls = callTimes.filter(time => time > oneMinuteAgo)
+    callTimes.length = 0
+    callTimes.push(...recentCalls)
+    
+    return recentCalls.length < maxCallsPerMinute
+  }, [])
+
+  // Debounced grammar checking - balanced for responsiveness and rate limiting
   const checkGrammar = useCallback((text: string) => {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current)
     }
     
     debounceRef.current = setTimeout(() => {
-      if (text.trim() && text.length > 3) {
-        dispatch(checkText({ text }))
+      if (text.trim() && text.length > 10) { // Increased minimum length to reduce calls
+        // Check rate limiting before making call
+        if (canMakeApiCall(grammarCallTimesRef.current, 12)) { // Limit to 12 grammar calls per minute
+          grammarCallTimesRef.current.push(Date.now())
+          dispatch(checkText({ text }))
+          console.log('📝 Grammar check called. Recent calls:', grammarCallTimesRef.current.length)
+        } else {
+          console.log('⏳ Grammar check skipped due to rate limiting')
+          toast.error('⏳ Too many requests - please type more slowly to avoid rate limits')
+        }
       }
-    }, 3000) // Increased to 3000ms to further reduce API calls and avoid rate limiting
-  }, [dispatch])
+    }, 2000) // Keep at 2 seconds for responsiveness as requested
+  }, [dispatch, canMakeApiCall])
 
-  // Debounced sentence analysis
+  // Debounced sentence analysis - much longer delay since it's less critical than grammar
   const checkSentenceStructure = useCallback((text: string) => {
     if (sentenceDebounceRef.current) {
       clearTimeout(sentenceDebounceRef.current)
     }
     
     sentenceDebounceRef.current = setTimeout(async () => {
-      if (text.trim() && text.length > 10) {
-        console.log('🔍 Starting sentence analysis for text:', text.substring(0, 100) + '...')
-        setSentenceAnalysisLoading(true)
-        try {
-          const result = await analyzeSentences(text)
-          console.log('📊 Sentence analysis result:', result)
-          
-          if (result.success) {
-            console.log('✅ Setting sentence analysis data:', result.analysis)
-            setSentenceAnalysis(result.analysis)
-          } else {
-            console.log('❌ Sentence analysis failed:', result.error)
-            setSentenceAnalysis(null)
-            // Show user-friendly error messages
-            if (result.error?.includes('Rate limited')) {
-              toast.error('⏳ Please slow down - too many requests. Try again in a moment.')
-            } else if (result.error?.includes('Authentication')) {
-              toast.error('🔐 Please log in to use sentence analysis.')
+      if (text.trim() && text.length > 25) { // Increased minimum length significantly
+        // Check rate limiting before making call
+        if (canMakeApiCall(sentenceCallTimesRef.current, 6)) { // Limit to 6 sentence calls per minute
+          sentenceCallTimesRef.current.push(Date.now())
+          console.log('🔍 Starting sentence analysis for text:', text.substring(0, 100) + '...')
+          console.log('📊 Sentence analysis called. Recent calls:', sentenceCallTimesRef.current.length)
+          setSentenceAnalysisLoading(true)
+          try {
+            const result = await analyzeSentences(text)
+            console.log('📊 Sentence analysis result:', result)
+            
+            if (result.success) {
+              console.log('✅ Setting sentence analysis data:', result.analysis)
+              setSentenceAnalysis(result.analysis)
+            } else {
+              console.log('❌ Sentence analysis failed:', result.error)
+              setSentenceAnalysis(null)
+              // Show user-friendly error messages
+              if (result.error?.includes('Rate limited')) {
+                toast.error('⏳ Please slow down - too many requests. Try again in a moment.')
+              } else if (result.error?.includes('Authentication')) {
+                toast.error('🔐 Please log in to use sentence analysis.')
+              }
             }
+          } catch (error) {
+            console.error('Sentence analysis error:', error)
+            setSentenceAnalysis(null)
+            if (error instanceof Error && error.message.includes('Rate limited')) {
+              toast.error('⏳ Please slow down - too many requests. Try again in a moment.')
+            }
+          } finally {
+            setSentenceAnalysisLoading(false)
           }
-        } catch (error) {
-          console.error('Sentence analysis error:', error)
-          setSentenceAnalysis(null)
-          if (error instanceof Error && error.message.includes('Rate limited')) {
-            toast.error('⏳ Please slow down - too many requests. Try again in a moment.')
-          }
-        } finally {
-          setSentenceAnalysisLoading(false)
+        } else {
+          console.log('⏳ Sentence analysis skipped due to rate limiting')
         }
       } else {
         console.log('⏭️ Skipping sentence analysis - text too short:', text.length)
         setSentenceAnalysis(null)
       }
-    }, 6000) // Increased to 6000ms (6 seconds) to significantly reduce sentence analysis API calls
-  }, [])
+    }, 8000) // Increased to 8 seconds since sentence analysis is less critical than grammar
+  }, [canMakeApiCall])
 
   // Auto-save functionality
   const autoSave = useCallback((text: string) => {
@@ -123,7 +164,7 @@ const GrammarTextEditor: React.FC = () => {
         setLastSaveStatus('error')
         setTimeout(() => setLastSaveStatus(null), 5000)
       })
-    }, 5000) // Increased auto-save delay to 5 seconds to reduce API calls
+    }, 10000) // Increased auto-save delay to 10 seconds to reduce save API calls
   }, [autoSaveEnabled, currentDocument, user, dispatch])
 
   // Manual save function
@@ -179,7 +220,7 @@ const GrammarTextEditor: React.FC = () => {
     autoSave(rewrittenText)
   }, [dispatch, checkGrammar, checkSentenceStructure, autoSave])
 
-  // Handle keyboard shortcuts
+  // Handle keyboard shortcuts (defined after undoLastSuggestion)
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.ctrlKey && event.key === 's') {
       event.preventDefault()
@@ -191,6 +232,12 @@ const GrammarTextEditor: React.FC = () => {
   const handleContentChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newContent = event.target.value
     setContentState(newContent)
+    
+    // Clear undo state when user manually edits (typing new content)
+    if (lastAppliedSuggestion) {
+      setLastAppliedSuggestion(null)
+      console.log('🔄 Cleared undo state due to manual content change')
+    }
     
     // Update Redux state for editor
     dispatch(setContent([{
@@ -205,7 +252,7 @@ const GrammarTextEditor: React.FC = () => {
     checkGrammar(newContent)
     checkSentenceStructure(newContent)
     autoSave(newContent)
-  }, [dispatch, checkGrammar, checkSentenceStructure, autoSave])
+  }, [dispatch, checkGrammar, checkSentenceStructure, autoSave, lastAppliedSuggestion])
 
   // Create highlighted text overlay
   const createHighlightedText = useCallback(() => {
@@ -554,6 +601,16 @@ const GrammarTextEditor: React.FC = () => {
 
   // Apply suggestion
   const applySuggestion = useCallback((suggestion: Suggestion, replacement: string) => {
+    // Store the current state for undo
+    const originalText = content.substring(suggestion.offset, suggestion.offset + suggestion.length)
+    setLastAppliedSuggestion({
+      originalText,
+      replacement,
+      offset: suggestion.offset,
+      length: replacement.length, // Store the new length for undo calculation
+      fullContentBefore: content
+    })
+    
     const newContent = 
       content.substring(0, suggestion.offset) + 
       replacement + 
@@ -578,6 +635,12 @@ const GrammarTextEditor: React.FC = () => {
     checkGrammar(newContent)
     autoSave(newContent)
     setShowTooltip(null)
+    
+    console.log('📝 Applied suggestion - undo data stored:', {
+      originalText,
+      replacement,
+      offset: suggestion.offset
+    })
   }, [content, dispatch, checkGrammar, autoSave])
 
   // Ignore suggestion
@@ -586,9 +649,72 @@ const GrammarTextEditor: React.FC = () => {
     setShowTooltip(null)
   }, [dispatch])
 
+  // Undo last applied suggestion
+  const undoLastSuggestion = useCallback(() => {
+    if (!lastAppliedSuggestion) {
+      toast.error('No suggestion to undo')
+      return
+    }
+    
+    console.log('⬅️ Undoing last suggestion:', lastAppliedSuggestion)
+    
+    // Restore the original content
+    const restoredContent = lastAppliedSuggestion.fullContentBefore
+    
+    setContentState(restoredContent)
+    
+    if (editorRef.current) {
+      editorRef.current.value = restoredContent
+      // Position cursor where the original text was
+      editorRef.current.focus()
+      editorRef.current.setSelectionRange(
+        lastAppliedSuggestion.offset, 
+        lastAppliedSuggestion.offset + lastAppliedSuggestion.originalText.length
+      )
+    }
+    
+    // Update Redux state
+    dispatch(setContent([{
+      type: 'paragraph',
+      children: [{ text: restoredContent }]
+    }]))
+    
+    // Update current document content
+    dispatch(updateCurrentDocumentContent(restoredContent))
+    
+    // Clear the undo state since we've used it
+    setLastAppliedSuggestion(null)
+    
+    // Trigger grammar check and auto-save
+    checkGrammar(restoredContent)
+    autoSave(restoredContent)
+    
+    toast.success('✅ Suggestion undone')
+  }, [lastAppliedSuggestion, dispatch, checkGrammar, autoSave])
+
+  // Enhanced keyboard shortcuts with undo support
+  const handleKeyDownEnhanced = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.ctrlKey && event.key === 's') {
+      event.preventDefault()
+      manualSave()
+    } else if (event.ctrlKey && event.key === 'z') {
+      event.preventDefault()
+      undoLastSuggestion()
+    }
+  }, [manualSave, undoLastSuggestion])
+
   // Accept all suggestions
   const handleAcceptAllSuggestions = useCallback(() => {
     if (suggestions.length === 0) return
+    
+    // Store state for potential undo of accept all
+    setLastAppliedSuggestion({
+      originalText: '',
+      replacement: '',
+      offset: 0,
+      length: 0,
+      fullContentBefore: content
+    })
     
     // Apply all suggestions to the content, starting from the end to preserve offsets
     let newContent = content
@@ -628,6 +754,8 @@ const GrammarTextEditor: React.FC = () => {
     checkGrammar(newContent)
     autoSave(newContent)
     setShowTooltip(null)
+    
+    console.log('📝 Applied all suggestions - undo available for bulk action')
   }, [suggestions, content, dispatch, checkGrammar, autoSave])
 
   // Ignore all suggestions
@@ -791,8 +919,9 @@ const GrammarTextEditor: React.FC = () => {
       // Clear suggestions when document changes
       dispatch(clearSuggestions())
       
-      // Clear any existing tooltips
+      // Clear any existing tooltips and undo state
       setShowTooltip(null)
+      setLastAppliedSuggestion(null)
       
       // Update the ref to track current document
       currentDocumentIdRef.current = currentDocId
@@ -1013,7 +1142,7 @@ const GrammarTextEditor: React.FC = () => {
           ref={editorRef}
           value={content}
           onChange={handleContentChange}
-          onKeyDown={handleKeyDown}
+          onKeyDown={handleKeyDownEnhanced}
           className="w-full h-96 p-4 bg-transparent text-gray-900 dark:text-gray-100 resize-none focus:outline-none font-serif text-lg leading-relaxed"
           placeholder={`Start writing your document... Grammar checking will begin automatically. ${autoSaveEnabled ? 'Auto-save is enabled.' : 'Auto-save is disabled - press Ctrl+S to save manually.'}`}
           style={{ fontFamily: 'ui-serif, Georgia, serif' }}
@@ -1118,6 +1247,20 @@ const GrammarTextEditor: React.FC = () => {
             
             {/* Bulk Actions in Panel */}
             <div className="flex items-center space-x-2">
+              {/* Undo Button */}
+              {lastAppliedSuggestion && (
+                <button
+                  onClick={undoLastSuggestion}
+                  className="px-3 py-1 bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-900 dark:hover:bg-yellow-800 text-yellow-800 dark:text-yellow-200 text-xs rounded transition-colors flex items-center space-x-1"
+                  title="Undo last suggestion (Ctrl+Z)"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                  </svg>
+                  <span>Undo</span>
+                </button>
+              )}
+              
               <button
                 onClick={handleAcceptAllSuggestions}
                 className="px-3 py-1 bg-green-100 hover:bg-green-200 dark:bg-green-900 dark:hover:bg-green-800 text-green-800 dark:text-green-200 text-xs rounded transition-colors flex items-center space-x-1"
