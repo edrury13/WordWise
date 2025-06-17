@@ -9,22 +9,6 @@ const ReadabilityPanel: React.FC = () => {
     return null
   }
 
-  const getReadabilityColor = (level: string): string => {
-    switch (level) {
-      case 'Very Easy':
-      case 'Elementary':
-        return 'text-green-600 dark:text-green-400'
-      case 'Middle School':
-      case 'High School':
-        return 'text-yellow-600 dark:text-yellow-400'
-      case 'College':
-      case 'Graduate':
-        return 'text-red-600 dark:text-red-400'
-      default:
-        return 'text-gray-600 dark:text-gray-400'
-    }
-  }
-
   const getScoreColor = (score: number): string => {
     if (score <= 8) return 'text-green-600 dark:text-green-400'
     if (score <= 12) return 'text-yellow-600 dark:text-yellow-400'
