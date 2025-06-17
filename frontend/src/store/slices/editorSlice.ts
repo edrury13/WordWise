@@ -26,7 +26,7 @@ const initialState: EditorState = {
   characterCount: 0,
   isFullscreen: false,
   showStats: true,
-  autoSaveEnabled: true,
+  autoSaveEnabled: false,
   lastSaved: null,
 }
 

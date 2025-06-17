@@ -38,6 +38,8 @@ interface SentenceAnalysisData {
   totalIssues: number
   totalGrammarIssues: number
   totalStructureIssues: number
+  fleschKincaidScore: number
+  readabilityLevel: string
   sentences: SentenceAnalysis[]
 }
 
@@ -195,6 +197,16 @@ const SentenceAnalysisPanel: React.FC<SentenceAnalysisPanelProps> = ({ text, onS
             </div>
           </div>
         )}
+
+        {/* Flesch-Kincaid Readability Score */}
+        <div className="mt-3 pt-3 border-t border-current border-opacity-20">
+          <div className="flex items-center justify-between text-sm">
+            <span>Flesch-Kincaid Grade Level: <span className="font-medium">{analysis.fleschKincaidScore}</span></span>
+            <span className="text-xs px-2 py-1 rounded bg-white dark:bg-gray-800 border">
+              {analysis.readabilityLevel}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Individual Sentences */}

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
 import { checkText, setActiveSuggestion, ignoreSuggestion, clearSuggestions, acceptAllSuggestions, ignoreAllCurrentSuggestions } from '../store/slices/suggestionSlice'
-import { setContent, setLastSaved } from '../store/slices/editorSlice'
+import { setContent, setLastSaved, setAutoSave } from '../store/slices/editorSlice'
 import { updateDocument, updateCurrentDocumentContent } from '../store/slices/documentSlice'
 import { Suggestion } from '../store/slices/suggestionSlice'
 import { analyzeSentences } from '../services/languageService'
@@ -566,6 +566,40 @@ const GrammarTextEditor: React.FC = () => {
               )}
             </div>
           )}
+          
+          {/* Auto-save disabled indicator */}
+          {!autoSaveEnabled && !saving && !lastSaveStatus && (
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+              <span className="text-yellow-600 dark:text-yellow-400">Auto-save disabled</span>
+            </div>
+          )}
+          
+          {/* Auto-save Toggle */}
+          <div className="flex items-center space-x-2">
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <span className="text-sm text-gray-600 dark:text-gray-400">Auto-save</span>
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={autoSaveEnabled}
+                  onChange={(e) => dispatch(setAutoSave(e.target.checked))}
+                  className="sr-only"
+                />
+                <div className={`w-10 h-5 rounded-full transition-colors duration-200 ${
+                  autoSaveEnabled 
+                    ? 'bg-green-500' 
+                    : 'bg-gray-300 dark:bg-gray-600'
+                }`}>
+                  <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                    autoSaveEnabled 
+                      ? 'translate-x-5' 
+                      : 'translate-x-0.5'
+                  } mt-0.5`}></div>
+                </div>
+              </div>
+            </label>
+          </div>
         </div>
         
         <div className="flex items-center space-x-2 text-sm">
@@ -623,7 +657,7 @@ const GrammarTextEditor: React.FC = () => {
           onChange={handleContentChange}
           onKeyDown={handleKeyDown}
           className="w-full h-96 p-4 bg-transparent text-gray-900 dark:text-gray-100 resize-none focus:outline-none font-serif text-lg leading-relaxed"
-          placeholder="Start writing your document... Grammar checking will begin automatically. Press Ctrl+S to save manually."
+          placeholder={`Start writing your document... Grammar checking will begin automatically. ${autoSaveEnabled ? 'Auto-save is enabled.' : 'Auto-save is disabled - press Ctrl+S to save manually.'}`}
           style={{ fontFamily: 'ui-serif, Georgia, serif' }}
         />
         

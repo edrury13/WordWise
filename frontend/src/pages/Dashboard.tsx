@@ -95,14 +95,14 @@ const Dashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <header className="bg-white dark:bg-gray-800 shadow">
+      <header className="shadow" style={{ backgroundColor: '#ab2408' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              <h1 className="text-3xl font-bold text-white">
                 WordWise
               </h1>
-              <p className="text-gray-600 dark:text-gray-400">
+              <p className="text-gray-200">
                 Welcome back, {user?.email}
               </p>
             </div>
@@ -110,7 +110,7 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => dispatch(toggleDarkMode())}
-                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                className="p-2 text-gray-200 hover:text-white transition-colors"
               >
                 {isDarkMode ? (
                   <Sun className="h-5 w-5" />
@@ -121,7 +121,7 @@ const Dashboard: React.FC = () => {
               
               <button
                 onClick={handleLogout}
-                className="flex items-center space-x-2 px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                className="flex items-center space-x-2 px-4 py-2 text-gray-200 hover:text-white transition-colors"
               >
                 <LogOut className="h-4 w-4" />
                 <span>Logout</span>
@@ -134,7 +134,7 @@ const Dashboard: React.FC = () => {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
             <div className="flex items-center">
               <FileText className="h-8 w-8 text-blue-500" />
@@ -162,20 +162,6 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
           </div>
-          
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-            <div className="flex items-center">
-              <User className="h-8 w-8 text-purple-500" />
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Account Type
-                </p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  Free
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Documents Section */}
@@ -187,7 +173,7 @@ const Dashboard: React.FC = () => {
               </h2>
               <button
                 onClick={() => setShowNewDocModal(true)}
-                className="btn btn-primary flex items-center space-x-2"
+                className="btn btn-primary flex items-center justify-center space-x-2"
               >
                 <Plus className="h-4 w-4" />
                 <span>New Document</span>
@@ -206,7 +192,7 @@ const Dashboard: React.FC = () => {
               </p>
               <button
                 onClick={() => setShowNewDocModal(true)}
-                className="btn btn-primary"
+                className="btn btn-primary flex items-center justify-center"
               >
                 Create Document
               </button>

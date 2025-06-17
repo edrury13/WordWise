@@ -328,7 +328,8 @@ router.post('/sentence-analysis', async (req: AuthenticatedRequest, res) => {
         } else if (grammarIssues > 2) {
           sentenceQuality = 'poor'
         } else if (grammarIssues > 0) {
-          sentenceQuality = 'fair'
+          // Any sentence with grammar issues should be at least 'poor'
+          sentenceQuality = 'poor'
         }
 
         sentenceAnalysis.push({
@@ -390,6 +391,9 @@ router.post('/sentence-analysis', async (req: AuthenticatedRequest, res) => {
       overallQuality = 'fair'
     }
 
+    // Calculate Flesch-Kincaid readability score for the entire text
+    const readabilityData = calculateReadability(text)
+
     res.status(200).json({
       success: true,
       analysis: {
@@ -399,6 +403,8 @@ router.post('/sentence-analysis', async (req: AuthenticatedRequest, res) => {
         totalIssues,
         totalGrammarIssues,
         totalStructureIssues,
+        fleschKincaidScore: readabilityData.fleschKincaid,
+        readabilityLevel: readabilityData.readabilityLevel,
         sentences: sentenceAnalysis
       }
     })

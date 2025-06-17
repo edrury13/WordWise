@@ -131,30 +131,31 @@ const EditorPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+      <div className="shadow-sm border-b border-gray-200 dark:border-gray-700" style={{ backgroundColor: '#ab2408' }}>
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            {/* Left side - Back button and title */}
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => navigateRef.current('/dashboard')}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              
+            {/* Left side - Back button moved to far left */}
+            <button
+              onClick={() => navigateRef.current('/dashboard')}
+              className="text-gray-200 hover:text-white mr-6"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            
+            {/* Center - Title */}
+            <div className="flex items-center space-x-4 flex-1">
               <input
                 type="text"
                 value={documentTitle}
                 onChange={handleTitleChange}
-                className="text-xl font-semibold bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1 text-gray-900 dark:text-gray-100"
+                className="text-xl font-semibold bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-white rounded px-2 py-1 text-white placeholder-gray-200"
                 placeholder="Document title..."
               />
               
               {isNewDocument && (
-                <span className="text-sm text-blue-600 dark:text-blue-400 font-medium">
+                <span className="text-sm text-gray-200 font-medium">
                   New Document
                 </span>
               )}
@@ -163,23 +164,23 @@ const EditorPage: React.FC = () => {
             {/* Right side - Status and actions */}
             <div className="flex items-center space-x-4">
               {/* Grammar Status */}
-              <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
+              <div className="flex items-center space-x-2 text-sm text-gray-200">
                 {suggestions.length > 0 && (
                   <div className="flex items-center space-x-1">
-                    <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                    <div className="w-2 h-2 bg-orange-300 rounded-full"></div>
                     <span>{suggestions.length} suggestion{suggestions.length !== 1 ? 's' : ''}</span>
                   </div>
                 )}
                 {suggestions.length === 0 && (
                   <div className="flex items-center space-x-1">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <div className="w-2 h-2 bg-green-300 rounded-full"></div>
                     <span>No issues</span>
                   </div>
                 )}
               </div>
 
               {/* Save Status */}
-              <div className="text-sm text-gray-500 dark:text-gray-400">
+              <div className="text-sm text-gray-200">
                 Auto-saving enabled
               </div>
 
@@ -188,12 +189,12 @@ const EditorPage: React.FC = () => {
                 <button
                   onClick={handleSaveDocument}
                   disabled={!currentDocument || saving}
-                  className="btn btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1 bg-white bg-opacity-20 hover:bg-opacity-30 text-white rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {saving ? 'Saving...' : 'Save'}
                 </button>
                 
-                <button className="btn btn-primary text-sm">
+                <button className="px-3 py-1 bg-white text-red-800 hover:bg-gray-100 rounded text-sm transition-colors">
                   Share
                 </button>
               </div>
