@@ -52,7 +52,7 @@ const initialState: SuggestionState = {
 // Async thunks
 export const checkText = createAsyncThunk(
   'suggestions/checkText',
-  async ({ text, language = 'en-US' }: { text: string; language?: string }, { rejectWithValue }) => {
+  async ({ text, language = 'en-US' }: { text: string; language?: string }) => {
     let grammarResults: { suggestions: Suggestion[], apiStatus: 'api' | 'client-fallback' | 'mixed' } = { 
       suggestions: [], 
       apiStatus: 'client-fallback' as const 
