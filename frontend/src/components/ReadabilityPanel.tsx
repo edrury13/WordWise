@@ -5,8 +5,26 @@ import { RootState } from '../store'
 const ReadabilityPanel: React.FC = () => {
   const { readabilityScore } = useSelector((state: RootState) => state.suggestions)
 
+  // Debug logging for Vercel
+  console.log('📊 ReadabilityPanel render:', { 
+    hasScore: !!readabilityScore, 
+    score: readabilityScore,
+    isProd: import.meta.env.PROD 
+  })
+
   if (!readabilityScore) {
-    return null
+    // Show a placeholder instead of hiding completely
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+          Readability Analysis
+        </h3>
+        <div className="text-center text-gray-500 dark:text-gray-400 py-4">
+          <p className="text-sm">No readability data available</p>
+          <p className="text-xs mt-1">Type some text to see analysis</p>
+        </div>
+      </div>
+    )
   }
 
   const getScoreColor = (score: number): string => {

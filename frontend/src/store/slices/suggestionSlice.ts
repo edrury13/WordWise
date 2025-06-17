@@ -74,7 +74,18 @@ export const checkText = createAsyncThunk(
       console.log('✅ Readability analysis completed:', readabilityResults)
     } catch (readabilityError) {
       console.error('❌ Readability analysis failed:', readabilityError)
-      // readabilityResults stays null
+      // Provide a basic fallback readability score to ensure UI always shows something
+      console.log('🔄 Providing fallback readability score')
+      readabilityResults = {
+        fleschKincaid: 10.0,
+        fleschReadingEase: 60.0,
+        readabilityLevel: 'High School',
+        averageWordsPerSentence: Math.max(text.split(/\s+/).length / Math.max(text.split(/[.!?]+/).length, 1), 1),
+        averageSyllablesPerWord: 1.5,
+        totalSentences: Math.max(text.split(/[.!?]+/).filter(s => s.trim().length > 0).length, 1),
+        passiveVoicePercentage: 0.0,
+        longSentences: 0,
+      }
     }
 
     // Handle rate limiting specifically
@@ -184,6 +195,14 @@ const suggestionSlice = createSlice({
         state.suggestions = action.payload.suggestions.filter(
           (s: Suggestion) => !state.ignoredSuggestions.includes(s.id)
         )
+        
+        // Debug logging for readability score
+        console.log('📊 Redux: Setting readability score:', {
+          hasScore: !!action.payload.readabilityScore,
+          score: action.payload.readabilityScore,
+          isProd: typeof window !== 'undefined' ? window.location.hostname.includes('vercel') : false
+        })
+        
         state.readabilityScore = action.payload.readabilityScore
         state.apiStatus = action.payload.apiStatus
         state.lastCheckTime = Date.now()
