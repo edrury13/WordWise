@@ -171,17 +171,6 @@ const EditorPage: React.FC = () => {
                     <span>{suggestions.length} suggestion{suggestions.length !== 1 ? 's' : ''}</span>
                   </div>
                 )}
-                {suggestions.length === 0 && (
-                  <div className="flex items-center space-x-1">
-                    <div className="w-2 h-2 bg-green-300 rounded-full"></div>
-                    <span>No issues</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Save Status */}
-              <div className="text-sm text-gray-200">
-                Auto-saving enabled
               </div>
 
               {/* Action Buttons */}

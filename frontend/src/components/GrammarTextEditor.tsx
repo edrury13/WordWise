@@ -44,7 +44,7 @@ const GrammarTextEditor: React.FC = () => {
       if (text.trim() && text.length > 3) {
         dispatch(checkText({ text }))
       }
-    }, 2000) // Increased from 1000ms to 2000ms to reduce API calls
+    }, 3000) // Increased to 3000ms to further reduce API calls and avoid rate limiting
   }, [dispatch])
 
   // Debounced sentence analysis
@@ -87,7 +87,7 @@ const GrammarTextEditor: React.FC = () => {
         console.log('⏭️ Skipping sentence analysis - text too short:', text.length)
         setSentenceAnalysis(null)
       }
-    }, 4000) // Increased to 4000ms to further reduce API calls and avoid rate limiting
+    }, 6000) // Increased to 6000ms (6 seconds) to significantly reduce sentence analysis API calls
   }, [])
 
   // Auto-save functionality
@@ -107,6 +107,12 @@ const GrammarTextEditor: React.FC = () => {
         if (action.type === 'documents/updateDocument/fulfilled') {
           setLastSaveStatus('saved')
           dispatch(setLastSaved(new Date()))
+          
+          // Clean up localStorage backup after successful save
+          const backupKey = `wordwise-backup-${currentDocument.id}`
+          localStorage.removeItem(backupKey)
+          console.log('🗑️ Cleaned up backup after successful auto-save')
+          
           // Clear status after 3 seconds
           setTimeout(() => setLastSaveStatus(null), 3000)
         } else {
@@ -117,7 +123,7 @@ const GrammarTextEditor: React.FC = () => {
         setLastSaveStatus('error')
         setTimeout(() => setLastSaveStatus(null), 5000)
       })
-    }, 3000) // Auto-save after 3 seconds of no typing
+    }, 5000) // Increased auto-save delay to 5 seconds to reduce API calls
   }, [autoSaveEnabled, currentDocument, user, dispatch])
 
   // Manual save function
@@ -132,6 +138,12 @@ const GrammarTextEditor: React.FC = () => {
       if (action.type === 'documents/updateDocument/fulfilled') {
         setLastSaveStatus('saved')
         dispatch(setLastSaved(new Date()))
+        
+        // Clean up localStorage backup after successful manual save
+        const backupKey = `wordwise-backup-${currentDocument.id}`
+        localStorage.removeItem(backupKey)
+        console.log('🗑️ Cleaned up backup after successful manual save')
+        
         setTimeout(() => setLastSaveStatus(null), 3000)
       } else {
         setLastSaveStatus('error')
@@ -728,13 +740,23 @@ const GrammarTextEditor: React.FC = () => {
     }
   }, [showTooltip])
 
-  // Initialize content from current document
+  // Initialize content from current document (only when document actually changes, not on re-mount)
   useEffect(() => {
-    if (currentDocument && currentDocument.content !== content) {
+    const currentDocId = currentDocument?.id
+    const previousDocId = currentDocumentIdRef.current
+    
+    // Only reset content if this is truly a different document, not just a component re-mount
+    if (currentDocument && currentDocId !== previousDocId) {
+      console.log('📄 Document changed, initializing content:', {
+        newDocId: currentDocId,
+        previousDocId,
+        contentLength: currentDocument.content.length
+      })
+      
       // Clear old suggestions immediately when switching documents
       dispatch(clearSuggestions())
       
-      // Set new content
+      // Set new content only when document actually changes
       setContentState(currentDocument.content)
       if (editorRef.current) {
         editorRef.current.value = currentDocument.content
@@ -747,8 +769,18 @@ const GrammarTextEditor: React.FC = () => {
       if (currentDocument.content.trim() && currentDocument.content.length > 3) {
         checkGrammar(currentDocument.content)
       }
+    } else if (currentDocument && currentDocId === previousDocId && !content) {
+      // Only set content if it's empty (initial load case)
+      console.log('📄 Same document, but content is empty, initializing:', {
+        docId: currentDocId,
+        contentLength: currentDocument.content.length
+      })
+      setContentState(currentDocument.content)
+      if (editorRef.current) {
+        editorRef.current.value = currentDocument.content
+      }
     }
-  }, [currentDocument, content, dispatch, checkGrammar])
+  }, [currentDocument, dispatch, checkGrammar, content])
 
   // Track document ID changes to ensure suggestions are cleared when switching documents
   useEffect(() => {
@@ -803,6 +835,79 @@ const GrammarTextEditor: React.FC = () => {
       dispatch(clearError())
     }
   }, [error, dispatch])
+
+  // Save content to localStorage as backup to prevent loss on tab switching
+  useEffect(() => {
+    if (content && currentDocument?.id) {
+      const backupKey = `wordwise-backup-${currentDocument.id}`
+      const lastSavedContent = currentDocument.content || ''
+      
+      // Only save to localStorage if content differs from last saved version
+      if (content !== lastSavedContent) {
+        localStorage.setItem(backupKey, content)
+        console.log('💾 Backed up unsaved content to localStorage:', {
+          docId: currentDocument.id,
+          contentLength: content.length,
+          savedLength: lastSavedContent.length
+        })
+      }
+    }
+  }, [content, currentDocument])
+
+  // Restore from localStorage backup if available and newer than saved content
+  useEffect(() => {
+    if (currentDocument?.id) {
+      const backupKey = `wordwise-backup-${currentDocument.id}`
+      const backup = localStorage.getItem(backupKey)
+      const savedContent = currentDocument.content || ''
+      
+      // Check if backup exists and is different/newer than saved content
+      if (backup && backup !== savedContent && backup.length > savedContent.length && !content) {
+        console.log('🔄 Restoring unsaved changes from localStorage backup:', {
+          docId: currentDocument.id,
+          backupLength: backup.length,
+          savedLength: savedContent.length
+        })
+        
+        setContentState(backup)
+        if (editorRef.current) {
+          editorRef.current.value = backup
+        }
+        
+        // Update Redux state with restored content
+        dispatch(updateCurrentDocumentContent(backup))
+        
+        toast.success('📝 Restored unsaved changes from backup')
+      } else if (backup && backup === savedContent) {
+        // Clean up backup if it matches saved content
+        localStorage.removeItem(backupKey)
+        console.log('🗑️ Cleaned up backup - matches saved content')
+      }
+    }
+  }, [currentDocument, content, dispatch])
+
+  // Handle page visibility changes to maintain state
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('👁️ Tab became visible, preserving current content')
+        // Don't reset content when tab becomes visible
+      } else {
+        console.log('👁️ Tab became hidden, content preserved')
+        // Save current state when tab becomes hidden
+        if (content && currentDocument?.id) {
+          const backupKey = `wordwise-backup-${currentDocument.id}`
+          localStorage.setItem(backupKey, content)
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [content, currentDocument?.id])
 
   const activeSuggestion = combinedSuggestions.find(s => s.id === showTooltip) || suggestions.find(s => s.id === showTooltip)
   const wordCount = content.split(/\s+/).filter(w => w.length > 0).length

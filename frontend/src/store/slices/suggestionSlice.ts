@@ -172,7 +172,12 @@ const suggestionSlice = createSlice({
       })
       .addCase(checkText.rejected, (state, action) => {
         state.loading = false
-        state.error = action.error.message || 'Failed to check text'
+        // Handle rate limiting more gracefully
+        if (action.payload === 'Rate limited. Please wait a moment before trying again.') {
+          state.error = action.payload as string
+        } else {
+          state.error = action.error.message || 'Failed to check text'
+        }
       })
       // Recheck text
       .addCase(recheckText.pending, (state) => {
