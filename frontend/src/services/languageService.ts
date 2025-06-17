@@ -607,35 +607,10 @@ export const analyzeReadability = async (text: string): Promise<ReadabilityScore
     throw new Error('Text is required for readability analysis')
   }
 
-  try {
-    // Use backend API for readability analysis
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')
-    const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.access_token
-
-    if (!token) {
-      // Fallback to client-side readability analysis
-      return performClientSideReadabilityAnalysis(text)
-    }
-
-    const response = await axios.post(
-      `${API_BASE_URL}/language/readability`,
-      { text },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 15000
-      }
-    )
-
-    return response.data.readability
-  } catch (error) {
-    console.error('Readability analysis failed, using client-side fallback:', error)
-    // Fallback to client-side analysis
-    return performClientSideReadabilityAnalysis(text)
-  }
+  console.log('📊 Analyzing readability client-side for text:', text.substring(0, 50) + '...')
+  
+  // Use client-side readability analysis directly - it's fast, reliable, and doesn't require API calls
+  return performClientSideReadabilityAnalysis(text)
 }
 
 // const getSuggestionType = (categoryId: string, issueType: string): Suggestion['type'] => {
@@ -707,6 +682,9 @@ function performClientSideReadabilityAnalysis(text: string): ReadabilityScore {
   // Flesch-Kincaid Grade Level
   const fleschKincaid = 0.39 * averageWordsPerSentence + 11.8 * averageSyllablesPerWord - 15.59
 
+  // Flesch Reading Ease Score
+  const fleschReadingEase = 206.835 - (1.015 * averageWordsPerSentence) - (84.6 * averageSyllablesPerWord)
+
   // Long sentences (>20 words)
   const longSentences = sentences.filter(sentence => {
     const sentenceWords = sentence.split(/\s+/).filter(w => w.trim().length > 0)
@@ -718,8 +696,19 @@ function performClientSideReadabilityAnalysis(text: string): ReadabilityScore {
   const passiveMatches = text.match(passiveIndicators) || []
   const passiveVoicePercentage = (passiveMatches.length / Math.max(totalSentences, 1)) * 100
 
+  console.log('📊 Readability calculations:', {
+    fleschKincaid: Math.round(fleschKincaid * 10) / 10,
+    fleschReadingEase: Math.round(fleschReadingEase * 10) / 10,
+    averageWordsPerSentence: Math.round(averageWordsPerSentence * 10) / 10,
+    averageSyllablesPerWord: Math.round(averageSyllablesPerWord * 10) / 10,
+    totalSentences,
+    longSentences,
+    passiveVoicePercentage: Math.round(passiveVoicePercentage * 10) / 10
+  })
+
   const readabilityScore: ReadabilityScore = {
     fleschKincaid: Math.round(fleschKincaid * 10) / 10,
+    fleschReadingEase: Math.round(fleschReadingEase * 10) / 10,
     readabilityLevel: getReadabilityLevel(fleschKincaid),
     averageWordsPerSentence: Math.round(averageWordsPerSentence * 10) / 10,
     averageSyllablesPerWord: Math.round(averageSyllablesPerWord * 10) / 10,

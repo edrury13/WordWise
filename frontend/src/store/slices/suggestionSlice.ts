@@ -16,6 +16,7 @@ export interface Suggestion {
 
 export interface ReadabilityScore {
   fleschKincaid: number
+  fleschReadingEase: number
   readabilityLevel: string
   averageWordsPerSentence: number
   averageSyllablesPerWord: number

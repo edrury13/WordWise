@@ -31,6 +31,23 @@ const ReadabilityPanel: React.FC = () => {
     return 'text-red-600 dark:text-red-400'
   }
 
+  const getReadingEaseColor = (score: number): string => {
+    if (score >= 70) return 'text-green-600 dark:text-green-400'
+    if (score >= 60) return 'text-yellow-600 dark:text-yellow-400'
+    if (score >= 50) return 'text-orange-600 dark:text-orange-400'
+    return 'text-red-600 dark:text-red-400'
+  }
+
+  const getReadingEaseLevel = (score: number): string => {
+    if (score >= 90) return 'Very Easy'
+    if (score >= 80) return 'Easy'
+    if (score >= 70) return 'Fairly Easy'
+    if (score >= 60) return 'Standard'
+    if (score >= 50) return 'Fairly Difficult'
+    if (score >= 30) return 'Difficult'
+    return 'Very Difficult'
+  }
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
@@ -41,12 +58,20 @@ const ReadabilityPanel: React.FC = () => {
         {/* Flesch-Kincaid Grade Level */}
         <div className="flex items-center justify-between">
           <span className="text-sm text-gray-600 dark:text-gray-400">Grade Level:</span>
+          <span className={`text-sm font-medium ${getScoreColor(readabilityScore.fleschKincaid)}`}>
+            {readabilityScore.fleschKincaid}
+          </span>
+        </div>
+
+        {/* Flesch Reading Ease */}
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-gray-600 dark:text-gray-400">Reading Ease:</span>
           <div className="text-right">
-            <span className={`text-sm font-medium ${getScoreColor(readabilityScore.fleschKincaid)}`}>
-              {readabilityScore.fleschKincaid}
+            <span className={`text-sm font-medium ${getReadingEaseColor(readabilityScore.fleschReadingEase)}`}>
+              {readabilityScore.fleschReadingEase}
             </span>
-            <div className={`text-xs ${getReadabilityColor(readabilityScore.readabilityLevel)}`}>
-              {readabilityScore.readabilityLevel}
+            <div className={`text-xs ${getReadingEaseColor(readabilityScore.fleschReadingEase)}`}>
+              {getReadingEaseLevel(readabilityScore.fleschReadingEase)}
             </div>
           </div>
         </div>
@@ -105,6 +130,9 @@ const ReadabilityPanel: React.FC = () => {
           {readabilityScore.fleschKincaid > 12 && (
             <li>• Consider using shorter sentences and simpler words</li>
           )}
+          {readabilityScore.fleschReadingEase < 50 && (
+            <li>• Text is fairly difficult - consider simplifying vocabulary and sentence structure</li>
+          )}
           {readabilityScore.averageWordsPerSentence > 20 && (
             <li>• Break up long sentences for better readability</li>
           )}
@@ -114,8 +142,8 @@ const ReadabilityPanel: React.FC = () => {
           {readabilityScore.longSentences > 0 && (
             <li>• Consider splitting sentences with more than 20 words</li>
           )}
-          {readabilityScore.fleschKincaid <= 8 && readabilityScore.passiveVoicePercentage <= 15 && (
-            <li className="text-green-600 dark:text-green-400">• Great! Your writing is clear and easy to read</li>
+          {readabilityScore.fleschKincaid <= 8 && readabilityScore.fleschReadingEase >= 70 && readabilityScore.passiveVoicePercentage <= 15 && (
+            <li className="text-green-600 dark:text-green-400">• Excellent! Your writing is clear and easy to read</li>
           )}
         </ul>
       </div>
