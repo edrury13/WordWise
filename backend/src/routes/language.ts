@@ -232,21 +232,44 @@ router.post('/sentence-analysis', async (req: AuthenticatedRequest, res) => {
 
     const languageToolUrl = process.env.LANGUAGETOOL_API_URL || 'https://api.languagetool.org/v2'
     
-    // Split text into sentences for individual analysis
-    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0)
-    const sentenceAnalysis = []
+    // Simple and reliable sentence detection
+    const sentences = []
+    const sentenceOffsets = []
+    
+    console.log(`📄 Analyzing text of length ${text.length}`)
+    
+    // Use a simple approach: split by sentence endings and find each in the original text
+    const rawSentences = text.split(/[.!?]+/).filter(s => s.trim().length >= 3)
+    
+    console.log(`📝 Found ${rawSentences.length} raw sentences`)
+    
+    let searchStartIndex = 0
+    
+    for (let i = 0; i < rawSentences.length; i++) {
+      const sentenceText = rawSentences[i].trim()
+      
+      // Find this sentence in the original text starting from where we left off
+      const sentenceIndex = text.indexOf(sentenceText, searchStartIndex)
+      
+      if (sentenceIndex !== -1) {
+        sentences.push(sentenceText)
+        sentenceOffsets.push(sentenceIndex)
+        
+        // Update search start for next sentence
+        searchStartIndex = sentenceIndex + sentenceText.length
+        
+        console.log(`📍 Sentence ${i + 1}: "${sentenceText.substring(0, 30)}..." at offset ${sentenceIndex}, length ${sentenceText.length}`)
+      } else {
+        console.log(`⚠️ Could not find sentence in text: "${sentenceText.substring(0, 30)}..."`)
+      }
+    }
 
+    const sentenceAnalysis = []
     console.log(`Analyzing ${sentences.length} sentences for sentence-level grammar...`)
 
     for (let i = 0; i < sentences.length; i++) {
-      const sentence = sentences[i].trim()
-      if (sentence.length < 3) continue
-
-      // Calculate sentence position in original text
-      let sentenceOffset = 0
-      for (let j = 0; j < i; j++) {
-        sentenceOffset += sentences[j].length + 1 // +1 for punctuation
-      }
+      const sentence = sentences[i]
+      const sentenceOffset = sentenceOffsets[i]
 
       // Add proper punctuation for analysis
       const sentenceWithPunctuation = sentence + '.'

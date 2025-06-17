@@ -202,6 +202,12 @@ const GrammarTextEditor: React.FC = () => {
       return
     }
 
+    console.log('🎨 === STARTING HIGHLIGHT CREATION ===')
+    console.log('📄 Content length:', content.length)
+    console.log('📄 Content:', content)
+    console.log('📝 Regular suggestions count:', suggestions.length)
+    console.log('📝 Sentence analysis available:', !!sentenceAnalysis?.sentences)
+
     let result = content
     const allHighlights: Array<{
       offset: number
@@ -216,7 +222,15 @@ const GrammarTextEditor: React.FC = () => {
 
     // Add regular grammar suggestions
     if (suggestions.length > 0) {
+      console.log('📝 Adding regular grammar suggestions:', suggestions.length)
       suggestions.forEach((suggestion) => {
+        console.log('➕ Adding grammar highlight:', {
+          id: suggestion.id,
+          type: suggestion.type,
+          offset: suggestion.offset,
+          length: suggestion.length,
+          message: suggestion.message.substring(0, 50) + '...'
+        })
         allHighlights.push({
           offset: suggestion.offset,
           length: suggestion.length,
@@ -227,61 +241,165 @@ const GrammarTextEditor: React.FC = () => {
       })
     }
 
-    // Add sentence-level issues (incomplete sentences)
-    if (sentenceAnalysis?.sentences) {
+    // Add sentence-level issues (incomplete sentences) - TEMPORARILY DISABLED TO ISOLATE ISSUE
+    if (false && sentenceAnalysis?.sentences) {
       console.log('🔍 Sentence analysis data:', sentenceAnalysis)
       console.log('📝 Sentences found:', sentenceAnalysis.sentences.length)
+      console.log('📄 Content length:', content.length)
+      console.log('📄 Content preview:', content.substring(0, 100) + '...')
       
       sentenceAnalysis.sentences.forEach((sentence: any, index: number) => {
         console.log(`Sentence ${index + 1}:`, {
-          text: sentence.text,
+          text: sentence.text?.substring(0, 50) + (sentence.text?.length > 50 ? '...' : ''),
           quality: sentence.quality,
-          issues: sentence.issues,
+          issues: sentence.issues?.length || 0,
           offset: sentence.offset,
-          length: sentence.length
+          length: sentence.length,
+          endPosition: sentence.offset + sentence.length,
+          isOutOfBounds: sentence.offset + sentence.length > content.length
         })
         
-        if (sentence.quality === 'incomplete' && sentence.issues?.length > 0) {
+        // Only highlight for incomplete sentences, ignore individual issues (those are handled by regular grammar checking)
+        if (sentence.quality === 'incomplete') {
           console.log(`🚨 Found incomplete sentence ${index + 1}:`, sentence.text)
           
-          // Check if this sentence already has a grammar highlight to avoid duplicates
-          const hasExistingHighlight = allHighlights.some(h => 
-            h.offset >= sentence.offset && 
-            h.offset < sentence.offset + sentence.length
-          )
-          
-          console.log(`Existing highlight check:`, hasExistingHighlight)
-          
-          if (!hasExistingHighlight) {
-            // Create a fake suggestion object for the incomplete sentence
-            const incompleteSuggestion: Suggestion = {
-              id: `sentence-${index}`,
-              type: 'grammar',
-              message: sentence.issues[0]?.message || 'This sentence appears to be incomplete.',
-              offset: sentence.offset,
+          // Safety check: Skip if sentence data looks suspicious
+          if (!sentence.text || sentence.length <= 0 || sentence.offset < 0 || 
+              sentence.length > Math.min(content.length * 0.3, 500)) { // Skip if sentence is >30% of content or >500 chars
+            console.log(`⚠️ Skipping suspicious sentence data:`, {
+              hasText: !!sentence.text,
               length: sentence.length,
-              replacements: sentence.issues[0]?.replacements || [],
-              context: sentence.text,
-              explanation: 'Incomplete sentences are missing essential components like helping verbs or main verbs.',
-              category: 'Grammar',
-              severity: 'high'
+              offset: sentence.offset,
+              contentLength: content.length,
+              percentOfContent: (sentence.length / content.length * 100).toFixed(1) + '%'
+            })
+            return
+          }
+          
+          // Find the exact sentence in the content using indexOf from the reported offset
+          const sentenceTextTrimmed = sentence.text.trim()
+          let sentenceInContentIndex = content.indexOf(sentenceTextTrimmed, Math.max(0, sentence.offset - 50))
+          
+          // If not found near the reported offset, try a broader search
+          if (sentenceInContentIndex === -1) {
+            sentenceInContentIndex = content.indexOf(sentenceTextTrimmed)
+          }
+          
+          // If still not found, try searching for the first few words
+          if (sentenceInContentIndex === -1 && sentenceTextTrimmed.length > 10) {
+            const firstWords = sentenceTextTrimmed.substring(0, Math.min(20, sentenceTextTrimmed.length))
+            const partialIndex = content.indexOf(firstWords)
+            if (partialIndex !== -1) {
+              // Use the partial match and try to extend to the full sentence
+              const remainingText = content.substring(partialIndex)
+              const sentenceEndPattern = /[.!?]\s|$/ 
+              const sentenceEndMatch = remainingText.match(sentenceEndPattern)
+              if (sentenceEndMatch && sentenceEndMatch.index !== undefined) {
+                const endIndex = partialIndex + sentenceEndMatch.index + (sentenceEndMatch[0].length > 1 ? 1 : 0)
+                const fullSentence = content.substring(partialIndex, endIndex).trim()
+                if (fullSentence.length > 0) {
+                  sentenceInContentIndex = partialIndex
+                  console.log(`🔍 Using partial match for sentence:`, {
+                    originalSentence: sentenceTextTrimmed,
+                    foundSentence: fullSentence,
+                    offset: partialIndex
+                  })
+                }
+              }
             }
+          }
+          
+          if (sentenceInContentIndex !== -1) {
+            const actualSentenceStart = sentenceInContentIndex
+            const actualSentenceLength = sentenceTextTrimmed.length
+            const actualSentenceEnd = actualSentenceStart + actualSentenceLength
             
-            // Add to combined suggestions array for tooltip lookup
-            allSuggestions.push(incompleteSuggestion)
-            
-            allHighlights.push({
-              offset: sentence.offset,
-              length: sentence.length,
-              type: 'grammar',
-              id: `sentence-${index}`,
-              className: 'underline decoration-orange-500 decoration-wavy bg-orange-500 bg-opacity-10 dark:bg-orange-400 dark:bg-opacity-20'
+            console.log(`🔍 Found exact sentence position:`, {
+              originalOffset: sentence.offset,
+              actualOffset: actualSentenceStart,
+              originalLength: sentence.length,
+              actualLength: actualSentenceLength,
+              sentenceText: sentenceTextTrimmed,
+              contentLength: content.length
             })
             
-            console.log(`✅ Added highlight for incomplete sentence:`, {
-              offset: sentence.offset,
-              length: sentence.length,
-              text: sentence.text
+            // Verify bounds are valid
+            if (actualSentenceStart >= 0 && actualSentenceEnd <= content.length) {
+              // Check if this sentence already has ANY grammar highlight to avoid duplicates
+              // Skip sentence highlighting if there are already individual grammar suggestions in this sentence
+              const hasExistingGrammarInSentence = allHighlights.some(h => {
+                const hStart = h.offset
+                const hEnd = h.offset + h.length
+                const sStart = actualSentenceStart
+                const sEnd = actualSentenceEnd
+                
+                // Check if the grammar highlight is anywhere within this sentence
+                return (hStart >= sStart && hStart < sEnd) || 
+                       (hEnd > sStart && hEnd <= sEnd) ||
+                       (hStart <= sStart && hEnd >= sEnd)
+              })
+              
+              console.log(`🔍 Existing grammar check for sentence:`, {
+                sentenceStart: actualSentenceStart,
+                sentenceEnd: actualSentenceEnd,
+                existingHighlights: allHighlights.map(h => ({
+                  id: h.id,
+                  start: h.offset,
+                  end: h.offset + h.length,
+                  type: h.type
+                })),
+                hasExistingGrammar: hasExistingGrammarInSentence
+              })
+              
+              console.log(`Existing highlight check:`, hasExistingGrammarInSentence)
+              
+              if (!hasExistingGrammarInSentence) {
+                // Create a suggestion object for the incomplete sentence
+                const incompleteSuggestion: Suggestion = {
+                  id: `sentence-${index}`,
+                  type: 'grammar',
+                  message: 'This sentence appears to be incomplete and may be missing essential components like helping verbs.',
+                  offset: actualSentenceStart,
+                  length: actualSentenceLength,
+                  replacements: [],
+                  context: sentence.text,
+                  explanation: 'Incomplete sentences are missing essential components like helping verbs or main verbs. Try adding "is", "are", "was", "were", or other helping verbs.',
+                  category: 'Grammar',
+                  severity: 'high'
+                }
+                
+                // Add to combined suggestions array for tooltip lookup
+                allSuggestions.push(incompleteSuggestion)
+                
+                allHighlights.push({
+                  offset: actualSentenceStart,
+                  length: actualSentenceLength,
+                  type: 'grammar',
+                  id: `sentence-${index}`,
+                  className: 'underline decoration-orange-500 decoration-wavy bg-orange-500 bg-opacity-10 dark:bg-orange-400 dark:bg-opacity-20'
+                })
+                
+                console.log(`✅ Added sentence highlight:`, {
+                  id: `sentence-${index}`,
+                  type: 'grammar',
+                  offset: actualSentenceStart,
+                  length: actualSentenceLength,
+                  text: sentenceTextTrimmed,
+                  highlightedContent: content.substring(actualSentenceStart, actualSentenceEnd)
+                })
+              }
+            } else {
+              console.log(`⚠️ Calculated sentence bounds are invalid:`, {
+                start: actualSentenceStart,
+                end: actualSentenceEnd,
+                contentLength: content.length
+              })
+            }
+          } else {
+            console.log(`⚠️ Could not find sentence in content:`, {
+              sentenceText: sentenceTextTrimmed,
+              reportedOffset: sentence.offset,
+              searchStart: Math.max(0, sentence.offset - 50)
             })
           }
         }
@@ -292,20 +410,112 @@ const GrammarTextEditor: React.FC = () => {
 
     // Sort highlights by offset (descending) to apply from end to start
     const sortedHighlights = allHighlights.sort((a, b) => b.offset - a.offset)
-
-    sortedHighlights.forEach((highlight) => {
-      const { offset, length, type, id, className } = highlight
-      const before = result.substring(0, offset)
-      const highlightedText = result.substring(offset, offset + length)
-      const after = result.substring(offset + length)
-      
-      // All highlights now use the same event handlers since we changed incomplete to 'grammar' type
-      const eventHandlers = `data-suggestion-id="${id}" data-offset="${offset}" data-length="${length}" style="pointer-events: auto;" onmouseenter="window.handleSuggestionHover && window.handleSuggestionHover('${id}', event)" onmouseleave="window.handleSuggestionLeave && window.handleSuggestionLeave()" onclick="window.handleSuggestionClick && window.handleSuggestionClick(${offset}, event)"`
-      
-      const highlightedSpan = `<span class="${className}" ${eventHandlers}>${highlightedText}</span>`
-      
-      result = before + highlightedSpan + after
+    
+    console.log('🎨 Total highlights to apply:', sortedHighlights.length)
+    console.log('🎨 Highlights summary:', sortedHighlights.map(h => ({
+      id: h.id,
+      type: h.type,
+      offset: h.offset,
+      length: h.length,
+      endPosition: h.offset + h.length,
+      percentOfContent: ((h.length / content.length) * 100).toFixed(1) + '%',
+      highlightedText: content.substring(h.offset, h.offset + h.length)
+    })))
+    
+    // SAFETY CHECK: Remove any highlights that seem too large
+    const validHighlights = sortedHighlights.filter(h => {
+      const isValid = h.length <= 100 && h.offset >= 0 && h.offset + h.length <= content.length
+      if (!isValid) {
+        console.error('🚨 REMOVING INVALID HIGHLIGHT:', {
+          id: h.id,
+          offset: h.offset,
+          length: h.length,
+          contentLength: content.length,
+          reason: h.length > 100 ? 'too long' : h.offset < 0 ? 'negative offset' : 'exceeds bounds'
+        })
+      }
+      return isValid
     })
+    
+    console.log('🔍 Valid highlights after filtering:', validHighlights.length)
+
+          // CLEAR DUPLICATE HIGHLIGHTS - Remove duplicates based on offset and length
+      const uniqueHighlights = []
+      const seen = new Set()
+      
+      for (const highlight of validHighlights) {
+        const key = `${highlight.offset}-${highlight.length}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          uniqueHighlights.push(highlight)
+          console.log(`✅ Keeping unique highlight:`, {
+            id: highlight.id,
+            offset: highlight.offset,
+            length: highlight.length,
+            key
+          })
+        } else {
+          console.log(`🗑️ Removing duplicate highlight:`, {
+            id: highlight.id,
+            offset: highlight.offset,
+            length: highlight.length,
+            key
+          })
+        }
+      }
+      
+      console.log(`🔄 Reduced ${validHighlights.length} highlights to ${uniqueHighlights.length} unique highlights`)
+
+      uniqueHighlights.forEach((highlight) => {
+        const { offset, length, type, id, className } = highlight
+        
+        // Validate highlight bounds before applying (double-check)
+        if (offset < 0 || offset + length > result.length || length > 500) {
+          console.warn(`⚠️ Skipping invalid highlight:`, {
+            id,
+            offset,
+            length,
+            resultLength: result.length,
+            type,
+            reason: offset < 0 ? 'negative offset' : 
+                    offset + length > result.length ? 'exceeds content bounds' :
+                    length > 500 ? 'too long (>500 chars)' : 'unknown'
+          })
+          return
+        }
+        
+        const before = result.substring(0, offset)
+        const highlightedText = result.substring(offset, offset + length)
+        const after = result.substring(offset + length)
+        
+        // Escape HTML in the highlighted text to prevent corruption
+        const escapedText = highlightedText
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#x27;')
+        
+        console.log(`🎨 Applying highlight:`, {
+          id,
+          type,
+          offset,
+          length,
+          highlightedText: highlightedText.substring(0, 50) + (highlightedText.length > 50 ? '...' : ''),
+          textLength: highlightedText.length,
+          beforeLength: before.length,
+          afterLength: after.length
+        })
+        
+        // Create the highlight span with escaped content
+        const eventHandlers = `data-suggestion-id="${id}" data-offset="${offset}" data-length="${length}" style="pointer-events: auto;" onmouseenter="window.handleSuggestionHover && window.handleSuggestionHover('${id}', event)" onmouseleave="window.handleSuggestionLeave && window.handleSuggestionLeave()" onclick="window.handleSuggestionClick && window.handleSuggestionClick(${offset}, event)"`
+        
+        const highlightedSpan = `<span class="${className}" ${eventHandlers}>${escapedText}</span>`
+        
+        result = before + highlightedSpan + after
+        
+        console.log(`📝 New result length: ${result.length}`)
+      })
 
     setHighlightedContent(result)
     
