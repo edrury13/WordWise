@@ -78,8 +78,16 @@ export const checkGrammarAndSpelling = async (
         language,
         enabledOnly: 'false',
         level: 'picky',
-        enabledCategories: 'GRAMMAR,SENTENCE_WHITESPACE,MISC,COMPOUNDING,SEMANTICS,PUNCTUATION,CASING,TYPOS',
-        disabledCategories: 'STYLE,COLLOQUIALISMS,REDUNDANCY,WORDINESS'
+        // Enable all grammar-related categories including incomplete sentences
+        enabledCategories: 'GRAMMAR,SENTENCE_WHITESPACE,MISC,COMPOUNDING,SEMANTICS,PUNCTUATION,CASING,TYPOS,CONFUSED_WORDS,LOGIC,TYPOGRAPHY',
+        // Only disable purely stylistic categories
+        disabledCategories: 'STYLE,COLLOQUIALISMS,REDUNDANCY,WORDINESS,CREATIVE_WRITING'
+      })
+
+      console.log('📡 LanguageTool API request:', {
+        text: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+        language,
+        textLength: text.length
       })
 
       const ltResponse = await axios.post(`${languageToolUrl}/check`, params, {
@@ -90,7 +98,15 @@ export const checkGrammarAndSpelling = async (
       })
 
       console.log('✅ LanguageTool API response:', {
-        matches: ltResponse.data.matches?.length || 0
+        matches: ltResponse.data.matches?.length || 0,
+        rawMatches: ltResponse.data.matches?.map((match: any) => ({
+          rule: match.rule.id,
+          category: match.rule.category.id,
+          message: match.message,
+          text: text.substring(match.offset, match.offset + match.length),
+          offset: match.offset,
+          length: match.length
+        })) || []
       })
 
       const suggestions = ltResponse.data.matches.map((match: any, index: number) => ({
@@ -521,6 +537,30 @@ function performSupplementalGrammarCheck(text: string): Suggestion[] {
   
   // Specific rules for common errors that LanguageTool might not catch
   const supplementalRules = [
+    // "The dog running in the park" - incomplete sentence missing auxiliary verb
+    {
+      pattern: /\b(the|a|an)\s+(\w+)\s+(running|walking|jumping|swimming|flying|sleeping|eating|drinking|playing|working|studying|reading|writing|talking|singing|dancing|cooking|driving|sitting|standing|moving|coming|going|looking|watching|listening|thinking|feeling|getting|making|taking|giving|seeing|knowing|saying|telling|asking|helping|learning|teaching|buying|selling|building|cleaning|washing|fixing|painting|opening|closing|starting|stopping|continuing|beginning|ending|finishing|trying|wanting|needing|loving|liking|hating|hoping|believing|understanding|remembering|forgetting|choosing|deciding|planning|preparing|organizing|managing|controlling|leading|following|supporting|encouraging|celebrating|enjoying|suffering|struggling|fighting|winning|losing|competing|practicing|training|exercising|relaxing|resting|waking|dreaming)\b(?:\s+\w+)*(?:\.|$)/gi,
+      message: "This appears to be an incomplete sentence. Consider adding 'is', 'was', 'are', or 'were' before the -ing verb.",
+      replacement: (match: string) => {
+        const parts = match.trim().replace(/\.$/, '').split(/\s+/)
+        const article = parts[0]
+        const noun = parts[1]
+        const ingVerb = parts[2]
+        const restOfSentence = parts.slice(3).join(' ')
+        
+        // Determine if singular or plural based on article and noun
+        const isSingular = article.toLowerCase() !== 'the' || !noun.endsWith('s')
+        const auxVerb = isSingular ? 'is' : 'are'
+        
+        const result = restOfSentence 
+          ? `${article} ${noun} ${auxVerb} ${ingVerb} ${restOfSentence}`
+          : `${article} ${noun} ${auxVerb} ${ingVerb}`
+        
+        return match.endsWith('.') ? result + '.' : result
+      },
+      type: 'grammar' as const
+    },
+    
     // "The dog is run" - awkward passive voice that should be "The dog runs" or "The dog is running"
     {
       pattern: /\b(the|a|an)\s+(\w+)\s+is\s+(run|walk|jump|swim|fly|sleep|eat|drink|play|work|study|read|write|talk|sing|dance|cook|drive|sit|stand|move|come|go|look|watch|listen|think|feel|get|make|take|give|see|know|say|tell|ask|help|learn|teach|buy|sell|build|clean|wash|fix|paint|open|close|start|stop|continue|begin|end|finish|try|want|need|love|like|hate|hope|believe|understand|remember|forget|choose|decide|plan|prepare|organize|manage|control|lead|follow|support|encourage|celebrate|enjoy|suffer|struggle|fight|win|lose|compete|practice|train|exercise|relax|rest|wake|dream)\b(?!\w)/gi,
