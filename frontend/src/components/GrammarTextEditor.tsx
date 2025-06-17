@@ -53,7 +53,7 @@ const GrammarTextEditor: React.FC = () => {
   const autoSaveRef = useRef<NodeJS.Timeout>()
   const currentDocumentIdRef = useRef<string | null>(null)
   const sentenceDebounceRef = useRef<NodeJS.Timeout>()
-  
+
   // Rate limiting tracking
   const grammarCallTimesRef = useRef<number[]>([])
   const sentenceCallTimesRef = useRef<number[]>([])
@@ -82,12 +82,12 @@ const GrammarTextEditor: React.FC = () => {
         // Check rate limiting before making call
         if (canMakeApiCall(grammarCallTimesRef.current, 12)) { // Limit to 12 grammar calls per minute
           grammarCallTimesRef.current.push(Date.now())
-          dispatch(checkText({ text }))
+        dispatch(checkText({ text }))
           console.log('📝 Grammar check called. Recent calls:', grammarCallTimesRef.current.length)
         } else {
           console.log('⏳ Grammar check skipped due to rate limiting')
           toast.error('⏳ Too many requests - please type more slowly to avoid rate limits')
-        }
+      }
       }
     }, 2000) // Keep at 2 seconds for responsiveness as requested
   }, [dispatch, canMakeApiCall])
@@ -103,34 +103,34 @@ const GrammarTextEditor: React.FC = () => {
         // Check rate limiting before making call
         if (canMakeApiCall(sentenceCallTimesRef.current, 6)) { // Limit to 6 sentence calls per minute
           sentenceCallTimesRef.current.push(Date.now())
-          console.log('🔍 Starting sentence analysis for text:', text.substring(0, 100) + '...')
+        console.log('🔍 Starting sentence analysis for text:', text.substring(0, 100) + '...')
           console.log('📊 Sentence analysis called. Recent calls:', sentenceCallTimesRef.current.length)
-          setSentenceAnalysisLoading(true)
-          try {
-            const result = await analyzeSentences(text)
-            console.log('📊 Sentence analysis result:', result)
-            
-            if (result.success) {
-              console.log('✅ Setting sentence analysis data:', result.analysis)
-              setSentenceAnalysis(result.analysis)
-            } else {
-              console.log('❌ Sentence analysis failed:', result.error)
-              setSentenceAnalysis(null)
-              // Show user-friendly error messages
-              if (result.error?.includes('Rate limited')) {
-                toast.error('⏳ Please slow down - too many requests. Try again in a moment.')
-              } else if (result.error?.includes('Authentication')) {
-                toast.error('🔐 Please log in to use sentence analysis.')
-              }
-            }
-          } catch (error) {
-            console.error('Sentence analysis error:', error)
+        setSentenceAnalysisLoading(true)
+        try {
+          const result = await analyzeSentences(text)
+          console.log('📊 Sentence analysis result:', result)
+          
+          if (result.success) {
+            console.log('✅ Setting sentence analysis data:', result.analysis)
+            setSentenceAnalysis(result.analysis)
+          } else {
+            console.log('❌ Sentence analysis failed:', result.error)
             setSentenceAnalysis(null)
-            if (error instanceof Error && error.message.includes('Rate limited')) {
+            // Show user-friendly error messages
+            if (result.error?.includes('Rate limited')) {
               toast.error('⏳ Please slow down - too many requests. Try again in a moment.')
+            } else if (result.error?.includes('Authentication')) {
+              toast.error('🔐 Please log in to use sentence analysis.')
             }
-          } finally {
-            setSentenceAnalysisLoading(false)
+          }
+        } catch (error) {
+          console.error('Sentence analysis error:', error)
+          setSentenceAnalysis(null)
+          if (error instanceof Error && error.message.includes('Rate limited')) {
+            toast.error('⏳ Please slow down - too many requests. Try again in a moment.')
+          }
+        } finally {
+          setSentenceAnalysisLoading(false)
           }
         } else {
           console.log('⏳ Sentence analysis skipped due to rate limiting')
@@ -425,30 +425,30 @@ const GrammarTextEditor: React.FC = () => {
               
               if (!hasExistingGrammarInSentence) {
                 // Create a suggestion object for the incomplete sentence
-                const incompleteSuggestion: Suggestion = {
-                  id: `sentence-${index}`,
-                  type: 'grammar',
+            const incompleteSuggestion: Suggestion = {
+              id: `sentence-${index}`,
+              type: 'grammar',
                   message: 'This sentence appears to be incomplete and may be missing essential components like helping verbs.',
                   offset: actualSentenceStart,
                   length: actualSentenceLength,
                   replacements: [],
-                  context: sentence.text,
+              context: sentence.text,
                   explanation: 'Incomplete sentences are missing essential components like helping verbs or main verbs. Try adding "is", "are", "was", "were", or other helping verbs.',
-                  category: 'Grammar',
-                  severity: 'high'
-                }
-                
-                // Add to combined suggestions array for tooltip lookup
-                allSuggestions.push(incompleteSuggestion)
-                
-                allHighlights.push({
+              category: 'Grammar',
+              severity: 'high'
+            }
+            
+            // Add to combined suggestions array for tooltip lookup
+            allSuggestions.push(incompleteSuggestion)
+            
+            allHighlights.push({
                   offset: actualSentenceStart,
                   length: actualSentenceLength,
-                  type: 'grammar',
-                  id: `sentence-${index}`,
-                  className: 'underline decoration-orange-500 decoration-wavy bg-orange-500 bg-opacity-10 dark:bg-orange-400 dark:bg-opacity-20'
-                })
-                
+              type: 'grammar',
+              id: `sentence-${index}`,
+              className: 'underline decoration-orange-500 decoration-wavy bg-orange-500 bg-opacity-10 dark:bg-orange-400 dark:bg-opacity-20'
+            })
+            
                 console.log(`✅ Added sentence highlight:`, {
                   id: `sentence-${index}`,
                   type: 'grammar',
@@ -480,7 +480,7 @@ const GrammarTextEditor: React.FC = () => {
 
     // Sort highlights by offset (descending) to apply from end to start
     const sortedHighlights = allHighlights.sort((a, b) => b.offset - a.offset)
-    
+
     console.log('🎨 Total highlights to apply:', sortedHighlights.length)
     console.log('🎨 Highlights summary:', sortedHighlights.map(h => ({
       id: h.id,
@@ -537,7 +537,7 @@ const GrammarTextEditor: React.FC = () => {
       console.log(`🔄 Reduced ${validHighlights.length} highlights to ${uniqueHighlights.length} unique highlights`)
 
       uniqueHighlights.forEach((highlight) => {
-        const { offset, length, type, id, className } = highlight
+      const { offset, length, type, id, className } = highlight
         
         // Validate highlight bounds before applying (double-check)
         if (offset < 0 || offset + length > result.length || length > 500) {
@@ -554,10 +554,10 @@ const GrammarTextEditor: React.FC = () => {
           return
         }
         
-        const before = result.substring(0, offset)
-        const highlightedText = result.substring(offset, offset + length)
-        const after = result.substring(offset + length)
-        
+      const before = result.substring(0, offset)
+      const highlightedText = result.substring(offset, offset + length)
+      const after = result.substring(offset + length)
+      
         // Escape HTML in the highlighted text to prevent corruption
         const escapedText = highlightedText
           .replace(/&/g, '&amp;')
@@ -578,14 +578,14 @@ const GrammarTextEditor: React.FC = () => {
         })
         
         // Create the highlight span with escaped content
-        const eventHandlers = `data-suggestion-id="${id}" data-offset="${offset}" data-length="${length}" style="pointer-events: auto;" onmouseenter="window.handleSuggestionHover && window.handleSuggestionHover('${id}', event)" onmouseleave="window.handleSuggestionLeave && window.handleSuggestionLeave()" onclick="window.handleSuggestionClick && window.handleSuggestionClick(${offset}, event)"`
-        
+      const eventHandlers = `data-suggestion-id="${id}" data-offset="${offset}" data-length="${length}" style="pointer-events: auto;" onmouseenter="window.handleSuggestionHover && window.handleSuggestionHover('${id}', event)" onmouseleave="window.handleSuggestionLeave && window.handleSuggestionLeave()" onclick="window.handleSuggestionClick && window.handleSuggestionClick(${offset}, event)"`
+      
         const highlightedSpan = `<span class="${className}" ${eventHandlers}>${escapedText}</span>`
-        
-        result = before + highlightedSpan + after
+      
+      result = before + highlightedSpan + after
         
         console.log(`📝 New result length: ${result.length}`)
-      })
+    })
 
     setHighlightedContent(result)
     
@@ -1216,7 +1216,7 @@ const GrammarTextEditor: React.FC = () => {
               <span>Undo</span>
             </button>
           )}
-
+          
           {/* Tone Rewrite Button */}
           {content.trim().length > 0 && (
             <button
@@ -1235,31 +1235,31 @@ const GrammarTextEditor: React.FC = () => {
 
       {/* Main Content Area with Sidebar */}
       <div className="flex gap-2 flex-1 min-h-0 mx-4">
-        {/* Editor Container */}
+      {/* Editor Container */}
         <div className="flex-1 flex flex-col min-w-0">
           <div className="relative border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-900 flex-1 flex flex-col">
-            {/* Textarea */}
-            <textarea
-              ref={editorRef}
-              value={content}
-              onChange={handleContentChange}
+        {/* Textarea */}
+        <textarea
+          ref={editorRef}
+          value={content}
+          onChange={handleContentChange}
               onKeyDown={handleKeyDownEnhanced}
               className="w-full flex-1 p-4 bg-transparent text-gray-900 dark:text-gray-100 resize-none focus:outline-none font-serif text-lg leading-relaxed min-h-0"
-              placeholder={`Start writing your document... Grammar checking will begin automatically. ${autoSaveEnabled ? 'Auto-save is enabled.' : 'Auto-save is disabled - press Ctrl+S to save manually.'}`}
-              style={{ fontFamily: 'ui-serif, Georgia, serif' }}
-            />
-            
-            {/* Overlay for highlights */}
-            <div
-              ref={overlayRef}
-              className="grammar-overlay absolute inset-0 p-4 font-serif text-lg leading-relaxed text-transparent z-10"
-              style={{ 
-                fontFamily: 'ui-serif, Georgia, serif',
-                whiteSpace: 'pre-wrap',
-                wordWrap: 'break-word'
-              }}
-              dangerouslySetInnerHTML={{ __html: highlightedContent }}
-            />
+          placeholder={`Start writing your document... Grammar checking will begin automatically. ${autoSaveEnabled ? 'Auto-save is enabled.' : 'Auto-save is disabled - press Ctrl+S to save manually.'}`}
+          style={{ fontFamily: 'ui-serif, Georgia, serif' }}
+        />
+        
+        {/* Overlay for highlights */}
+        <div
+          ref={overlayRef}
+          className="grammar-overlay absolute inset-0 p-4 font-serif text-lg leading-relaxed text-transparent z-10"
+          style={{ 
+            fontFamily: 'ui-serif, Georgia, serif',
+            whiteSpace: 'pre-wrap',
+            wordWrap: 'break-word'
+          }}
+          dangerouslySetInnerHTML={{ __html: highlightedContent }}
+        />
           </div>
         </div>
 

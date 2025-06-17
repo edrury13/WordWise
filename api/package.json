@@ -1,0 +1,9 @@
+{
+  "name": "wordwise-api",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.38.4",
+    "axios": "^1.6.2"
+  }
+} 
