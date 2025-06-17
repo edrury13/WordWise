@@ -781,14 +781,21 @@ function performClientSideReadabilityAnalysis(text: string): ReadabilityScore {
   const passiveMatches = text.match(passiveIndicators) || []
   const passiveVoicePercentage = (passiveMatches.length / Math.max(totalSentences, 1)) * 100
 
+  const calculatedFK = Math.round(fleschKincaid * 10) / 10
+  const calculatedFRE = Math.round(fleschReadingEase * 10) / 10
+  
   console.log('📊 Readability calculations:', {
-    fleschKincaid: Math.round(fleschKincaid * 10) / 10,
-    fleschReadingEase: Math.round(fleschReadingEase * 10) / 10,
+    fleschKincaid: calculatedFK,
+    fleschReadingEase: calculatedFRE,
     averageWordsPerSentence: Math.round(averageWordsPerSentence * 10) / 10,
     averageSyllablesPerWord: Math.round(averageSyllablesPerWord * 10) / 10,
     totalSentences,
     longSentences,
-    passiveVoicePercentage: Math.round(passiveVoicePercentage * 10) / 10
+    passiveVoicePercentage: Math.round(passiveVoicePercentage * 10) / 10,
+    rawFK: fleschKincaid,
+    rawFRE: fleschReadingEase,
+    isNaN_FK: isNaN(calculatedFK),
+    isNaN_FRE: isNaN(calculatedFRE)
   })
 
   const readabilityScore: ReadabilityScore = {

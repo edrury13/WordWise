@@ -61,7 +61,10 @@ const ReadabilityPanel: React.FC = () => {
         <div className="flex items-center justify-between">
           <span className="text-sm text-gray-600 dark:text-gray-400">Grade Level:</span>
           <span className={`text-sm font-medium ${getScoreColor(readabilityScore.fleschKincaid)}`}>
-            {readabilityScore.fleschKincaid}
+            {(() => {
+              console.log('📊 Rendering FK score:', readabilityScore.fleschKincaid, typeof readabilityScore.fleschKincaid)
+              return readabilityScore.fleschKincaid ?? 'N/A'
+            })()}
           </span>
         </div>
 
@@ -70,7 +73,10 @@ const ReadabilityPanel: React.FC = () => {
           <span className="text-sm text-gray-600 dark:text-gray-400">Reading Ease:</span>
           <div className="text-right">
             <span className={`text-sm font-medium ${getReadingEaseColor(readabilityScore.fleschReadingEase)}`}>
-              {readabilityScore.fleschReadingEase}
+              {(() => {
+                console.log('📊 Rendering FRE score:', readabilityScore.fleschReadingEase, typeof readabilityScore.fleschReadingEase)
+                return readabilityScore.fleschReadingEase ?? 'N/A'
+              })()}
             </span>
             <div className={`text-xs ${getReadingEaseColor(readabilityScore.fleschReadingEase)}`}>
               {getReadingEaseLevel(readabilityScore.fleschReadingEase)}
