@@ -49,15 +49,29 @@ const initialState: SuggestionState = {
 // Async thunks
 export const checkText = createAsyncThunk(
   'suggestions/checkText',
-  async ({ text, language = 'en-US' }: { text: string; language?: string }) => {
-    const [grammarResults, readabilityResults] = await Promise.all([
-      checkGrammarAndSpelling(text, language),
-      analyzeReadability(text),
-    ])
-    
-    return {
-      suggestions: grammarResults,
-      readabilityScore: readabilityResults,
+  async ({ text, language = 'en-US' }: { text: string; language?: string }, { rejectWithValue }) => {
+    try {
+      const [grammarResults, readabilityResults] = await Promise.all([
+        checkGrammarAndSpelling(text, language),
+        analyzeReadability(text),
+      ])
+      
+      return {
+        suggestions: grammarResults,
+        readabilityScore: readabilityResults,
+      }
+    } catch (error) {
+      // Handle rate limiting gracefully
+      if (error instanceof Error && error.message.includes('Rate limit')) {
+        return rejectWithValue('Rate limited. Please wait a moment before trying again.')
+      }
+      
+      // For other errors, still return empty results rather than failing completely
+      console.warn('Grammar check failed, returning empty results:', error)
+      return {
+        suggestions: [],
+        readabilityScore: null,
+      }
     }
   }
 )

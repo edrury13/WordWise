@@ -4,6 +4,28 @@ import { Suggestion, ReadabilityScore } from '../store/slices/suggestionSlice'
 
 const LANGUAGETOOL_API_URL = import.meta.env.VITE_LANGUAGETOOL_API_URL || 'https://api.languagetool.org/v2'
 
+// Simple rate limiter to prevent too many simultaneous API calls
+class RateLimiter {
+  private lastCallTime: number = 0
+  private minInterval: number = 1000 // Minimum 1 second between calls
+
+  async throttle(): Promise<void> {
+    const now = Date.now()
+    const timeSinceLastCall = now - this.lastCallTime
+    
+    if (timeSinceLastCall < this.minInterval) {
+      const waitTime = this.minInterval - timeSinceLastCall
+      console.log(`⏳ Rate limiting: waiting ${waitTime}ms before API call`)
+      await new Promise(resolve => setTimeout(resolve, waitTime))
+    }
+    
+    this.lastCallTime = Date.now()
+  }
+}
+
+const grammarRateLimiter = new RateLimiter()
+const sentenceRateLimiter = new RateLimiter()
+
 interface LanguageToolMatch {
   offset: number
   length: number
@@ -37,6 +59,9 @@ export const checkGrammarAndSpelling = async (
     if (!text || text.trim().length === 0) {
       return []
     }
+
+    // Add a small delay to prevent rapid API calls
+    await new Promise(resolve => setTimeout(resolve, 100))
 
     // Use backend API instead of directly calling LanguageTool
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
@@ -126,6 +151,12 @@ export const checkGrammarAndSpelling = async (
       status: axios.isAxiosError(error) ? error.response?.status : null,
       data: axios.isAxiosError(error) ? error.response?.data : null
     })
+    
+    // Handle rate limiting specifically
+    if (axios.isAxiosError(error) && error.response?.status === 429) {
+      console.warn('🚨 Rate limit exceeded - using client-side grammar checking as fallback')
+      return performClientSideGrammarCheck(text)
+    }
     
     // Fallback to client-side checking if backend fails
     if (axios.isAxiosError(error)) {
@@ -474,6 +505,9 @@ function performClientSideReadabilityAnalysis(text: string): ReadabilityScore {
 
 export const analyzeSentences = async (text: string) => {
   try {
+    // Add a small delay to prevent rapid API calls
+    await new Promise(resolve => setTimeout(resolve, 200))
+    
     // Use backend API with Supabase authentication
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
     

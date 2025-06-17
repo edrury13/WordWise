@@ -119,14 +119,12 @@ const RegisterPage: React.FC = () => {
       }))
       
       if (registerUser.fulfilled.match(result)) {
-        // Check if user needs email confirmation
-        if (result.payload.user && !result.payload.session) {
-          toast.success('Registration successful! Please check your email to confirm your account.')
-          navigate('/login')
-        } else {
-          toast.success('Registration successful! Welcome to WordWise.')
-          navigate('/dashboard')
-        }
+        // Store email for confirmation page
+        localStorage.setItem('pendingConfirmationEmail', formData.email)
+        
+        // Always redirect to email confirmation page after registration
+        toast.success('Registration successful! Please check your email to confirm your account.')
+        navigate(`/confirm-email?email=${encodeURIComponent(formData.email)}`)
       }
     } catch (error) {
       console.error('Registration error:', error)

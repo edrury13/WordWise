@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
-import { checkText, setActiveSuggestion, ignoreSuggestion, clearSuggestions, acceptAllSuggestions, ignoreAllCurrentSuggestions } from '../store/slices/suggestionSlice'
+import { checkText, setActiveSuggestion, ignoreSuggestion, clearSuggestions, acceptAllSuggestions, ignoreAllCurrentSuggestions, clearError } from '../store/slices/suggestionSlice'
 import { setContent, setLastSaved, setAutoSave } from '../store/slices/editorSlice'
 import { updateDocument, updateCurrentDocumentContent } from '../store/slices/documentSlice'
 import { Suggestion } from '../store/slices/suggestionSlice'
 import { analyzeSentences } from '../services/languageService'
 import SentenceAnalysisPanel from './SentenceAnalysisPanel'
 import ToneRewritePanel from './ToneRewritePanel'
+import toast from 'react-hot-toast'
 
 const GrammarTextEditor: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -33,7 +34,7 @@ const GrammarTextEditor: React.FC = () => {
   const currentDocumentIdRef = useRef<string | null>(null)
   const sentenceDebounceRef = useRef<NodeJS.Timeout>()
 
-  // Debounced grammar checking
+  // Debounced grammar checking with increased delay to reduce API calls
   const checkGrammar = useCallback((text: string) => {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current)
@@ -43,7 +44,7 @@ const GrammarTextEditor: React.FC = () => {
       if (text.trim() && text.length > 3) {
         dispatch(checkText({ text }))
       }
-    }, 1000)
+    }, 2000) // Increased from 1000ms to 2000ms to reduce API calls
   }, [dispatch])
 
   // Debounced sentence analysis
@@ -54,24 +55,39 @@ const GrammarTextEditor: React.FC = () => {
     
     sentenceDebounceRef.current = setTimeout(async () => {
       if (text.trim() && text.length > 10) {
+        console.log('🔍 Starting sentence analysis for text:', text.substring(0, 100) + '...')
         setSentenceAnalysisLoading(true)
         try {
           const result = await analyzeSentences(text)
+          console.log('📊 Sentence analysis result:', result)
+          
           if (result.success) {
+            console.log('✅ Setting sentence analysis data:', result.analysis)
             setSentenceAnalysis(result.analysis)
           } else {
+            console.log('❌ Sentence analysis failed:', result.error)
             setSentenceAnalysis(null)
+            // Show user-friendly error messages
+            if (result.error?.includes('Rate limited')) {
+              toast.error('⏳ Please slow down - too many requests. Try again in a moment.')
+            } else if (result.error?.includes('Authentication')) {
+              toast.error('🔐 Please log in to use sentence analysis.')
+            }
           }
         } catch (error) {
           console.error('Sentence analysis error:', error)
           setSentenceAnalysis(null)
+          if (error instanceof Error && error.message.includes('Rate limited')) {
+            toast.error('⏳ Please slow down - too many requests. Try again in a moment.')
+          }
         } finally {
           setSentenceAnalysisLoading(false)
         }
       } else {
+        console.log('⏭️ Skipping sentence analysis - text too short:', text.length)
         setSentenceAnalysis(null)
       }
-    }, 3000) // Increased from 1500ms to 3000ms to reduce API calls
+    }, 4000) // Increased to 4000ms to further reduce API calls and avoid rate limiting
   }, [])
 
   // Auto-save functionality
@@ -213,13 +229,28 @@ const GrammarTextEditor: React.FC = () => {
 
     // Add sentence-level issues (incomplete sentences)
     if (sentenceAnalysis?.sentences) {
+      console.log('🔍 Sentence analysis data:', sentenceAnalysis)
+      console.log('📝 Sentences found:', sentenceAnalysis.sentences.length)
+      
       sentenceAnalysis.sentences.forEach((sentence: any, index: number) => {
+        console.log(`Sentence ${index + 1}:`, {
+          text: sentence.text,
+          quality: sentence.quality,
+          issues: sentence.issues,
+          offset: sentence.offset,
+          length: sentence.length
+        })
+        
         if (sentence.quality === 'incomplete' && sentence.issues?.length > 0) {
+          console.log(`🚨 Found incomplete sentence ${index + 1}:`, sentence.text)
+          
           // Check if this sentence already has a grammar highlight to avoid duplicates
           const hasExistingHighlight = allHighlights.some(h => 
             h.offset >= sentence.offset && 
             h.offset < sentence.offset + sentence.length
           )
+          
+          console.log(`Existing highlight check:`, hasExistingHighlight)
           
           if (!hasExistingHighlight) {
             // Create a fake suggestion object for the incomplete sentence
@@ -246,9 +277,17 @@ const GrammarTextEditor: React.FC = () => {
               id: `sentence-${index}`,
               className: 'underline decoration-orange-500 decoration-wavy bg-orange-500 bg-opacity-10 dark:bg-orange-400 dark:bg-opacity-20'
             })
+            
+            console.log(`✅ Added highlight for incomplete sentence:`, {
+              offset: sentence.offset,
+              length: sentence.length,
+              text: sentence.text
+            })
           }
         }
       })
+    } else {
+      console.log('❌ No sentence analysis data available')
     }
 
     // Sort highlights by offset (descending) to apply from end to start
@@ -546,6 +585,15 @@ const GrammarTextEditor: React.FC = () => {
     }
   }, [])
 
+  // Monitor Redux error state and show toast notifications
+  useEffect(() => {
+    if (error && error.includes('Rate limited')) {
+      toast.error('⏳ Please slow down - too many requests. Try again in a moment.')
+      // Clear the error after showing the toast
+      dispatch(clearError())
+    }
+  }, [error, dispatch])
+
   const activeSuggestion = combinedSuggestions.find(s => s.id === showTooltip) || suggestions.find(s => s.id === showTooltip)
   const wordCount = content.split(/\s+/).filter(w => w.length > 0).length
   const charCount = content.length
@@ -639,51 +687,6 @@ const GrammarTextEditor: React.FC = () => {
               </svg>
               <span>Rewrite Tone</span>
             </button>
-          )}
-        </div>
-        
-        <div className="flex items-center space-x-2 text-sm">
-          {(suggestions.length > 0 || (sentenceAnalysis?.qualityDistribution?.incomplete > 0)) && (
-            <>
-              <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded">
-                {suggestions.length + (sentenceAnalysis?.qualityDistribution?.incomplete || 0)} issue{(suggestions.length + (sentenceAnalysis?.qualityDistribution?.incomplete || 0)) !== 1 ? 's' : ''}
-              </span>
-              
-              {/* Bulk Action Buttons */}
-              <div className="flex items-center space-x-2 ml-3">
-                <button
-                  onClick={handleAcceptAllSuggestions}
-                  className="px-3 py-1 bg-green-100 hover:bg-green-200 text-green-800 text-xs rounded transition-colors flex items-center space-x-1"
-                  title="Accept all suggestions"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span>Accept All</span>
-                </button>
-                
-                <button
-                  onClick={handleIgnoreAllSuggestions}
-                  className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs rounded transition-colors flex items-center space-x-1"
-                  title="Ignore all suggestions"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                  <span>Ignore All</span>
-                </button>
-              </div>
-            </>
-          )}
-          {sentenceAnalysis?.qualityDistribution?.incomplete > 0 && (
-            <span className="px-2 py-1 bg-red-100 text-red-800 rounded">
-              {sentenceAnalysis.qualityDistribution.incomplete} incomplete sentence{sentenceAnalysis.qualityDistribution.incomplete !== 1 ? 's' : ''}
-            </span>
-          )}
-          {suggestions.length === 0 && (!sentenceAnalysis?.qualityDistribution?.incomplete || sentenceAnalysis.qualityDistribution.incomplete === 0) && content.length > 0 && !loading && !sentenceAnalysisLoading && (
-            <span className="px-2 py-1 bg-green-100 text-green-800 rounded">
-              No issues found
-            </span>
           )}
         </div>
       </div>
@@ -808,7 +811,7 @@ const GrammarTextEditor: React.FC = () => {
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                <span>Accept All ({suggestions.length})</span>
+                <span>Accept All</span>
               </button>
               
               <button

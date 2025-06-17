@@ -8,6 +8,7 @@ import { RootState, AppDispatch } from './store'
 // Components
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
+import EmailConfirmationPage from './pages/EmailConfirmationPage'
 import Dashboard from './pages/Dashboard'
 import EditorPage from './pages/EditorPage'
 import LoadingSpinner from './components/LoadingSpinner'
@@ -37,6 +38,11 @@ function App() {
       async (event, session) => {
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           dispatch(setAuth({ user: session?.user || null, session }))
+          
+          // Clean up pending confirmation email when user successfully signs in
+          if (event === 'SIGNED_IN') {
+            localStorage.removeItem('pendingConfirmationEmail')
+          }
         } else if (event === 'SIGNED_OUT') {
           dispatch(setAuth({ user: null, session: null }))
         }
@@ -71,6 +77,10 @@ function App() {
           element={
             isAuthenticated ? <Navigate to="/dashboard" replace /> : <RegisterPage />
           } 
+        />
+        <Route 
+          path="/confirm-email" 
+          element={<EmailConfirmationPage />} 
         />
 
         {/* Protected routes */}
