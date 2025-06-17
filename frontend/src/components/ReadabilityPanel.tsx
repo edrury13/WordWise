@@ -31,16 +31,6 @@ const ReadabilityPanel: React.FC = () => {
     )
   }
 
-  const getScoreColor = (score: number): string => {
-    if (isNaN(score) || score === null || score === undefined) {
-      console.log('📊 getScoreColor: Invalid score:', score)
-      return 'text-gray-600 dark:text-gray-400'
-    }
-    if (score <= 8) return 'text-green-600 dark:text-green-400'
-    if (score <= 12) return 'text-yellow-600 dark:text-yellow-400'
-    return 'text-red-600 dark:text-red-400'
-  }
-
   const getReadingEaseColor = (score: number): string => {
     if (isNaN(score) || score === null || score === undefined) {
       console.log('📊 getReadingEaseColor: Invalid score:', score)
