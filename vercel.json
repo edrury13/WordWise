@@ -1,11 +1,16 @@
 {
-  "version": 2,
-  "buildCommand": "cd frontend && npm ci && npm run build",
-  "outputDirectory": "frontend/dist",
-  "installCommand": "npm ci --prefix frontend",
+  "builds": [
+    {
+      "src": "frontend/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
   "functions": {
     "api/**/*.js": {
-      "runtime": "@vercel/node@3.0.7"
+      "runtime": "@vercel/node"
     }
   },
   "routes": [
