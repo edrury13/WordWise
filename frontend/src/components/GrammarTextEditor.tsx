@@ -7,6 +7,7 @@ import { updateDocument, updateCurrentDocumentContent } from '../store/slices/do
 import { Suggestion } from '../store/slices/suggestionSlice'
 import { analyzeSentences } from '../services/languageService'
 import SentenceAnalysisPanel from './SentenceAnalysisPanel'
+import ToneRewritePanel from './ToneRewritePanel'
 
 const GrammarTextEditor: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -23,6 +24,7 @@ const GrammarTextEditor: React.FC = () => {
   const [sentenceAnalysis, setSentenceAnalysis] = useState<any>(null)
   const [sentenceAnalysisLoading, setSentenceAnalysisLoading] = useState(false)
   const [combinedSuggestions, setCombinedSuggestions] = useState<Suggestion[]>([])
+  const [showToneRewritePanel, setShowToneRewritePanel] = useState(false)
   
   const editorRef = useRef<HTMLTextAreaElement>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
@@ -124,6 +126,30 @@ const GrammarTextEditor: React.FC = () => {
       setTimeout(() => setLastSaveStatus(null), 5000)
     })
   }, [currentDocument, user, content, dispatch])
+
+  // Handle tone rewrite
+  const handleToneRewrite = useCallback((rewrittenText: string) => {
+    setContentState(rewrittenText)
+    
+    if (editorRef.current) {
+      editorRef.current.value = rewrittenText
+      editorRef.current.focus()
+    }
+    
+    // Update Redux state
+    dispatch(setContent([{
+      type: 'paragraph',
+      children: [{ text: rewrittenText }]
+    }]))
+    
+    // Update current document content
+    dispatch(updateCurrentDocumentContent(rewrittenText))
+    
+    // Trigger grammar check, sentence analysis, and auto-save
+    checkGrammar(rewrittenText)
+    checkSentenceStructure(rewrittenText)
+    autoSave(rewrittenText)
+  }, [dispatch, checkGrammar, checkSentenceStructure, autoSave])
 
   // Handle keyboard shortcuts
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -600,6 +626,20 @@ const GrammarTextEditor: React.FC = () => {
               </div>
             </label>
           </div>
+          
+          {/* Tone Rewrite Button */}
+          {content.trim().length > 0 && (
+            <button
+              onClick={() => setShowToneRewritePanel(true)}
+              className="px-3 py-1 bg-purple-100 hover:bg-purple-200 dark:bg-purple-900 dark:hover:bg-purple-800 text-purple-800 dark:text-purple-200 text-xs rounded transition-colors flex items-center space-x-1"
+              title="Rewrite text in different tone"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              <span>Rewrite Tone</span>
+            </button>
+          )}
         </div>
         
         <div className="flex items-center space-x-2 text-sm">
@@ -860,6 +900,15 @@ const GrammarTextEditor: React.FC = () => {
           autoSave(newContent)
         }}
       />
+
+      {/* Tone Rewrite Panel */}
+      {showToneRewritePanel && (
+        <ToneRewritePanel
+          text={content}
+          onRewrite={handleToneRewrite}
+          onClose={() => setShowToneRewritePanel(false)}
+        />
+      )}
     </div>
   )
 }

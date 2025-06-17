@@ -472,50 +472,132 @@ function performClientSideReadabilityAnalysis(text: string): ReadabilityScore {
   return readabilityScore
 }
 
-export const analyzeSentences = async (text: string, language: string = 'en-US') => {
+export const analyzeSentences = async (text: string) => {
   try {
+    // Use backend API with Supabase authentication
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
     
     // Get auth token from Supabase session (consistent with other functions)
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
     const token = session?.access_token
 
-    if (!token) {
-      throw new Error('No authentication token available')
-    }
-
-    const response = await fetch(`${API_BASE_URL}/language/sentence-analysis`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ text, language })
+    console.log('📊 Sentence analysis request:', {
+      textLength: text.length,
+      hasToken: !!token,
+      sessionError: sessionError?.message
     })
 
-    if (response.status === 429) {
-      // Rate limited - return a graceful fallback
-      console.warn('Sentence analysis rate limited, skipping this request')
+    if (!token) {
+      console.warn('🚨 No authentication token available for sentence analysis')
       return {
         success: false,
-        error: 'Rate limited - please wait before making more requests'
+        error: 'Authentication required. Please log in to analyze sentences.'
       }
     }
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+    const response = await axios.post(
+      `${API_BASE_URL}/language/sentence-analysis`,
+      { text },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        timeout: 30000
+      }
+    )
+
+    if (response.status === 429) {
+      // Rate limited - return graceful fallback
+      return {
+        success: false,
+        error: 'Rate limited. Please wait a moment before trying again.'
+      }
     }
 
-    return response.json()
+    return response.data
   } catch (error) {
     console.error('Sentence analysis error:', error)
     
-    // For rate limiting errors, return a graceful response instead of throwing
-    if (error instanceof Error && error.message.includes('429')) {
-      return {
-        success: false,
-        error: 'Rate limited - please wait before making more requests'
+    if (axios.isAxiosError(error)) {
+      if (error.response?.status === 429) {
+        return {
+          success: false,
+          error: 'Rate limited. Please wait a moment before trying again.'
+        }
+      } else if (error.response?.status === 401) {
+        return {
+          success: false,
+          error: 'Authentication failed. Please log in again.'
+        }
+      }
+    }
+    
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to analyze sentences'
+    }
+  }
+}
+
+export const rewriteTone = async (text: string, tone: string) => {
+  try {
+    // Use backend API with Supabase authentication
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
+    
+    // Get auth token from Supabase session (consistent with other functions)
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    const token = session?.access_token
+
+    console.log('🎨 Tone rewrite request:', {
+      textLength: text.length,
+      tone,
+      hasToken: !!token,
+      sessionError: sessionError?.message
+    })
+
+    if (!token) {
+      console.warn('🚨 No authentication token available for tone rewriting')
+      throw new Error('Authentication required. Please log in to use tone rewriting.')
+    }
+
+    console.log('📡 Making tone rewrite API call...')
+
+    const response = await axios.post(
+      `${API_BASE_URL}/language/rewrite-tone`,
+      { text, tone },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        timeout: 30000
+      }
+    )
+
+    console.log('✅ Tone rewrite API response:', {
+      success: response.data.success,
+      originalLength: response.data.originalText?.length || 0,
+      rewrittenLength: response.data.rewrittenText?.length || 0,
+      tone: response.data.tone
+    })
+
+    return response.data
+  } catch (error) {
+    console.error('❌ Tone rewriting failed:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      isAxiosError: axios.isAxiosError(error),
+      status: axios.isAxiosError(error) ? error.response?.status : null,
+      data: axios.isAxiosError(error) ? error.response?.data : null
+    })
+    
+    if (axios.isAxiosError(error)) {
+      if (error.response?.status === 429) {
+        throw new Error('Rate limited. Please wait a moment before trying again.')
+      } else if (error.response?.status === 401) {
+        throw new Error('Authentication failed. Please log in again.')
+      } else if (error.response?.data?.error) {
+        throw new Error(error.response.data.error)
       }
     }
     

@@ -39,7 +39,9 @@ interface SentenceAnalysisData {
   totalGrammarIssues: number
   totalStructureIssues: number
   fleschKincaidScore: number
+  fleschReadingEase: number
   readabilityLevel: string
+  readingEaseLevel: string
   sentences: SentenceAnalysis[]
 }
 
@@ -200,11 +202,19 @@ const SentenceAnalysisPanel: React.FC<SentenceAnalysisPanelProps> = ({ text, onS
 
         {/* Flesch-Kincaid Readability Score */}
         <div className="mt-3 pt-3 border-t border-current border-opacity-20">
-          <div className="flex items-center justify-between text-sm">
-            <span>Flesch-Kincaid Grade Level: <span className="font-medium">{analysis.fleschKincaidScore}</span></span>
-            <span className="text-xs px-2 py-1 rounded bg-white dark:bg-gray-800 border">
-              {analysis.readabilityLevel}
-            </span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span>Flesch-Kincaid Grade Level: <span className="font-medium">{analysis.fleschKincaidScore}</span></span>
+              <span className="text-xs px-2 py-1 rounded bg-white dark:bg-gray-800 border">
+                {analysis.readabilityLevel}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Flesch Reading Ease: <span className="font-medium">{analysis.fleschReadingEase}</span></span>
+              <span className="text-xs px-2 py-1 rounded bg-white dark:bg-gray-800 border">
+                {analysis.readingEaseLevel}
+              </span>
+            </div>
           </div>
         </div>
       </div>
