@@ -63,159 +63,103 @@ export const checkGrammarAndSpelling = async (
     // Add a small delay to prevent rapid API calls
     await new Promise(resolve => setTimeout(resolve, 100))
 
-    // Get auth token from Supabase session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    const token = session?.access_token
-
     console.log('🔍 Grammar check:', {
       textLength: text.length,
-      hasToken: !!token,
-      sessionError: sessionError?.message,
       isProd: import.meta.env.PROD
     })
 
-    if (!token) {
-      console.warn('🚨 No authentication token available - using client-side checking')
-      return { suggestions: performClientSideGrammarCheck(text), apiStatus: 'client-fallback' }
-    }
-
-    // Try backend API first (only in production or when explicitly configured)
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : null)
-    
-    if (API_BASE_URL) {
-      try {
-        console.log('📡 Trying backend API...', text.substring(0, 50) + '...')
-
-        const response = await axios.post(
-          `${API_BASE_URL}/language-check`,
-          { text, language },
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            timeout: 15000
-          }
-        )
-
-        console.log('✅ Backend API response:', {
-          success: response.data.success,
-          suggestionsCount: response.data.suggestions?.length || 0
-        })
-
-        const suggestions = response.data.suggestions || []
-        
-        // Still add client-side checks for comprehensive coverage
-        const clientSideGrammarSuggestions = performClientSideGrammarCheck(text)
-        const mergedSuggestions = [...suggestions]
-        
-        clientSideGrammarSuggestions.forEach(clientSuggestion => {
-          const hasOverlappingSuggestion = suggestions.some((apiSuggestion: Suggestion) => {
-            const clientStart = clientSuggestion.offset
-            const clientEnd = clientSuggestion.offset + clientSuggestion.length
-            const apiStart = apiSuggestion.offset
-            const apiEnd = apiSuggestion.offset + apiSuggestion.length
-            return (clientStart < apiEnd && clientEnd > apiStart)
-          })
-          
-          if (!hasOverlappingSuggestion) {
-            mergedSuggestions.push(clientSuggestion)
-          }
-        })
-
-        const apiStatus = suggestions.length > 0 
-          ? (clientSideGrammarSuggestions.length > 0 ? 'mixed' : 'api')
-          : 'client-fallback'
-
-        return { suggestions: mergedSuggestions, apiStatus }
-      } catch (backendError) {
-        console.warn('🔄 Backend API failed, trying LanguageTool directly:', 
-          axios.isAxiosError(backendError) ? backendError.response?.status : backendError)
-      }
-    }
-
-    // Fallback to direct LanguageTool API call
-    console.log('📡 Calling LanguageTool API directly...')
-    
-    const languageToolUrl = 'https://api.languagetool.org/v2'
-    const params = new URLSearchParams({
-      text,
-      language,
-      enabledOnly: 'false',
-      level: 'picky',
-      enabledCategories: 'GRAMMAR,SENTENCE_WHITESPACE,MISC,COMPOUNDING,SEMANTICS,PUNCTUATION,CASING,TYPOS',
-      disabledCategories: 'STYLE,COLLOQUIALISMS,REDUNDANCY,WORDINESS'
-    })
-
-    const ltResponse = await axios.post(`${languageToolUrl}/check`, params, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      timeout: 30000,
-    })
-
-    console.log('✅ LanguageTool API response:', {
-      matches: ltResponse.data.matches?.length || 0
-    })
-
-    const suggestions = ltResponse.data.matches.map((match: any, index: number) => ({
-      id: `lt-${match.rule.id}-${match.offset}-${index}`,
-      type: getSuggestionType(match.rule.category.id, match.rule.issueType),
-      message: match.message,
-      replacements: match.replacements.map((r: any) => r.value),
-      offset: match.offset,
-      length: match.length,
-      context: match.context.text,
-      explanation: match.shortMessage || match.message,
-      category: match.rule.category.name,
-      severity: getSeverity(match.rule.issueType),
-    })) || []
-    
-    console.log('📋 Received suggestions:', {
-      total: suggestions.length,
-      grammar: suggestions.filter((s: Suggestion) => s.type === 'grammar').length,
-      spelling: suggestions.filter((s: Suggestion) => s.type === 'spelling').length,
-      style: suggestions.filter((s: Suggestion) => s.type === 'style').length,
-    })
-
-    // Always run client-side grammar checks to catch patterns the API might miss
-    console.log('🔄 Adding client-side grammar checks')
-    const clientSideGrammarSuggestions = performClientSideGrammarCheck(text)
-    
-    // Merge client-side suggestions with API suggestions, avoiding duplicates
-    const mergedSuggestions = [...suggestions]
-    
-    clientSideGrammarSuggestions.forEach(clientSuggestion => {
-      // Check if there's already a suggestion covering this text range
-      const hasOverlappingSuggestion = suggestions.some((apiSuggestion: Suggestion) => {
-        const clientStart = clientSuggestion.offset
-        const clientEnd = clientSuggestion.offset + clientSuggestion.length
-        const apiStart = apiSuggestion.offset
-        const apiEnd = apiSuggestion.offset + apiSuggestion.length
-        
-        // Check for overlap: ranges overlap if one starts before the other ends
-        return (clientStart < apiEnd && clientEnd > apiStart)
-      })
+    // ALWAYS try LanguageTool API first (no authentication required)
+    try {
+      console.log('📡 Calling LanguageTool API directly...')
       
-      // Only add client-side suggestion if there's no overlapping API suggestion
-      if (!hasOverlappingSuggestion) {
-        mergedSuggestions.push(clientSuggestion)
+      const languageToolUrl = 'https://api.languagetool.org/v2'
+      const params = new URLSearchParams({
+        text,
+        language,
+        enabledOnly: 'false',
+        level: 'picky',
+        enabledCategories: 'GRAMMAR,SENTENCE_WHITESPACE,MISC,COMPOUNDING,SEMANTICS,PUNCTUATION,CASING,TYPOS',
+        disabledCategories: 'STYLE,COLLOQUIALISMS,REDUNDANCY,WORDINESS'
+      })
+
+      const ltResponse = await axios.post(`${languageToolUrl}/check`, params, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        timeout: 30000,
+      })
+
+      console.log('✅ LanguageTool API response:', {
+        matches: ltResponse.data.matches?.length || 0
+      })
+
+      const suggestions = ltResponse.data.matches.map((match: any, index: number) => ({
+        id: `lt-${match.rule.id}-${match.offset}-${index}`,
+        type: getSuggestionType(match.rule.category.id, match.rule.issueType),
+        message: match.message,
+        replacements: match.replacements.map((r: any) => r.value),
+        offset: match.offset,
+        length: match.length,
+        context: match.context.text,
+        explanation: match.shortMessage || match.message,
+        category: match.rule.category.name,
+        severity: getSeverity(match.rule.issueType),
+      })) || []
+      
+      console.log('📋 LanguageTool suggestions:', {
+        total: suggestions.length,
+        grammar: suggestions.filter((s: Suggestion) => s.type === 'grammar').length,
+        spelling: suggestions.filter((s: Suggestion) => s.type === 'spelling').length,
+        style: suggestions.filter((s: Suggestion) => s.type === 'style').length,
+      })
+
+      // Add specific client-side rules for common errors that LanguageTool might miss
+      const clientSideSupplementalSuggestions = performSupplementalGrammarCheck(text)
+      
+      // Merge with LanguageTool suggestions, avoiding duplicates
+      const mergedSuggestions = [...suggestions]
+      
+      clientSideSupplementalSuggestions.forEach((clientSuggestion: Suggestion) => {
+        // Check if there's already a suggestion covering this text range
+        const hasOverlappingSuggestion = suggestions.some((apiSuggestion: Suggestion) => {
+          const clientStart = clientSuggestion.offset
+          const clientEnd = clientSuggestion.offset + clientSuggestion.length
+          const apiStart = apiSuggestion.offset
+          const apiEnd = apiSuggestion.offset + apiSuggestion.length
+          
+          // Check for overlap: ranges overlap if one starts before the other ends
+          return (clientStart < apiEnd && clientEnd > apiStart)
+        })
+        
+        // Only add client-side suggestion if there's no overlapping API suggestion
+        if (!hasOverlappingSuggestion) {
+          mergedSuggestions.push(clientSuggestion)
+        }
+      })
+
+      console.log('📋 Final suggestions after supplemental check:', {
+        fromLanguageTool: suggestions.length,
+        supplemental: clientSideSupplementalSuggestions.length,
+        total: mergedSuggestions.length
+      })
+
+      // Status should be 'api' if LanguageTool API succeeded, regardless of suggestion count
+      return { suggestions: mergedSuggestions, apiStatus: 'api' }
+
+    } catch (languageToolError) {
+      console.warn('🔄 LanguageTool API failed:', 
+        axios.isAxiosError(languageToolError) ? languageToolError.response?.status : languageToolError)
+      
+      // Handle rate limiting specifically
+      if (axios.isAxiosError(languageToolError) && languageToolError.response?.status === 429) {
+        console.warn('🚨 LanguageTool rate limit exceeded - using client-side grammar checking as fallback')
+        return { suggestions: performClientSideGrammarCheck(text), apiStatus: 'client-fallback' }
       }
-    })
+    }
 
-    console.log('📋 Final suggestions after merge:', {
-      total: mergedSuggestions.length,
-      fromAPI: suggestions.length,
-      fromClient: clientSideGrammarSuggestions.length,
-      added: mergedSuggestions.length - suggestions.length
-    })
-
-    // Determine API status based on what was used
-    const apiStatus = suggestions.length > 0 
-      ? (clientSideGrammarSuggestions.length > 0 ? 'mixed' : 'api')
-      : 'client-fallback'
-
-    return { suggestions: mergedSuggestions, apiStatus }
+    // Fallback to client-side checking only if LanguageTool API fails
+    console.log('🔄 Using client-side grammar checking as fallback')
+    return { suggestions: performClientSideGrammarCheck(text), apiStatus: 'client-fallback' }
   } catch (error) {
     console.error('❌ Grammar check failed:', {
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -568,6 +512,95 @@ function performClientSideGrammarCheck(text: string): Suggestion[] {
   })
 
   console.log('Added client-side grammar suggestions:', suggestions.length)
+  return suggestions
+}
+
+// Supplemental grammar checking for specific patterns that LanguageTool might miss
+function performSupplementalGrammarCheck(text: string): Suggestion[] {
+  const suggestions: Suggestion[] = []
+  
+  // Specific rules for common errors that LanguageTool might not catch
+  const supplementalRules = [
+    // "The dog is run" - awkward passive voice that should be "The dog runs" or "The dog is running"
+    {
+      pattern: /\b(the|a|an)\s+(\w+)\s+is\s+(run|walk|jump|swim|fly|sleep|eat|drink|play|work|study|read|write|talk|sing|dance|cook|drive|sit|stand|move|come|go|look|watch|listen|think|feel|get|make|take|give|see|know|say|tell|ask|help|learn|teach|buy|sell|build|clean|wash|fix|paint|open|close|start|stop|continue|begin|end|finish|try|want|need|love|like|hate|hope|believe|understand|remember|forget|choose|decide|plan|prepare|organize|manage|control|lead|follow|support|encourage|celebrate|enjoy|suffer|struggle|fight|win|lose|compete|practice|train|exercise|relax|rest|wake|dream)\b(?!\w)/gi,
+      message: "This construction is awkward. Consider using the simple present tense or present continuous.",
+      replacement: (match: string) => {
+        const parts = match.trim().split(/\s+/)
+        const article = parts[0]
+        const noun = parts[1]
+        const verb = parts[3]
+        
+        // Determine if singular or plural based on article and noun
+        const isSingular = article.toLowerCase() !== 'the' || !noun.endsWith('s')
+        
+        if (isSingular) {
+          // For singular subjects, add 's' to the verb
+          const correctedVerb = verb === 'go' ? 'goes' :
+                              verb === 'do' ? 'does' :
+                              verb === 'have' ? 'has' :
+                              verb.endsWith('s') ? verb : verb + 's'
+          return `${article} ${noun} ${correctedVerb}`
+        } else {
+          // For plural subjects, use base form
+          return `${article} ${noun} ${verb}`
+        }
+      },
+      type: 'grammar' as const
+    },
+    
+    // "He/She/It + base verb" without 's'
+    {
+      pattern: /\b(he|she|it)\s+(run|walk|jump|swim|fly|sleep|eat|drink|play|work|study|read|write|talk|sing|dance|cook|drive|sit|stand|move|come|go|look|watch|listen|think|feel|get|make|take|give|see|know|say|tell|ask|help|learn|teach|buy|sell|build|clean|wash|fix|paint|open|close|start|stop|continue|begin|end|finish|try|want|need|love|like|hate|hope|believe|understand|remember|forget|choose|decide|plan|prepare|organize|manage|control|lead|follow|support|encourage|celebrate|enjoy|suffer|struggle|fight|win|lose|compete|practice|train|exercise|relax|rest|wake|dream)\b(?!\w)/gi,
+      message: "Third person singular subjects (he, she, it) require 's' at the end of the verb.",
+      replacement: (match: string) => {
+        const parts = match.trim().split(/\s+/)
+        const pronoun = parts[0]
+        const verb = parts[1]
+        
+        const correctedVerb = verb === 'go' ? 'goes' :
+                            verb === 'do' ? 'does' :
+                            verb === 'have' ? 'has' :
+                            verb.endsWith('s') ? verb : verb + 's'
+        
+        return `${pronoun} ${correctedVerb}`
+      },
+      type: 'grammar' as const
+    },
+    
+    // "runs good" -> "runs well" (adjective/adverb confusion)
+    {
+      pattern: /\b(runs?|walks?|jumps?|swims?|flies?|works?|plays?|drives?|moves?|looks?|sounds?|feels?|smells?|tastes?)\s+good\b/gi,
+      message: "Use 'well' instead of 'good' to modify verbs.",
+      replacement: (match: string) => match.replace(/good/gi, 'well'),
+      type: 'grammar' as const
+    }
+  ]
+
+  supplementalRules.forEach((rule, ruleIndex) => {
+    let match
+    const regex = new RegExp(rule.pattern.source, rule.pattern.flags)
+    
+    while ((match = regex.exec(text)) !== null) {
+      const matchText = match[0]
+      const matchOffset = match.index
+      
+      suggestions.push({
+        id: `supplemental-${ruleIndex}-${matchOffset}`,
+        type: rule.type,
+        message: rule.message,
+        replacements: [rule.replacement(matchText)],
+        offset: matchOffset,
+        length: matchText.length,
+        context: text.substring(Math.max(0, matchOffset - 20), matchOffset + matchText.length + 20),
+        explanation: rule.message,
+        category: 'Grammar (Supplemental)',
+        severity: 'high'
+      })
+    }
+  })
+
+  console.log('Added supplemental grammar suggestions:', suggestions.length)
   return suggestions
 }
 

@@ -32,7 +32,7 @@ interface SuggestionState {
   loading: boolean
   error: string | null
   debounceTimer: number | null
-  lastCheckTime: Date | null
+  lastCheckTime: number | null
   ignoredSuggestions: string[]
   apiStatus: 'api' | 'client-fallback' | 'mixed' | null
 }
@@ -174,7 +174,7 @@ const suggestionSlice = createSlice({
         )
         state.readabilityScore = action.payload.readabilityScore
         state.apiStatus = action.payload.apiStatus
-        state.lastCheckTime = new Date()
+        state.lastCheckTime = Date.now()
       })
       .addCase(checkText.rejected, (state, action) => {
         state.loading = false
