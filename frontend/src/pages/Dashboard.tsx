@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Edit, Trash2, Calendar, LogOut, Moon, Sun, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { Plus, FileText, Edit, Trash2, Calendar, LogOut, Moon, Sun, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Command } from 'lucide-react'
 import { AppDispatch } from '../store'
 import { fetchDocuments, deleteDocument, createDocument } from '../store/slices/documentSlice'
 import { logoutUser } from '../store/slices/authSlice'
@@ -177,7 +177,7 @@ const Dashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-cream dark:bg-gray-900">
       {/* Academic Header */}
-      <header className="bg-white border-b-4 border-navy shadow-sm">
+      <header className="bg-white dark:bg-gray-800 border-b-4 border-navy dark:border-blue-600 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-4">
@@ -185,10 +185,10 @@ const Dashboard: React.FC = () => {
                 <span className="text-white font-bold text-xl academic-serif">W</span>
               </div>
               <div>
-                <h1 className="text-3xl font-bold academic-serif text-navy">
+                <h1 className="text-3xl font-bold academic-serif text-navy dark:text-blue-400">
                   Research Dashboard
                 </h1>
-                <p className="text-academic-gray academic-sans">
+                <p className="text-academic-gray dark:text-gray-300 academic-sans">
                   {user?.email} • Academic Writing Environment
                 </p>
               </div>
@@ -197,7 +197,7 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center space-x-6">
               <button
                 onClick={() => dispatch(toggleDarkMode())}
-                className="p-2 text-navy hover:text-burgundy transition-colors"
+                className="p-2 text-navy dark:text-blue-400 hover:text-burgundy dark:hover:text-blue-300 transition-colors"
               >
                 {isDarkMode ? (
                   <Sun className="h-5 w-5" />
@@ -208,7 +208,7 @@ const Dashboard: React.FC = () => {
               
               <button
                 onClick={handleLogout}
-                className="flex items-center space-x-2 px-4 py-2 text-navy hover:text-burgundy transition-colors academic-sans font-medium"
+                className="flex items-center space-x-2 px-4 py-2 text-navy dark:text-blue-400 hover:text-burgundy dark:hover:text-blue-300 transition-colors academic-sans font-medium"
               >
                 <LogOut className="h-4 w-4" />
                 <span>Sign Out</span>
@@ -222,50 +222,50 @@ const Dashboard: React.FC = () => {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Research Overview */}
         <div className="mb-8">
-          <h2 className="text-2xl font-bold academic-serif text-navy mb-6">Research Overview</h2>
+          <h2 className="text-2xl font-bold academic-serif text-navy dark:text-blue-400 mb-6">Research Overview</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-navy">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md border-l-4 border-navy dark:border-blue-600">
               <div className="flex items-center">
-                <div className="w-12 h-12 bg-navy rounded-lg flex items-center justify-center">
+                <div className="w-12 h-12 bg-navy dark:bg-blue-600 rounded-lg flex items-center justify-center">
                   <FileText className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-academic-gray academic-sans">
+                  <p className="text-sm font-medium text-academic-gray dark:text-gray-300 academic-sans">
                     Research Documents
                   </p>
-                  <p className="text-2xl font-bold academic-serif text-navy">
+                  <p className="text-2xl font-bold academic-serif text-navy dark:text-blue-400">
                     {documents.length}
                   </p>
                 </div>
               </div>
             </div>
             
-            <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-burgundy">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md border-l-4 border-burgundy dark:border-red-600">
               <div className="flex items-center">
-                <div className="w-12 h-12 bg-burgundy rounded-lg flex items-center justify-center">
+                <div className="w-12 h-12 bg-burgundy dark:bg-red-600 rounded-lg flex items-center justify-center">
                   <Edit className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-academic-gray academic-sans">
+                  <p className="text-sm font-medium text-academic-gray dark:text-gray-300 academic-sans">
                     Total Words Written
                   </p>
-                  <p className="text-2xl font-bold academic-serif text-navy">
+                  <p className="text-2xl font-bold academic-serif text-navy dark:text-blue-400">
                     {documents.reduce((total: number, doc: any) => total + doc.word_count, 0).toLocaleString()}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-gold">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md border-l-4 border-gold dark:border-yellow-600">
               <div className="flex items-center">
-                <div className="w-12 h-12 bg-gold rounded-lg flex items-center justify-center">
+                <div className="w-12 h-12 bg-gold dark:bg-yellow-600 rounded-lg flex items-center justify-center">
                   <Calendar className="h-6 w-6 text-white" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-academic-gray academic-sans">
+                  <p className="text-sm font-medium text-academic-gray dark:text-gray-300 academic-sans">
                     Active Projects
                   </p>
-                  <p className="text-2xl font-bold academic-serif text-navy">
+                  <p className="text-2xl font-bold academic-serif text-navy dark:text-blue-400">
                     {documents.filter((doc: any) => {
                       const lastUpdated = new Date(doc.updated_at)
                       const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
@@ -279,14 +279,14 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Document Library Section */}
-        <div className="bg-white rounded-lg shadow-lg border border-gray-200">
-          <div className="px-6 py-6 border-b border-gray-200">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+          <div className="px-6 py-6 border-b border-gray-200 dark:border-gray-700">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
               <div>
-                <h2 className="text-2xl font-bold academic-serif text-navy">
+                <h2 className="text-2xl font-bold academic-serif text-navy dark:text-blue-400">
                   Document Library
                 </h2>
-                <p className="text-academic-gray academic-sans mt-1">
+                <p className="text-academic-gray dark:text-gray-300 academic-sans mt-1">
                   Manage your research papers and academic writing projects
                 </p>
               </div>
@@ -349,13 +349,13 @@ const Dashboard: React.FC = () => {
 
           {documents.length === 0 ? (
             <div className="p-16 text-center">
-              <div className="w-20 h-20 bg-cream rounded-full flex items-center justify-center mx-auto mb-6">
-                <FileText className="h-10 w-10 text-navy" />
+              <div className="w-20 h-20 bg-cream dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-6">
+                <FileText className="h-10 w-10 text-navy dark:text-blue-400" />
               </div>
-              <h3 className="text-xl font-semibold academic-serif text-navy mb-3">
+              <h3 className="text-xl font-semibold academic-serif text-navy dark:text-blue-400 mb-3">
                 Your Research Library Awaits
               </h3>
-              <p className="text-academic-gray academic-sans mb-8 max-w-md mx-auto leading-relaxed">
+              <p className="text-academic-gray dark:text-gray-300 academic-sans mb-8 max-w-md mx-auto leading-relaxed">
                 Begin your academic writing journey by creating your first research document. 
                 Our advanced analysis tools will help refine your scholarly work.
               </p>
@@ -373,26 +373,26 @@ const Dashboard: React.FC = () => {
                 {getSortedDocuments().map((document: any) => (
                   <div
                     key={document.id}
-                    className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg hover:border-navy transition-all duration-200"
+                    className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 hover:shadow-lg hover:border-navy dark:hover:border-blue-600 transition-all duration-200"
                   >
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <div className="flex items-start space-x-3 mb-3">
-                          <div className="w-10 h-10 bg-navy rounded-lg flex items-center justify-center flex-shrink-0">
+                          <div className="w-10 h-10 bg-navy dark:bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
                             <FileText className="h-5 w-5 text-white" />
                           </div>
                           <div className="flex-1">
-                            <h3 className="text-lg font-semibold academic-serif text-navy mb-1">
+                            <h3 className="text-lg font-semibold academic-serif text-navy dark:text-blue-400 mb-1">
                               {document.title}
                             </h3>
-                            <div className="flex items-center space-x-4 text-sm text-academic-gray academic-sans">
+                            <div className="flex items-center space-x-4 text-sm text-academic-gray dark:text-gray-300 academic-sans">
                               <span className="flex items-center">
                                 <Edit className="h-3 w-3 mr-1" />
                                 {document.word_count} words
                               </span>
                               <span>{document.character_count} characters</span>
                             </div>
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-1 sm:space-y-0 text-xs text-academic-gray academic-sans mt-2">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-1 sm:space-y-0 text-xs text-academic-gray dark:text-gray-400 academic-sans mt-2">
                               <span className="flex items-center">
                                 <Calendar className="h-3 w-3 mr-1" />
                                 Created: {formatDate(document.created_at)}
@@ -409,14 +409,14 @@ const Dashboard: React.FC = () => {
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => navigate(`/editor/${document.id}`)}
-                          className="p-2 text-navy hover:text-burgundy transition-colors"
+                          className="p-2 text-navy dark:text-blue-400 hover:text-burgundy dark:hover:text-blue-300 transition-colors"
                           title="Edit document"
                         >
                           <Edit className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handleDeleteDocument(document.id)}
-                          className="p-2 text-academic-gray hover:text-red-600 transition-colors"
+                          className="p-2 text-academic-gray dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                           title="Delete document"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -428,6 +428,149 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Keyboard Shortcuts Section */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold academic-serif text-navy dark:text-blue-400 mb-6">Keyboard Shortcuts</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex items-center mb-4">
+              <div className="w-10 h-10 bg-navy dark:bg-blue-600 rounded-lg flex items-center justify-center mr-3">
+                <Keyboard className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold academic-serif text-navy dark:text-blue-400">Editor Shortcuts</h3>
+                <p className="text-sm text-academic-gray dark:text-gray-300 academic-sans">Boost your productivity with these keyboard shortcuts</p>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Document Management */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-navy dark:text-blue-400 academic-sans text-sm uppercase tracking-wide border-b border-gray-200 dark:border-gray-600 pb-1">
+                  Document Management
+                </h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Save Document</span>
+                    <div className="flex items-center space-x-1">
+                      <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-800 dark:text-gray-200">Ctrl</kbd>
+                      <span className="text-xs text-gray-400 dark:text-gray-500">+</span>
+                      <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-800 dark:text-gray-200">S</kbd>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">New Document</span>
+                    <div className="flex items-center space-x-1">
+                      <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-800 dark:text-gray-200">Ctrl</kbd>
+                      <span className="text-xs text-gray-400 dark:text-gray-500">+</span>
+                      <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-800 dark:text-gray-200">N</kbd>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Print Document</span>
+                    <div className="flex items-center space-x-1">
+                      <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-800 dark:text-gray-200">Ctrl</kbd>
+                      <span className="text-xs text-gray-400 dark:text-gray-500">+</span>
+                      <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-800 dark:text-gray-200">P</kbd>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Text Editing */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-navy dark:text-blue-400 academic-sans text-sm uppercase tracking-wide border-b border-gray-200 dark:border-gray-600 pb-1">
+                  Text Editing
+                </h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Undo</span>
+                    <div className="flex items-center space-x-1">
+                      <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-800 dark:text-gray-200">Ctrl</kbd>
+                      <span className="text-xs text-gray-400 dark:text-gray-500">+</span>
+                      <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-800 dark:text-gray-200">Z</kbd>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Redo</span>
+                    <div className="flex items-center space-x-1">
+                      <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-800 dark:text-gray-200">Ctrl</kbd>
+                      <span className="text-xs text-gray-400 dark:text-gray-500">+</span>
+                      <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-800 dark:text-gray-200">Y</kbd>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Select All</span>
+                    <div className="flex items-center space-x-1">
+                      <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-800 dark:text-gray-200">Ctrl</kbd>
+                      <span className="text-xs text-gray-400 dark:text-gray-500">+</span>
+                      <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-800 dark:text-gray-200">A</kbd>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Find & Replace</span>
+                    <div className="flex items-center space-x-1">
+                      <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-800 dark:text-gray-200">Ctrl</kbd>
+                      <span className="text-xs text-gray-400 dark:text-gray-500">+</span>
+                      <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-800 dark:text-gray-200">H</kbd>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Grammar & Analysis */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-navy dark:text-blue-400 academic-sans text-sm uppercase tracking-wide border-b border-gray-200 dark:border-gray-600 pb-1">
+                  Grammar & Analysis
+                </h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Recheck Grammar</span>
+                    <div className="flex items-center space-x-1">
+                      <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-800 dark:text-gray-200">F7</kbd>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Toggle Analysis Panel</span>
+                    <div className="flex items-center space-x-1">
+                      <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-800 dark:text-gray-200">Ctrl</kbd>
+                      <span className="text-xs text-gray-400 dark:text-gray-500">+</span>
+                      <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-800 dark:text-gray-200">;</kbd>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Accept Suggestion</span>
+                    <div className="flex items-center space-x-1">
+                      <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-800 dark:text-gray-200">Tab</kbd>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Ignore Suggestion</span>
+                    <div className="flex items-center space-x-1">
+                      <kbd className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-800 dark:text-gray-200">Esc</kbd>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Pro Tip */}
+            <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <div className="flex items-start space-x-3">
+                <div className="w-6 h-6 bg-blue-500 dark:bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <Command className="h-3 w-3 text-white" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-blue-900 dark:text-blue-300 academic-sans text-sm mb-1">Pro Tip</h4>
+                  <p className="text-sm text-blue-800 dark:text-blue-200 academic-sans leading-relaxed">
+                    Use <kbd className="px-1.5 py-0.5 text-xs bg-white dark:bg-blue-800 border border-blue-300 dark:border-blue-600 rounded mx-1 text-blue-800 dark:text-blue-200">Ctrl + /</kbd> 
+                    in the editor to see all available shortcuts, or hover over buttons to see their keyboard shortcuts.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </main>
 

@@ -93,7 +93,7 @@ const EditorPage: React.FC = () => {
 
   if (loading || isCreatingDocument) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-cream dark:bg-gray-900">
         <div className="text-center">
           <LoadingSpinner />
           <p className="mt-4 text-gray-600 dark:text-gray-400">
@@ -107,7 +107,7 @@ const EditorPage: React.FC = () => {
   // If no user, redirect to login
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-cream dark:bg-gray-900">
         <LoadingSpinner />
       </div>
     )
@@ -115,9 +115,9 @@ const EditorPage: React.FC = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-cream dark:bg-gray-900">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Document</h2>
+          <h2 className="text-2xl font-bold text-red-600 dark:text-red-400 mb-4">Error Loading Document</h2>
           <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
           <button
             onClick={() => navigateRef.current('/dashboard')}
@@ -131,16 +131,16 @@ const EditorPage: React.FC = () => {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-cream">
+    <div className="h-screen flex flex-col bg-cream dark:bg-gray-900">
       {/* Academic Header */}
-      <div className="bg-white border-b-4 border-navy shadow-sm flex-shrink-0">
+      <div className="bg-white dark:bg-gray-800 border-b-4 border-navy dark:border-blue-600 shadow-sm flex-shrink-0">
         <div className="w-full px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
             {/* Left side - Back button and branding */}
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => navigateRef.current('/dashboard')}
-                className="text-navy hover:text-burgundy transition-colors"
+                className="text-navy dark:text-blue-400 hover:text-burgundy dark:hover:text-blue-300 transition-colors"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -148,12 +148,12 @@ const EditorPage: React.FC = () => {
               </button>
               
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-navy rounded-full flex items-center justify-center">
+                <div className="w-10 h-10 bg-navy dark:bg-blue-600 rounded-full flex items-center justify-center">
                   <span className="text-white font-bold text-lg academic-serif">W</span>
                 </div>
                 <div>
-                  <h1 className="text-lg font-bold academic-serif text-navy">Academic Editor</h1>
-                  <p className="text-xs text-academic-gray academic-sans">Research Writing Environment</p>
+                  <h1 className="text-lg font-bold academic-serif text-navy dark:text-blue-400">Academic Editor</h1>
+                  <p className="text-xs text-academic-gray dark:text-gray-300 academic-sans">Research Writing Environment</p>
                 </div>
               </div>
             </div>
@@ -164,13 +164,13 @@ const EditorPage: React.FC = () => {
                 type="text"
                 value={documentTitle}
                 onChange={handleTitleChange}
-                className="w-full text-xl font-bold academic-serif text-navy bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-navy focus:ring-opacity-20 rounded px-3 py-2 placeholder-academic-gray text-center"
+                className="w-full text-xl font-bold academic-serif text-navy dark:text-blue-400 bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-navy dark:focus:ring-blue-600 focus:ring-opacity-20 rounded px-3 py-2 placeholder-academic-gray dark:placeholder-gray-400 text-center"
                 placeholder="Research Paper Title..."
               />
               
               {isNewDocument && (
                 <div className="text-center mt-1">
-                  <span className="text-sm text-gold academic-sans font-medium bg-yellow-50 px-2 py-1 rounded">
+                  <span className="text-sm text-gold dark:text-yellow-400 academic-sans font-medium bg-yellow-50 dark:bg-yellow-900/20 px-2 py-1 rounded">
                     Draft Document
                   </span>
                 </div>
@@ -182,9 +182,9 @@ const EditorPage: React.FC = () => {
               {/* Writing Analysis Status */}
               <div className="flex items-center space-x-3 text-sm academic-sans">
                 {suggestions.length > 0 && (
-                  <div className="flex items-center space-x-2 bg-yellow-50 px-3 py-1 rounded-full">
-                    <div className="w-2 h-2 bg-gold rounded-full"></div>
-                    <span className="text-navy font-medium">
+                  <div className="flex items-center space-x-2 bg-yellow-50 dark:bg-yellow-900/20 px-3 py-1 rounded-full">
+                    <div className="w-2 h-2 bg-gold dark:bg-yellow-400 rounded-full"></div>
+                    <span className="text-navy dark:text-blue-400 font-medium">
                       {suggestions.length} analysis point{suggestions.length !== 1 ? 's' : ''}
                     </span>
                   </div>
@@ -194,17 +194,17 @@ const EditorPage: React.FC = () => {
                 {apiStatus && (
                   <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-medium ${
                     apiStatus === 'api' 
-                      ? 'bg-green-50 text-green-700'
+                      ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
                       : apiStatus === 'mixed'
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'bg-orange-50 text-orange-700'
+                      ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'
+                      : 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400'
                   }`}>
                     <div className={`w-1.5 h-1.5 rounded-full ${
                       apiStatus === 'api' 
-                        ? 'bg-green-500'
+                        ? 'bg-green-500 dark:bg-green-400'
                         : apiStatus === 'mixed'
-                        ? 'bg-blue-500'
-                        : 'bg-orange-500'
+                        ? 'bg-blue-500 dark:bg-blue-400'
+                        : 'bg-orange-500 dark:bg-orange-400'
                     }`}></div>
                     <span>
                       {apiStatus === 'api' 
@@ -218,7 +218,7 @@ const EditorPage: React.FC = () => {
                 )}
                 
                 {currentDocument && (
-                  <div className="text-academic-gray">
+                  <div className="text-academic-gray dark:text-gray-300">
                     {currentDocument.word_count || 0} words
                   </div>
                 )}
@@ -229,7 +229,7 @@ const EditorPage: React.FC = () => {
                 <button
                   onClick={handleSaveDocument}
                   disabled={!currentDocument || saving}
-                  className="px-4 py-2 bg-navy text-white hover:bg-burgundy rounded-lg text-sm font-medium academic-sans disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                  className="px-4 py-2 bg-navy dark:bg-blue-600 text-white hover:bg-burgundy dark:hover:bg-blue-700 rounded-lg text-sm font-medium academic-sans disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                 >
                   {saving ? 'Saving...' : 'Save Document'}
                 </button>
@@ -242,7 +242,7 @@ const EditorPage: React.FC = () => {
       {/* Academic Editor Layout - Full Width */}
       <div className="flex-1 min-h-0 p-6">
         <div className="h-full mx-auto" style={{ maxWidth: 'calc(100vw - 3rem)' }}>
-          <div className="bg-white rounded-lg shadow-lg border border-gray-200 h-full overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 h-full overflow-hidden">
             {/* Academic Paper Layout */}
             <div className="h-full p-8 academic-sans">
               <GrammarTextEditor />
