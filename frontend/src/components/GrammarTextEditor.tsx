@@ -36,6 +36,14 @@ const GrammarTextEditor: React.FC = () => {
     fullContentBefore: string
   } | null>(null)
   
+  // Resizable sidebar state - load from localStorage or default to 400px
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('wordwise-sidebar-width')
+    return saved ? parseInt(saved, 10) : 400 // Increased from 320px (w-80)
+  })
+  const [isResizing, setIsResizing] = useState(false)
+  const resizerRef = useRef<HTMLDivElement>(null)
+  
   const editorRef = useRef<HTMLTextAreaElement>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<NodeJS.Timeout>()
@@ -893,9 +901,11 @@ const GrammarTextEditor: React.FC = () => {
       // Clear any existing tooltips
       setShowTooltip(null)
       
-      // Trigger grammar check for new content if it has text
-      if (currentDocument.content.trim() && currentDocument.content.length > 3) {
+      // Trigger grammar check and sentence analysis for new content if it has text
+      if (currentDocument.content.trim() && currentDocument.content.length > 10) {
+        console.log('🔍 Document loaded - triggering grammar check and sentence analysis')
         checkGrammar(currentDocument.content)
+        checkSentenceStructure(currentDocument.content)
       }
     } else if (currentDocument && currentDocId === previousDocId && !content) {
       // Only set content if it's empty (initial load case)
@@ -907,8 +917,15 @@ const GrammarTextEditor: React.FC = () => {
       if (editorRef.current) {
         editorRef.current.value = currentDocument.content
       }
+      
+      // Also trigger grammar check for initial load case
+      if (currentDocument.content.trim() && currentDocument.content.length > 10) {
+        console.log('🔍 Initial document load - triggering grammar check and sentence analysis')
+        checkGrammar(currentDocument.content)
+        checkSentenceStructure(currentDocument.content)
+      }
     }
-  }, [currentDocument, dispatch, checkGrammar, content])
+  }, [currentDocument, dispatch, checkGrammar, checkSentenceStructure, content])
 
   // Track document ID changes to ensure suggestions are cleared when switching documents
   useEffect(() => {
@@ -1006,6 +1023,13 @@ const GrammarTextEditor: React.FC = () => {
         // Update Redux state with restored content
         dispatch(updateCurrentDocumentContent(backup))
         
+        // Trigger grammar check for restored content
+        if (backup.trim() && backup.length > 10) {
+          console.log('🔍 Restored content - triggering grammar check and sentence analysis')
+          checkGrammar(backup)
+          checkSentenceStructure(backup)
+        }
+        
         toast.success('📝 Restored unsaved changes from backup')
       } else if (backup && backup === savedContent) {
         // Clean up backup if it matches saved content
@@ -1013,7 +1037,7 @@ const GrammarTextEditor: React.FC = () => {
         console.log('🗑️ Cleaned up backup - matches saved content')
       }
     }
-  }, [currentDocument, content, dispatch])
+  }, [currentDocument, content, dispatch, checkGrammar, checkSentenceStructure])
 
   // Handle page visibility changes to maintain state
   useEffect(() => {
@@ -1038,14 +1062,59 @@ const GrammarTextEditor: React.FC = () => {
     }
   }, [content, currentDocument?.id])
 
+  // Handle sidebar resizing
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return
+      
+      const container = resizerRef.current?.parentElement
+      if (!container) return
+      
+      const containerRect = container.getBoundingClientRect()
+      const newWidth = containerRect.right - e.clientX
+      
+      // Constrain sidebar width between 250px and 600px
+      const constrainedWidth = Math.max(250, Math.min(600, newWidth))
+      setSidebarWidth(constrainedWidth)
+      
+      // Save to localStorage for persistence
+      localStorage.setItem('wordwise-sidebar-width', constrainedWidth.toString())
+    }
+
+    const handleMouseUp = () => {
+      setIsResizing(false)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    if (isResizing) {
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove)
+        document.removeEventListener('mouseup', handleMouseUp)
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+    }
+  }, [isResizing])
+
+  // Handle resize start
+  const handleResizeStart = () => {
+    setIsResizing(true)
+  }
+
   const activeSuggestion = combinedSuggestions.find(s => s.id === showTooltip) || suggestions.find(s => s.id === showTooltip)
   const wordCount = content.split(/\s+/).filter(w => w.length > 0).length
   const charCount = content.length
 
   return (
-    <div className="relative w-full">
+    <div className="relative w-full h-full flex flex-col">
       {/* Statistics Bar */}
-      <div className="flex items-center justify-between mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+      <div className="flex items-center justify-between mb-4 mx-4 mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg flex-shrink-0">
         <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
           <span>{wordCount} words</span>
           <span>{charCount} characters</span>
@@ -1135,30 +1204,105 @@ const GrammarTextEditor: React.FC = () => {
         </div>
       </div>
 
-      {/* Editor Container */}
-      <div className="relative border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-900">
-        {/* Textarea */}
-        <textarea
-          ref={editorRef}
-          value={content}
-          onChange={handleContentChange}
-          onKeyDown={handleKeyDownEnhanced}
-          className="w-full h-96 p-4 bg-transparent text-gray-900 dark:text-gray-100 resize-none focus:outline-none font-serif text-lg leading-relaxed"
-          placeholder={`Start writing your document... Grammar checking will begin automatically. ${autoSaveEnabled ? 'Auto-save is enabled.' : 'Auto-save is disabled - press Ctrl+S to save manually.'}`}
-          style={{ fontFamily: 'ui-serif, Georgia, serif' }}
-        />
-        
-        {/* Overlay for highlights */}
+      {/* Main Content Area with Sidebar */}
+      <div className="flex gap-2 flex-1 min-h-0 mx-4">
+        {/* Editor Container */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="relative border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-900 flex-1 flex flex-col">
+            {/* Textarea */}
+            <textarea
+              ref={editorRef}
+              value={content}
+              onChange={handleContentChange}
+              onKeyDown={handleKeyDownEnhanced}
+              className="w-full flex-1 p-4 bg-transparent text-gray-900 dark:text-gray-100 resize-none focus:outline-none font-serif text-lg leading-relaxed min-h-0"
+              placeholder={`Start writing your document... Grammar checking will begin automatically. ${autoSaveEnabled ? 'Auto-save is enabled.' : 'Auto-save is disabled - press Ctrl+S to save manually.'}`}
+              style={{ fontFamily: 'ui-serif, Georgia, serif' }}
+            />
+            
+            {/* Overlay for highlights */}
+            <div
+              ref={overlayRef}
+              className="grammar-overlay absolute inset-0 p-4 font-serif text-lg leading-relaxed text-transparent z-10"
+              style={{ 
+                fontFamily: 'ui-serif, Georgia, serif',
+                whiteSpace: 'pre-wrap',
+                wordWrap: 'break-word'
+              }}
+              dangerouslySetInnerHTML={{ __html: highlightedContent }}
+            />
+          </div>
+        </div>
+
+        {/* Resize Handle */}
         <div
-          ref={overlayRef}
-          className="grammar-overlay absolute inset-0 p-4 font-serif text-lg leading-relaxed text-transparent z-10"
-          style={{ 
-            fontFamily: 'ui-serif, Georgia, serif',
-            whiteSpace: 'pre-wrap',
-            wordWrap: 'break-word'
-          }}
-          dangerouslySetInnerHTML={{ __html: highlightedContent }}
+          ref={resizerRef}
+          className={`w-1 bg-gray-200 dark:bg-gray-600 hover:bg-blue-400 dark:hover:bg-blue-500 cursor-col-resize flex-shrink-0 transition-colors duration-150 ${
+            isResizing ? 'bg-blue-400 dark:bg-blue-500' : ''
+          }`}
+          onMouseDown={handleResizeStart}
+          title="Drag to resize sidebar"
         />
+
+        {/* Right Sidebar - Sentence Analysis */}
+        <div 
+          className="flex-shrink-0 flex flex-col"
+          style={{ width: `${sidebarWidth}px` }}
+        >
+          <div className="flex-1 overflow-hidden">
+            <SentenceAnalysisPanel 
+              text={content}
+              onSentenceClick={(offset, length) => {
+                if (editorRef.current) {
+                  editorRef.current.focus()
+                  editorRef.current.setSelectionRange(offset, offset + length)
+                }
+              }}
+              onApplySuggestion={(offset, length, replacement) => {
+                // Store undo state for sentence suggestion
+                const originalText = content.substring(offset, offset + length)
+                setLastAppliedSuggestion({
+                  originalText,
+                  replacement,
+                  offset,
+                  length: replacement.length,
+                  fullContentBefore: content
+                })
+                
+                // Apply the suggestion to the text
+                const newContent = 
+                  content.substring(0, offset) + 
+                  replacement + 
+                  content.substring(offset + length)
+                
+                setContentState(newContent)
+                
+                if (editorRef.current) {
+                  editorRef.current.value = newContent
+                  // Position cursor after the replacement
+                  const newCursorPosition = offset + replacement.length
+                  editorRef.current.focus()
+                  editorRef.current.setSelectionRange(newCursorPosition, newCursorPosition)
+                }
+                
+                // Update Redux state
+                dispatch(setContent([{
+                  type: 'paragraph',
+                  children: [{ text: newContent }]
+                }]))
+                
+                // Update current document content
+                dispatch(updateCurrentDocumentContent(newContent))
+                
+                // Trigger grammar check and auto-save
+                checkGrammar(newContent)
+                autoSave(newContent)
+                
+                console.log('📝 Applied sentence suggestion - undo data stored')
+              }}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Suggestion Tooltip */}
@@ -1239,7 +1383,7 @@ const GrammarTextEditor: React.FC = () => {
 
       {/* Suggestions Panel */}
       {suggestions.length > 0 && (
-        <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+        <div className="mt-4 mx-4 mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg flex-shrink-0">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
               Writing Suggestions ({suggestions.length})
@@ -1321,46 +1465,7 @@ const GrammarTextEditor: React.FC = () => {
         </div>
       )}
 
-      {/* Sentence Analysis Panel */}
-      <SentenceAnalysisPanel 
-        text={content}
-        onSentenceClick={(offset, length) => {
-          if (editorRef.current) {
-            editorRef.current.focus()
-            editorRef.current.setSelectionRange(offset, offset + length)
-          }
-        }}
-        onApplySuggestion={(offset, length, replacement) => {
-          // Apply the suggestion to the text
-          const newContent = 
-            content.substring(0, offset) + 
-            replacement + 
-            content.substring(offset + length)
-          
-          setContentState(newContent)
-          
-          if (editorRef.current) {
-            editorRef.current.value = newContent
-            // Position cursor after the replacement
-            const newCursorPosition = offset + replacement.length
-            editorRef.current.focus()
-            editorRef.current.setSelectionRange(newCursorPosition, newCursorPosition)
-          }
-          
-          // Update Redux state
-          dispatch(setContent([{
-            type: 'paragraph',
-            children: [{ text: newContent }]
-          }]))
-          
-          // Update current document content
-          dispatch(updateCurrentDocumentContent(newContent))
-          
-          // Trigger grammar check and auto-save
-          checkGrammar(newContent)
-          autoSave(newContent)
-        }}
-      />
+
 
       {/* Tone Rewrite Panel */}
       {showToneRewritePanel && (

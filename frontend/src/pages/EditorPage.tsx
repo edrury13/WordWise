@@ -129,10 +129,10 @@ const EditorPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="h-screen flex flex-col">
       {/* Header */}
-      <div className="shadow-sm border-b border-gray-200 dark:border-gray-700" style={{ backgroundColor: '#ab2408' }}>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="shadow-sm border-b border-gray-200 dark:border-gray-700 flex-shrink-0" style={{ backgroundColor: '#ab2408' }}>
+        <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Left side - Back button moved to far left */}
             <button
@@ -192,57 +192,9 @@ const EditorPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Editor Area */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
-          <div className="p-6">
-            <GrammarTextEditor />
-          </div>
-        </div>
-      </div>
-
-      {/* Writing Statistics Panel */}
-      <div className="fixed bottom-6 right-6 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-4 w-64">
-        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-          Writing Statistics
-        </h3>
-        
-        <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
-          <div className="flex justify-between">
-            <span>Words:</span>
-            <span className="font-medium">{currentDocument?.word_count || 0}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Characters:</span>
-            <span className="font-medium">{currentDocument?.character_count || 0}</span>
-          </div>
-          
-          {suggestions.length > 0 && (
-            <>
-              <hr className="border-gray-200 dark:border-gray-600 my-2" />
-              <div className="space-y-1">
-                <div className="flex justify-between">
-                  <span>Grammar:</span>
-                  <span className="font-medium text-red-600">
-                    {suggestions.filter(s => s.type === 'grammar').length}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Spelling:</span>
-                  <span className="font-medium text-orange-600">
-                    {suggestions.filter(s => s.type === 'spelling').length}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Style:</span>
-                  <span className="font-medium text-blue-600">
-                    {suggestions.filter(s => ['style', 'clarity', 'engagement', 'delivery'].includes(s.type)).length}
-                  </span>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
+      {/* Main Editor Area - Full Screen */}
+      <div className="flex-1 min-h-0">
+        <GrammarTextEditor />
       </div>
     </div>
   )
