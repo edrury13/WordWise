@@ -182,10 +182,6 @@ const EditorPage: React.FC = () => {
                 >
                   {saving ? 'Saving...' : 'Save'}
                 </button>
-                
-                <button className="px-3 py-1 bg-white text-red-800 hover:bg-gray-100 rounded text-sm transition-colors">
-                  Share
-                </button>
               </div>
             </div>
           </div>
