@@ -6,6 +6,7 @@ import { fetchDocument, createDocument, updateDocument } from '../store/slices/d
 import { setLastSaved } from '../store/slices/editorSlice'
 import GrammarTextEditor from '../components/GrammarTextEditor'
 import LoadingSpinner from '../components/LoadingSpinner'
+import { testAPIConnection } from '../services/languageService'
 
 const EditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -24,7 +25,7 @@ const EditorPage: React.FC = () => {
   
   const { currentDocument, loading, error, saving } = useSelector((state: RootState) => state.documents)
   const { user } = useSelector((state: RootState) => state.auth)
-  const { suggestions } = useSelector((state: RootState) => state.suggestions)
+  const { suggestions, apiStatus } = useSelector((state: RootState) => state.suggestions)
   
   const [documentTitle, setDocumentTitle] = useState('Untitled Document')
   const [isNewDocument, setIsNewDocument] = useState(!id)
@@ -88,6 +89,15 @@ const EditorPage: React.FC = () => {
        })
     }
   }, [currentDocument, user, documentTitle])
+
+  const handleTestAPI = useCallback(async () => {
+    try {
+      const result = await testAPIConnection()
+      alert(`API Test Success: ${JSON.stringify(result, null, 2)}`)
+    } catch (error) {
+      alert(`API Test Failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }, [])
 
   if (loading || isCreatingDocument) {
     return (
@@ -188,6 +198,33 @@ const EditorPage: React.FC = () => {
                   </div>
                 )}
                 
+                {/* API Status Indicator */}
+                {apiStatus && (
+                  <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-medium ${
+                    apiStatus === 'api' 
+                      ? 'bg-green-50 text-green-700'
+                      : apiStatus === 'mixed'
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'bg-orange-50 text-orange-700'
+                  }`}>
+                    <div className={`w-1.5 h-1.5 rounded-full ${
+                      apiStatus === 'api' 
+                        ? 'bg-green-500'
+                        : apiStatus === 'mixed'
+                        ? 'bg-blue-500'
+                        : 'bg-orange-500'
+                    }`}></div>
+                    <span>
+                      {apiStatus === 'api' 
+                        ? 'Advanced AI'
+                        : apiStatus === 'mixed'
+                        ? 'AI + Local'
+                        : 'Local Analysis'
+                      }
+                    </span>
+                  </div>
+                )}
+                
                 {currentDocument && (
                   <div className="text-academic-gray">
                     {currentDocument.word_count || 0} words
@@ -197,6 +234,12 @@ const EditorPage: React.FC = () => {
 
               {/* Action Buttons */}
               <div className="flex items-center space-x-3">
+                <button
+                  onClick={handleTestAPI}
+                  className="px-3 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg text-xs font-medium academic-sans transition-colors shadow-sm"
+                >
+                  Test API
+                </button>
                 <button
                   onClick={handleSaveDocument}
                   disabled={!currentDocument || saving}

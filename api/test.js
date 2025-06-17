@@ -13,33 +13,17 @@ export default async function handler(req, res) {
     return
   }
 
-  try {
-    const { method, headers } = req
-    
-    return res.status(200).json({
-      success: true,
-      message: 'API is working',
-      method,
-      timestamp: new Date().toISOString(),
-      environment: {
-        hasSupabaseUrl: !!process.env.SUPABASE_URL,
-        hasSupabaseKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-        hasLanguageToolUrl: !!process.env.LANGUAGETOOL_API_URL,
-        nodeVersion: process.version,
-        platform: process.platform
-      },
-      headers: {
-        hasAuthorization: !!headers.authorization,
-        authType: headers.authorization?.split(' ')[0] || 'none'
-      }
-    })
+  console.log('Simple test API called:', {
+    method: req.method,
+    url: req.url,
+    timestamp: new Date().toISOString()
+  })
 
-  } catch (error) {
-    console.error('Test API error:', error)
-    return res.status(500).json({
-      success: false,
-      error: 'Internal server error',
-      message: error.message
-    })
-  }
+  return res.status(200).json({
+    success: true,
+    message: 'Simple API test successful!',
+    timestamp: new Date().toISOString(),
+    method: req.method,
+    environment: process.env.NODE_ENV || 'unknown'
+  })
 } 

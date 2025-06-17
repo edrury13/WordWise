@@ -54,10 +54,10 @@ import { Suggestion, ReadabilityScore } from '../store/slices/suggestionSlice'
 export const checkGrammarAndSpelling = async (
   text: string,
   language: string = 'en-US'
-): Promise<Suggestion[]> => {
+): Promise<{ suggestions: Suggestion[], apiStatus: 'api' | 'client-fallback' | 'mixed' }> => {
   try {
     if (!text || text.trim().length === 0) {
-      return []
+      return { suggestions: [], apiStatus: 'client-fallback' }
     }
 
     // Add a small delay to prevent rapid API calls
@@ -79,13 +79,13 @@ export const checkGrammarAndSpelling = async (
     if (!token) {
       console.warn('🚨 No authentication token available for grammar check')
       // Fallback to client-side checking when not authenticated
-      return performClientSideGrammarCheck(text)
+      return { suggestions: performClientSideGrammarCheck(text), apiStatus: 'client-fallback' }
     }
 
     console.log('📡 Making grammar API call...', text.substring(0, 50) + '...')
 
     const response = await axios.post(
-      `${API_BASE_URL}/language/check`,
+      `${API_BASE_URL}/language-check`,
       { text, language },
       {
         headers: {
@@ -143,7 +143,12 @@ export const checkGrammarAndSpelling = async (
       added: mergedSuggestions.length - suggestions.length
     })
 
-    return mergedSuggestions
+    // Determine API status based on what was used
+    const apiStatus = suggestions.length > 0 
+      ? (clientSideGrammarSuggestions.length > 0 ? 'mixed' : 'api')
+      : 'client-fallback'
+
+    return { suggestions: mergedSuggestions, apiStatus }
   } catch (error) {
     console.error('❌ Grammar check failed:', {
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -155,13 +160,13 @@ export const checkGrammarAndSpelling = async (
     // Handle rate limiting specifically
     if (axios.isAxiosError(error) && error.response?.status === 429) {
       console.warn('🚨 Rate limit exceeded - using client-side grammar checking as fallback')
-      return performClientSideGrammarCheck(text)
+      return { suggestions: performClientSideGrammarCheck(text), apiStatus: 'client-fallback' }
     }
     
     // Fallback to client-side checking if backend fails
     if (axios.isAxiosError(error)) {
       console.warn('🔄 Backend API failed, using client-side grammar checking as fallback')
-      return performClientSideGrammarCheck(text)
+      return { suggestions: performClientSideGrammarCheck(text), apiStatus: 'client-fallback' }
     }
     
     throw new Error('Failed to check grammar and spelling')
@@ -467,6 +472,40 @@ function performClientSideGrammarCheck(text: string): Suggestion[] {
 }
 
 // Test function to check if LanguageTool API is working
+export const testAPIConnection = async (): Promise<any> => {
+  try {
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')
+    
+    // Get auth token from Supabase session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    const token = session?.access_token
+
+    console.log('🧪 Testing API connection:', {
+      API_BASE_URL,
+      hasToken: !!token,
+      sessionError: sessionError?.message
+    })
+
+    const response = await axios.get(`${API_BASE_URL}/test`, {
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      timeout: 10000
+    })
+
+    console.log('✅ API test successful:', response.data)
+    return response.data
+  } catch (error) {
+    console.error('❌ API test failed:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      isAxiosError: axios.isAxiosError(error),
+      status: axios.isAxiosError(error) ? error.response?.status : null,
+      data: axios.isAxiosError(error) ? error.response?.data : null
+    })
+    throw error
+  }
+}
+
 export const testLanguageAPI = async (): Promise<any> => {
   try {
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')

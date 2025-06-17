@@ -33,6 +33,7 @@ interface SuggestionState {
   debounceTimer: number | null
   lastCheckTime: Date | null
   ignoredSuggestions: string[]
+  apiStatus: 'api' | 'client-fallback' | 'mixed' | null
 }
 
 const initialState: SuggestionState = {
@@ -44,6 +45,7 @@ const initialState: SuggestionState = {
   debounceTimer: null,
   lastCheckTime: null,
   ignoredSuggestions: [],
+  apiStatus: null,
 }
 
 // Async thunks
@@ -57,8 +59,9 @@ export const checkText = createAsyncThunk(
       ])
       
       return {
-        suggestions: grammarResults,
+        suggestions: grammarResults.suggestions,
         readabilityScore: readabilityResults,
+        apiStatus: grammarResults.apiStatus,
       }
     } catch (error) {
       // Handle rate limiting gracefully
@@ -71,6 +74,7 @@ export const checkText = createAsyncThunk(
       return {
         suggestions: [],
         readabilityScore: null,
+        apiStatus: 'client-fallback' as const,
       }
     }
   }
@@ -165,9 +169,10 @@ const suggestionSlice = createSlice({
       .addCase(checkText.fulfilled, (state, action) => {
         state.loading = false
         state.suggestions = action.payload.suggestions.filter(
-          s => !state.ignoredSuggestions.includes(s.id)
+          (s: Suggestion) => !state.ignoredSuggestions.includes(s.id)
         )
         state.readabilityScore = action.payload.readabilityScore
+        state.apiStatus = action.payload.apiStatus
         state.lastCheckTime = new Date()
       })
       .addCase(checkText.rejected, (state, action) => {
@@ -192,6 +197,9 @@ const suggestionSlice = createSlice({
       })
   },
 })
+
+// Selectors
+export const selectApiStatus = (state: { suggestions: SuggestionState }) => state.suggestions.apiStatus
 
 export const {
   setActiveSuggestion,
