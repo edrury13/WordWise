@@ -68,11 +68,11 @@ export default async function handler(req, res) {
     // Determine which endpoint was called
     if (url.includes('/check')) {
       return await handleGrammarCheck(text, language, res)
-    } else if (url.includes('/analyze-sentences')) {
+    } else if (url.includes('/sentence-analysis')) {
       return await handleSentenceAnalysis(text, language, res)
     } else if (url.includes('/readability')) {
       return await handleReadabilityCheck(text, res)
-    } else if (url.includes('/rewrite')) {
+    } else if (url.includes('/rewrite-tone')) {
       return await handleTextRewrite(text, body.tone, res)
     }
 
