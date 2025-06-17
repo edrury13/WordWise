@@ -9,7 +9,11 @@ const ReadabilityPanel: React.FC = () => {
   console.log('📊 ReadabilityPanel render:', { 
     hasScore: !!readabilityScore, 
     score: readabilityScore,
-    isProd: import.meta.env.PROD 
+    isProd: import.meta.env.PROD,
+    fleschKincaid: readabilityScore?.fleschKincaid,
+    fleschReadingEase: readabilityScore?.fleschReadingEase,
+    FK_type: typeof readabilityScore?.fleschKincaid,
+    FRE_type: typeof readabilityScore?.fleschReadingEase
   })
 
   if (!readabilityScore) {
@@ -28,12 +32,20 @@ const ReadabilityPanel: React.FC = () => {
   }
 
   const getScoreColor = (score: number): string => {
+    if (isNaN(score) || score === null || score === undefined) {
+      console.log('📊 getScoreColor: Invalid score:', score)
+      return 'text-gray-600 dark:text-gray-400'
+    }
     if (score <= 8) return 'text-green-600 dark:text-green-400'
     if (score <= 12) return 'text-yellow-600 dark:text-yellow-400'
     return 'text-red-600 dark:text-red-400'
   }
 
   const getReadingEaseColor = (score: number): string => {
+    if (isNaN(score) || score === null || score === undefined) {
+      console.log('📊 getReadingEaseColor: Invalid score:', score)
+      return 'text-gray-600 dark:text-gray-400'
+    }
     if (score >= 70) return 'text-green-600 dark:text-green-400'
     if (score >= 60) return 'text-yellow-600 dark:text-yellow-400'
     if (score >= 50) return 'text-orange-600 dark:text-orange-400'
@@ -60,10 +72,11 @@ const ReadabilityPanel: React.FC = () => {
         {/* Flesch-Kincaid Grade Level */}
         <div className="flex items-center justify-between">
           <span className="text-sm text-gray-600 dark:text-gray-400">Grade Level:</span>
-          <span className={`text-sm font-medium ${getScoreColor(readabilityScore.fleschKincaid)}`}>
+          <span className={`text-sm font-medium text-black bg-yellow-200 px-2 py-1`} style={{color: 'black !important', backgroundColor: 'yellow'}}>
             {(() => {
               console.log('📊 Rendering FK score:', readabilityScore.fleschKincaid, typeof readabilityScore.fleschKincaid)
-              return readabilityScore.fleschKincaid ?? 'N/A'
+              const value = readabilityScore.fleschKincaid
+              return value !== null && value !== undefined && !isNaN(value) ? value : 'N/A'
             })()}
           </span>
         </div>
@@ -72,10 +85,11 @@ const ReadabilityPanel: React.FC = () => {
         <div className="flex items-center justify-between">
           <span className="text-sm text-gray-600 dark:text-gray-400">Reading Ease:</span>
           <div className="text-right">
-            <span className={`text-sm font-medium ${getReadingEaseColor(readabilityScore.fleschReadingEase)}`}>
+            <span className={`text-sm font-medium text-black bg-yellow-200 px-2 py-1`} style={{color: 'black !important', backgroundColor: 'yellow'}}>
               {(() => {
                 console.log('📊 Rendering FRE score:', readabilityScore.fleschReadingEase, typeof readabilityScore.fleschReadingEase)
-                return readabilityScore.fleschReadingEase ?? 'N/A'
+                const value = readabilityScore.fleschReadingEase
+                return value !== null && value !== undefined && !isNaN(value) ? value : 'N/A'
               })()}
             </span>
             <div className={`text-xs ${getReadingEaseColor(readabilityScore.fleschReadingEase)}`}>
