@@ -1,6 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 import axios from 'axios'
 
+// Debug environment variables
+console.log('Environment check:', {
+  hasSupabaseUrl: !!process.env.SUPABASE_URL,
+  hasSupabaseKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+  supabaseUrlLength: process.env.SUPABASE_URL?.length || 0
+})
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -33,12 +40,24 @@ export default async function handler(req, res) {
     }
 
     const token = authHeader.substring(7)
+    
+    // Debug token validation
+    console.log('Token validation:', {
+      tokenLength: token.length,
+      tokenStart: token.substring(0, 10) + '...'
+    })
+    
     const { data: { user }, error: userError } = await supabase.auth.getUser(token)
 
     if (userError || !user) {
+      console.error('Authentication failed:', {
+        error: userError?.message,
+        hasUser: !!user
+      })
       return res.status(401).json({
         success: false,
-        error: 'Invalid authentication token'
+        error: 'Invalid authentication token',
+        debug: userError?.message
       })
     }
 
