@@ -338,6 +338,7 @@ router.post('/sentence-analysis', async (req: AuthenticatedRequest, res) => {
 
         // Determine sentence quality
         const grammarIssues = issues.filter(issue => issue.type === 'grammar').length
+        const spellingIssues = issues.filter(issue => issue.type === 'spelling').length
         const structureIssues = issues.filter(issue => 
           issue.ruleId.includes('FRAGMENT') || 
           issue.ruleId.includes('MISSING_VERB') ||
@@ -353,6 +354,14 @@ router.post('/sentence-analysis', async (req: AuthenticatedRequest, res) => {
         } else if (grammarIssues > 0) {
           // Any sentence with grammar issues should be at least 'poor'
           sentenceQuality = 'poor'
+        } else if (spellingIssues > 0) {
+          // Any sentence with spelling errors should be marked 'fair' at best
+          sentenceQuality = 'fair'
+        }
+
+        // Additional check: if sentence has spelling errors, it cannot be better than 'fair'
+        if (spellingIssues > 0 && (sentenceQuality === 'good' || sentenceQuality === 'poor')) {
+          sentenceQuality = sentenceQuality === 'poor' ? 'poor' : 'fair'
         }
 
         sentenceAnalysis.push({
@@ -365,10 +374,11 @@ router.post('/sentence-analysis', async (req: AuthenticatedRequest, res) => {
           issues,
           issueCount: issues.length,
           grammarIssueCount: grammarIssues,
+          spellingIssueCount: spellingIssues,
           structureIssueCount: structureIssues
         })
 
-        console.log(`Sentence ${i + 1}: "${sentence.substring(0, 50)}..." - Quality: ${sentenceQuality}, Issues: ${issues.length}`)
+        console.log(`Sentence ${i + 1}: "${sentence.substring(0, 50)}..." - Quality: ${sentenceQuality}, Issues: ${issues.length} (Grammar: ${grammarIssues}, Spelling: ${spellingIssues}, Structure: ${structureIssues})`)
 
       } catch (error) {
         console.error(`Error analyzing sentence ${i + 1}:`, error)
@@ -383,6 +393,7 @@ router.post('/sentence-analysis', async (req: AuthenticatedRequest, res) => {
           issues: [],
           issueCount: 0,
           grammarIssueCount: 0,
+          spellingIssueCount: 0,
           structureIssueCount: 0,
           error: 'Analysis failed'
         })
@@ -392,6 +403,7 @@ router.post('/sentence-analysis', async (req: AuthenticatedRequest, res) => {
     // Overall text analysis
     const totalIssues = sentenceAnalysis.reduce((sum, s) => sum + s.issueCount, 0)
     const totalGrammarIssues = sentenceAnalysis.reduce((sum, s) => sum + s.grammarIssueCount, 0)
+    const totalSpellingIssues = sentenceAnalysis.reduce((sum, s) => sum + s.spellingIssueCount, 0)
     const totalStructureIssues = sentenceAnalysis.reduce((sum, s) => sum + s.structureIssueCount, 0)
     
     const qualityDistribution = {
@@ -425,6 +437,7 @@ router.post('/sentence-analysis', async (req: AuthenticatedRequest, res) => {
         qualityDistribution,
         totalIssues,
         totalGrammarIssues,
+        totalSpellingIssues,
         totalStructureIssues,
         fleschKincaidScore: readabilityData.fleschKincaid,
         fleschReadingEase: readabilityData.fleschReadingEase,

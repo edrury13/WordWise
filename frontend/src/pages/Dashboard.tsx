@@ -84,6 +84,40 @@ const Dashboard: React.FC = () => {
     })
   }
 
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60)
+    
+    // If less than 24 hours ago, show relative time
+    if (diffInHours < 24) {
+      if (diffInHours < 1) {
+        const minutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
+        return minutes <= 1 ? 'Just now' : `${minutes} minutes ago`
+      }
+      const hours = Math.floor(diffInHours)
+      return hours === 1 ? '1 hour ago' : `${hours} hours ago`
+    }
+    
+    // If less than 7 days ago, show day and time
+    if (diffInHours < 168) {
+      return date.toLocaleDateString('en-US', {
+        weekday: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    }
+    
+    // Otherwise show full date
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
   if (loading && documents.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -210,13 +244,21 @@ const Dashboard: React.FC = () => {
                         <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
                           {document.title}
                         </h3>
-                        <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
-                          <span>{document.word_count} words</span>
-                          <span>{document.character_count} characters</span>
-                          <span className="flex items-center">
-                            <Calendar className="h-4 w-4 mr-1" />
-                            {formatDate(document.updated_at)}
-                          </span>
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
+                            <span>{document.word_count} words</span>
+                            <span>{document.character_count} characters</span>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-1 sm:space-y-0 text-xs text-gray-500 dark:text-gray-500">
+                            <span className="flex items-center">
+                              <Calendar className="h-3 w-3 mr-1" />
+                              Created: {formatDate(document.created_at)}
+                            </span>
+                            <span className="flex items-center">
+                              <Edit className="h-3 w-3 mr-1" />
+                              Modified: {formatDateTime(document.updated_at)}
+                            </span>
+                          </div>
                         </div>
                       </div>
                       
