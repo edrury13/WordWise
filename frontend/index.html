@@ -6,6 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>WordWise - Intelligent Writing Assistant</title>
     <meta name="description" content="Real-time grammar and spell checking with style suggestions" />
+    <script>
+      // Prevent flash of light mode
+      (function() {
+        const stored = localStorage.getItem('darkMode');
+        const isDark = stored !== null 
+          ? JSON.parse(stored) 
+          : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        
+        if (isDark) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

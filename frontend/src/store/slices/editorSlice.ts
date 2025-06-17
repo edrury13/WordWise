@@ -13,6 +13,19 @@ interface EditorState {
   lastSaved: Date | null
 }
 
+// Get initial dark mode from localStorage or system preference
+const getInitialDarkMode = (): boolean => {
+  if (typeof window === 'undefined') return false
+  
+  const stored = localStorage.getItem('darkMode')
+  if (stored !== null) {
+    return JSON.parse(stored)
+  }
+  
+  // Check system preference if no stored preference
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
 const initialState: EditorState = {
   editorInstance: null,
   content: [
@@ -21,7 +34,7 @@ const initialState: EditorState = {
       children: [{ text: 'Start writing your document...' }],
     },
   ],
-  isDarkMode: false,
+  isDarkMode: getInitialDarkMode(),
   wordCount: 0,
   characterCount: 0,
   isFullscreen: false,
@@ -48,6 +61,10 @@ const editorSlice = createSlice({
     },
     toggleDarkMode: (state) => {
       state.isDarkMode = !state.isDarkMode
+      // Persist to localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('darkMode', JSON.stringify(state.isDarkMode))
+      }
       // Update document class
       if (typeof document !== 'undefined') {
         if (state.isDarkMode) {
@@ -59,6 +76,10 @@ const editorSlice = createSlice({
     },
     setDarkMode: (state, action: PayloadAction<boolean>) => {
       state.isDarkMode = action.payload
+      // Persist to localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('darkMode', JSON.stringify(action.payload))
+      }
       if (typeof document !== 'undefined') {
         if (action.payload) {
           document.documentElement.classList.add('dark')
@@ -90,6 +111,16 @@ const editorSlice = createSlice({
       state.characterCount = 0
       state.lastSaved = null
     },
+    initializeDarkMode: (state) => {
+      // Apply the current dark mode state to the DOM
+      if (typeof document !== 'undefined') {
+        if (state.isDarkMode) {
+          document.documentElement.classList.add('dark')
+        } else {
+          document.documentElement.classList.remove('dark')
+        }
+      }
+    },
   },
 })
 
@@ -103,6 +134,7 @@ export const {
   setAutoSave,
   setLastSaved,
   resetEditor,
+  initializeDarkMode,
 } = editorSlice.actions
 
 export default editorSlice.reducer 

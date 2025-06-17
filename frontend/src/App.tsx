@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { supabase } from './config/supabase'
 import { setAuth } from './store/slices/authSlice'
+import { initializeDarkMode } from './store/slices/editorSlice'
 import { RootState, AppDispatch } from './store'
 
 // Components
@@ -22,6 +23,9 @@ function App() {
   const [initialLoading, setInitialLoading] = React.useState(true)
 
   useEffect(() => {
+    // Initialize dark mode from localStorage
+    dispatch(initializeDarkMode())
+    
     // Get initial session
     const getInitialSession = async () => {
       const { data: { session } } = await supabase.auth.getSession()
