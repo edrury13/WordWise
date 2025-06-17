@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
-import { Eye, EyeOff, Mail, Lock } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, X } from 'lucide-react'
 import { supabase } from '../config/supabase'
 import { loginUser, loginWithGoogle, clearError } from '../store/slices/authSlice'
 import { AppDispatch, RootState } from '../store'
@@ -28,9 +28,7 @@ const LoginPage: React.FC = () => {
       ...prev,
       [name]: value
     }))
-    if (error) {
-      dispatch(clearError())
-    }
+    // Don't clear error on input change - let it persist until next login attempt
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -116,24 +114,34 @@ const LoginPage: React.FC = () => {
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
             <div className="bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 text-red-700 dark:text-red-200 px-4 py-3 rounded">
-              <div className="text-sm">
-                {error}
-                {(error.toLowerCase().includes('email') || 
-                  error.toLowerCase().includes('confirm') || 
-                  error.toLowerCase().includes('verify')) && (
-                  <div className="mt-2 text-xs">
-                    <p>💡 <strong>Need to verify your email?</strong></p>
-                    <p>Check your inbox and click the verification link, then try logging in again.</p>
-                  </div>
-                )}
-                {error.toLowerCase().includes('invalid') && (
-                  <div className="mt-2 text-xs">
-                    <p>💡 <strong>Can't log in?</strong></p>
-                    <p>• Double-check your email and password</p>
-                    <p>• Make sure you've verified your email address</p>
-                    <p>• Try resetting your password if needed</p>
-                  </div>
-                )}
+              <div className="flex justify-between items-start">
+                <div className="text-sm flex-1">
+                  {error}
+                  {(error.toLowerCase().includes('email') || 
+                    error.toLowerCase().includes('confirm') || 
+                    error.toLowerCase().includes('verify')) && (
+                    <div className="mt-2 text-xs">
+                      <p>💡 <strong>Need to verify your email?</strong></p>
+                      <p>Check your inbox and click the verification link, then try logging in again.</p>
+                    </div>
+                  )}
+                  {error.toLowerCase().includes('invalid') && (
+                    <div className="mt-2 text-xs">
+                      <p>💡 <strong>Can't log in?</strong></p>
+                      <p>• Double-check your email and password</p>
+                      <p>• Make sure you've verified your email address</p>
+                      <p>• Try resetting your password if needed</p>
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => dispatch(clearError())}
+                  className="ml-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-200"
+                  title="Dismiss error"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
             </div>
           )}

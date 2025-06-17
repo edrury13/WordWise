@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
-import { Eye, EyeOff, Mail, Lock, User, AlertTriangle } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, User, AlertTriangle, X } from 'lucide-react'
 import { registerUser, loginWithGoogle, clearError } from '../store/slices/authSlice'
 import { AppDispatch, RootState } from '../store'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -62,9 +62,7 @@ const RegisterPage: React.FC = () => {
       }))
     }
     
-    if (error) {
-      dispatch(clearError())
-    }
+    // Don't clear global auth error on input change - let it persist until next registration attempt
   }
 
   const validateForm = (): boolean => {
@@ -179,9 +177,21 @@ const RegisterPage: React.FC = () => {
         
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
-            <div className="bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 text-red-700 dark:text-red-200 px-4 py-3 rounded flex items-start space-x-2">
-              <AlertTriangle className="h-5 w-5 mt-0.5 flex-shrink-0" />
-              <span className="text-sm">{error}</span>
+            <div className="bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 text-red-700 dark:text-red-200 px-4 py-3 rounded">
+              <div className="flex justify-between items-start">
+                <div className="flex items-start space-x-2 flex-1">
+                  <AlertTriangle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                  <span className="text-sm">{error}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => dispatch(clearError())}
+                  className="ml-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-200"
+                  title="Dismiss error"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           )}
           

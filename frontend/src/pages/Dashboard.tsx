@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Edit, Trash2, Calendar, User, LogOut, Moon, Sun } from 'lucide-react'
+import { Plus, FileText, Edit, Trash2, Calendar, User, LogOut, Moon, Sun, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { RootState, AppDispatch } from '../store'
 import { fetchDocuments, deleteDocument, createDocument } from '../store/slices/documentSlice'
 import { logoutUser } from '../store/slices/authSlice'
@@ -18,6 +18,8 @@ const Dashboard: React.FC = () => {
   
   const [showNewDocModal, setShowNewDocModal] = useState(false)
   const [newDocTitle, setNewDocTitle] = useState('')
+  const [sortBy, setSortBy] = useState<'name' | 'created' | 'updated'>('updated')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
   useEffect(() => {
     if (user) {
@@ -118,6 +120,52 @@ const Dashboard: React.FC = () => {
     })
   }
 
+  const handleSort = (field: 'name' | 'created' | 'updated') => {
+    if (sortBy === field) {
+      // Toggle sort order if same field
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+    } else {
+      // Set new field and default to desc for dates, asc for name
+      setSortBy(field)
+      setSortOrder(field === 'name' ? 'asc' : 'desc')
+    }
+  }
+
+  const getSortedDocuments = () => {
+    if (!documents || documents.length === 0) return []
+    
+    const sorted = [...documents].sort((a, b) => {
+      let comparison = 0
+      
+      switch (sortBy) {
+        case 'name':
+          comparison = a.title.toLowerCase().localeCompare(b.title.toLowerCase())
+          break
+        case 'created':
+          comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          break
+        case 'updated':
+          comparison = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
+          break
+        default:
+          return 0
+      }
+      
+      return sortOrder === 'asc' ? comparison : -comparison
+    })
+    
+    return sorted
+  }
+
+  const getSortIcon = (field: 'name' | 'created' | 'updated') => {
+    if (sortBy !== field) {
+      return <ArrowUpDown className="h-3 w-3" />
+    }
+    return sortOrder === 'asc' ? 
+      <ArrowUp className="h-3 w-3" /> : 
+      <ArrowDown className="h-3 w-3" />
+  }
+
   if (loading && documents.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -201,17 +249,64 @@ const Dashboard: React.FC = () => {
         {/* Documents Section */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                 Your Documents
               </h2>
-              <button
-                onClick={() => setShowNewDocModal(true)}
-                className="btn btn-primary flex items-center justify-center space-x-2"
-              >
-                <Plus className="h-4 w-4" />
-                <span>New Document</span>
-              </button>
+              
+              <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+                {/* Sort Controls */}
+                {documents.length > 0 && (
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Sort by:</span>
+                    <div className="flex items-center space-x-1">
+                      <button
+                        onClick={() => handleSort('name')}
+                        className={`flex items-center space-x-1 px-2 py-1 text-xs rounded transition-colors ${
+                          sortBy === 'name'
+                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                            : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+                        }`}
+                      >
+                        <span>Name</span>
+                        {getSortIcon('name')}
+                      </button>
+                      
+                      <button
+                        onClick={() => handleSort('created')}
+                        className={`flex items-center space-x-1 px-2 py-1 text-xs rounded transition-colors ${
+                          sortBy === 'created'
+                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                            : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+                        }`}
+                      >
+                        <span>Created</span>
+                        {getSortIcon('created')}
+                      </button>
+                      
+                      <button
+                        onClick={() => handleSort('updated')}
+                        className={`flex items-center space-x-1 px-2 py-1 text-xs rounded transition-colors ${
+                          sortBy === 'updated'
+                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                            : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+                        }`}
+                      >
+                        <span>Updated</span>
+                        {getSortIcon('updated')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
+                <button
+                  onClick={() => setShowNewDocModal(true)}
+                  className="btn btn-primary flex items-center justify-center space-x-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>New Document</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -234,7 +329,7 @@ const Dashboard: React.FC = () => {
           ) : (
             <div className="p-6">
               <div className="grid gap-4">
-                {documents.map((document: any) => (
+                {getSortedDocuments().map((document: any) => (
                   <div
                     key={document.id}
                     className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow"
