@@ -58,40 +58,48 @@ const SentenceAnalysisPanel: React.FC<SentenceAnalysisPanelProps> = ({ text, onS
   const [expandedSentence, setExpandedSentence] = useState<number | null>(null)
 
   useEffect(() => {
-    if (text && text.trim().length > 10) {
+    if (text && text.trim().length > 20) {
       analyzeSentenceStructure()
     } else {
       setAnalysis(null)
+      setError(null)
     }
   }, [text])
 
   const analyzeSentenceStructure = async () => {
-    setLoading(true)
-    setError(null)
-    
     try {
+      setLoading(true)
+      setError(null)
+      
+      console.log('🔍 SentenceAnalysisPanel: Starting analysis for text:', text.substring(0, 100) + '...')
       const result = await analyzeSentences(text)
+      console.log('📊 SentenceAnalysisPanel: Raw API result:', result)
+      
       if (result.success) {
+        console.log('✅ SentenceAnalysisPanel: Analysis data received:', {
+          hasAnalysis: !!result.analysis,
+          fleschKincaidScore: result.analysis?.fleschKincaidScore,
+          fleschReadingEase: result.analysis?.fleschReadingEase,
+          FK_type: typeof result.analysis?.fleschKincaidScore,
+          FRE_type: typeof result.analysis?.fleschReadingEase,
+          FK_isNaN: isNaN(result.analysis?.fleschKincaidScore),
+          FRE_isNaN: isNaN(result.analysis?.fleschReadingEase),
+          FK_isNull: result.analysis?.fleschKincaidScore === null,
+          FRE_isNull: result.analysis?.fleschReadingEase === null,
+          FK_isUndefined: result.analysis?.fleschKincaidScore === undefined,
+          FRE_isUndefined: result.analysis?.fleschReadingEase === undefined,
+          readabilityLevel: result.analysis?.readabilityLevel,
+          readingEaseLevel: result.analysis?.readingEaseLevel,
+          fullAnalysisKeys: result.analysis ? Object.keys(result.analysis) : []
+        })
         setAnalysis(result.analysis)
       } else {
-        setError(result.error || 'Analysis failed')
+        console.log('❌ SentenceAnalysisPanel: Analysis failed:', result.error)
+        setError(result.error || 'Failed to analyze sentences')
       }
-    } catch (err) {
-      console.error('Sentence analysis error:', err)
-      if (err instanceof Error) {
-        if (err.message.includes('No authentication token')) {
-          setAnalysis(null)
-          return
-        } else if (err.message.includes('401')) {
-          setError('Please log in to use sentence analysis')
-        } else if (err.message.includes('500')) {
-          setError('Server error during sentence analysis')
-        } else {
-          setError(err.message)
-        }
-      } else {
-        setError('Failed to analyze sentences')
-      }
+    } catch (error) {
+      console.error('❌ SentenceAnalysisPanel: Exception during analysis:', error)
+      setError(error instanceof Error ? error.message : 'An unexpected error occurred')
     } finally {
       setLoading(false)
     }
@@ -203,16 +211,30 @@ const SentenceAnalysisPanel: React.FC<SentenceAnalysisPanelProps> = ({ text, onS
         {/* Flesch-Kincaid Readability Score */}
         <div className="mt-3 pt-3 border-t border-current border-opacity-20">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <div className="flex items-center justify-between">
-              <span>Flesch-Kincaid Grade Level: <span className="font-medium">{analysis.fleschKincaidScore}</span></span>
+            <div className="flex items-center justify-between" style={{backgroundColor: 'yellow', padding: '4px'}}>
+              <span>Flesch-Kincaid Grade Level: <span className="font-medium" style={{backgroundColor: 'red', color: 'white', padding: '2px'}}>
+                {(() => {
+                  console.log('🎯 Rendering FK in SentenceAnalysisPanel:', analysis.fleschKincaidScore, typeof analysis.fleschKincaidScore)
+                  return analysis.fleschKincaidScore !== null && analysis.fleschKincaidScore !== undefined && !isNaN(analysis.fleschKincaidScore) 
+                    ? analysis.fleschKincaidScore 
+                    : 'NO DATA'
+                })()}
+              </span></span>
               <span className="text-xs px-2 py-1 rounded bg-white dark:bg-gray-800 border">
-                {analysis.readabilityLevel}
+                {analysis.readabilityLevel || 'Unknown'}
               </span>
             </div>
-            <div className="flex items-center justify-between">
-              <span>Flesch Reading Ease: <span className="font-medium">{analysis.fleschReadingEase}</span></span>
+            <div className="flex items-center justify-between" style={{backgroundColor: 'yellow', padding: '4px'}}>
+              <span>Flesch Reading Ease: <span className="font-medium" style={{backgroundColor: 'red', color: 'white', padding: '2px'}}>
+                {(() => {
+                  console.log('🎯 Rendering FRE in SentenceAnalysisPanel:', analysis.fleschReadingEase, typeof analysis.fleschReadingEase)
+                  return analysis.fleschReadingEase !== null && analysis.fleschReadingEase !== undefined && !isNaN(analysis.fleschReadingEase) 
+                    ? analysis.fleschReadingEase 
+                    : 'NO DATA'
+                })()}
+              </span></span>
               <span className="text-xs px-2 py-1 rounded bg-white dark:bg-gray-800 border">
-                {analysis.readingEaseLevel}
+                {analysis.readingEaseLevel || 'Unknown'}
               </span>
             </div>
           </div>
