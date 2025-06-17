@@ -459,7 +459,7 @@ function performClientSideReadabilityAnalysis(text: string): ReadabilityScore {
   const passiveMatches = text.match(passiveIndicators) || []
   const passiveVoicePercentage = (passiveMatches.length / Math.max(totalSentences, 1)) * 100
 
-  return {
+  const readabilityScore: ReadabilityScore = {
     fleschKincaid: Math.round(fleschKincaid * 10) / 10,
     readabilityLevel: getReadabilityLevel(fleschKincaid),
     averageWordsPerSentence: Math.round(averageWordsPerSentence * 10) / 10,
@@ -467,5 +467,58 @@ function performClientSideReadabilityAnalysis(text: string): ReadabilityScore {
     totalSentences,
     passiveVoicePercentage: Math.round(passiveVoicePercentage * 10) / 10,
     longSentences,
+  }
+
+  return readabilityScore
+}
+
+export const analyzeSentences = async (text: string, language: string = 'en-US') => {
+  try {
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
+    
+    // Get auth token from Supabase session (consistent with other functions)
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    const token = session?.access_token
+
+    if (!token) {
+      throw new Error('No authentication token available')
+    }
+
+    const response = await fetch(`${API_BASE_URL}/language/sentence-analysis`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ text, language })
+    })
+
+    if (response.status === 429) {
+      // Rate limited - return a graceful fallback
+      console.warn('Sentence analysis rate limited, skipping this request')
+      return {
+        success: false,
+        error: 'Rate limited - please wait before making more requests'
+      }
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    return response.json()
+  } catch (error) {
+    console.error('Sentence analysis error:', error)
+    
+    // For rate limiting errors, return a graceful response instead of throwing
+    if (error instanceof Error && error.message.includes('429')) {
+      return {
+        success: false,
+        error: 'Rate limited - please wait before making more requests'
+      }
+    }
+    
+    throw error
   }
 } 

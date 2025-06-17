@@ -5,6 +5,8 @@ import { checkText, setActiveSuggestion, ignoreSuggestion, clearSuggestions, acc
 import { setContent, setLastSaved } from '../store/slices/editorSlice'
 import { updateDocument, updateCurrentDocumentContent } from '../store/slices/documentSlice'
 import { Suggestion } from '../store/slices/suggestionSlice'
+import { analyzeSentences } from '../services/languageService'
+import SentenceAnalysisPanel from './SentenceAnalysisPanel'
 
 const GrammarTextEditor: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -18,12 +20,16 @@ const GrammarTextEditor: React.FC = () => {
   const [showTooltip, setShowTooltip] = useState<string | null>(null)
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 })
   const [lastSaveStatus, setLastSaveStatus] = useState<'saving' | 'saved' | 'error' | null>(null)
+  const [sentenceAnalysis, setSentenceAnalysis] = useState<any>(null)
+  const [sentenceAnalysisLoading, setSentenceAnalysisLoading] = useState(false)
+  const [combinedSuggestions, setCombinedSuggestions] = useState<Suggestion[]>([])
   
   const editorRef = useRef<HTMLTextAreaElement>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<NodeJS.Timeout>()
   const autoSaveRef = useRef<NodeJS.Timeout>()
   const currentDocumentIdRef = useRef<string | null>(null)
+  const sentenceDebounceRef = useRef<NodeJS.Timeout>()
 
   // Debounced grammar checking
   const checkGrammar = useCallback((text: string) => {
@@ -37,6 +43,34 @@ const GrammarTextEditor: React.FC = () => {
       }
     }, 1000)
   }, [dispatch])
+
+  // Debounced sentence analysis
+  const checkSentenceStructure = useCallback((text: string) => {
+    if (sentenceDebounceRef.current) {
+      clearTimeout(sentenceDebounceRef.current)
+    }
+    
+    sentenceDebounceRef.current = setTimeout(async () => {
+      if (text.trim() && text.length > 10) {
+        setSentenceAnalysisLoading(true)
+        try {
+          const result = await analyzeSentences(text)
+          if (result.success) {
+            setSentenceAnalysis(result.analysis)
+          } else {
+            setSentenceAnalysis(null)
+          }
+        } catch (error) {
+          console.error('Sentence analysis error:', error)
+          setSentenceAnalysis(null)
+        } finally {
+          setSentenceAnalysisLoading(false)
+        }
+      } else {
+        setSentenceAnalysis(null)
+      }
+    }, 3000) // Increased from 1500ms to 3000ms to reduce API calls
+  }, [])
 
   // Auto-save functionality
   const autoSave = useCallback((text: string) => {
@@ -113,35 +147,106 @@ const GrammarTextEditor: React.FC = () => {
     // Update current document content in Redux
     dispatch(updateCurrentDocumentContent(newContent))
     
-    // Trigger grammar check and auto-save
+    // Trigger grammar check, sentence analysis, and auto-save
     checkGrammar(newContent)
+    checkSentenceStructure(newContent)
     autoSave(newContent)
-  }, [dispatch, checkGrammar, autoSave])
+  }, [dispatch, checkGrammar, checkSentenceStructure, autoSave])
 
   // Create highlighted text overlay
   const createHighlightedText = useCallback(() => {
-    if (!content || suggestions.length === 0) {
+    if (!content) {
       setHighlightedContent(content)
       return
     }
 
     let result = content
-    const sortedSuggestions = [...suggestions].sort((a, b) => b.offset - a.offset)
+    const allHighlights: Array<{
+      offset: number
+      length: number
+      type: string
+      id: string
+      className: string
+    }> = []
+    
+    // Create a combined suggestions array for tooltip lookup
+    const allSuggestions = [...suggestions]
 
-    sortedSuggestions.forEach((suggestion) => {
-      const { offset, length, type, id } = suggestion
+    // Add regular grammar suggestions
+    if (suggestions.length > 0) {
+      suggestions.forEach((suggestion) => {
+        allHighlights.push({
+          offset: suggestion.offset,
+          length: suggestion.length,
+          type: suggestion.type,
+          id: suggestion.id,
+          className: getErrorClassName(suggestion.type)
+        })
+      })
+    }
+
+    // Add sentence-level issues (incomplete sentences)
+    if (sentenceAnalysis?.sentences) {
+      sentenceAnalysis.sentences.forEach((sentence: any, index: number) => {
+        if (sentence.quality === 'incomplete' && sentence.issues?.length > 0) {
+          // Check if this sentence already has a grammar highlight to avoid duplicates
+          const hasExistingHighlight = allHighlights.some(h => 
+            h.offset >= sentence.offset && 
+            h.offset < sentence.offset + sentence.length
+          )
+          
+          if (!hasExistingHighlight) {
+            // Create a fake suggestion object for the incomplete sentence
+            const incompleteSuggestion: Suggestion = {
+              id: `sentence-${index}`,
+              type: 'grammar',
+              message: sentence.issues[0]?.message || 'This sentence appears to be incomplete.',
+              offset: sentence.offset,
+              length: sentence.length,
+              replacements: sentence.issues[0]?.replacements || [],
+              context: sentence.text,
+              explanation: 'Incomplete sentences are missing essential components like helping verbs or main verbs.',
+              category: 'Grammar',
+              severity: 'high'
+            }
+            
+            // Add to combined suggestions array for tooltip lookup
+            allSuggestions.push(incompleteSuggestion)
+            
+            allHighlights.push({
+              offset: sentence.offset,
+              length: sentence.length,
+              type: 'grammar',
+              id: `sentence-${index}`,
+              className: 'underline decoration-orange-500 decoration-wavy bg-orange-500 bg-opacity-10 dark:bg-orange-400 dark:bg-opacity-20'
+            })
+          }
+        }
+      })
+    }
+
+    // Sort highlights by offset (descending) to apply from end to start
+    const sortedHighlights = allHighlights.sort((a, b) => b.offset - a.offset)
+
+    sortedHighlights.forEach((highlight) => {
+      const { offset, length, type, id, className } = highlight
       const before = result.substring(0, offset)
-      const errorText = result.substring(offset, offset + length)
+      const highlightedText = result.substring(offset, offset + length)
       const after = result.substring(offset + length)
       
-      const className = getErrorClassName(type)
-      const highlightedSpan = `<span class="${className}" data-suggestion-id="${id}" data-offset="${offset}" data-length="${length}" onmouseenter="window.handleSuggestionHover && window.handleSuggestionHover('${id}', event)" onmouseleave="window.handleSuggestionLeave && window.handleSuggestionLeave()" onclick="window.handleSuggestionClick && window.handleSuggestionClick(${offset}, event)">${errorText}</span>`
+      // All highlights now use the same event handlers since we changed incomplete to 'grammar' type
+      const eventHandlers = `data-suggestion-id="${id}" data-offset="${offset}" data-length="${length}" style="pointer-events: auto;" onmouseenter="window.handleSuggestionHover && window.handleSuggestionHover('${id}', event)" onmouseleave="window.handleSuggestionLeave && window.handleSuggestionLeave()" onclick="window.handleSuggestionClick && window.handleSuggestionClick(${offset}, event)"`
+      
+      const highlightedSpan = `<span class="${className}" ${eventHandlers}>${highlightedText}</span>`
       
       result = before + highlightedSpan + after
     })
 
     setHighlightedContent(result)
-  }, [content, suggestions])
+    
+    // Store the combined suggestions for tooltip lookup
+    setCombinedSuggestions(allSuggestions)
+  }, [content, suggestions, sentenceAnalysis])
 
   // Get CSS class for error types
   const getErrorClassName = (type: Suggestion['type']): string => {
@@ -398,7 +503,7 @@ const GrammarTextEditor: React.FC = () => {
   // Update highlighted content when suggestions change
   useEffect(() => {
     createHighlightedText()
-  }, [createHighlightedText, suggestions])
+  }, [createHighlightedText, suggestions, sentenceAnalysis])
 
   // Cleanup timeouts on unmount
   useEffect(() => {
@@ -409,10 +514,13 @@ const GrammarTextEditor: React.FC = () => {
       if (autoSaveRef.current) {
         clearTimeout(autoSaveRef.current)
       }
+      if (sentenceDebounceRef.current) {
+        clearTimeout(sentenceDebounceRef.current)
+      }
     }
   }, [])
 
-  const activeSuggestion = suggestions.find(s => s.id === showTooltip)
+  const activeSuggestion = combinedSuggestions.find(s => s.id === showTooltip) || suggestions.find(s => s.id === showTooltip)
   const wordCount = content.split(/\s+/).filter(w => w.length > 0).length
   const charCount = content.length
 
@@ -427,6 +535,12 @@ const GrammarTextEditor: React.FC = () => {
             <div className="flex items-center space-x-2">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
               <span className="text-blue-500">Checking...</span>
+            </div>
+          )}
+          {sentenceAnalysisLoading && (
+            <div className="flex items-center space-x-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-500"></div>
+              <span className="text-purple-500">Analyzing sentences...</span>
             </div>
           )}
           {/* Save Status */}
@@ -455,10 +569,10 @@ const GrammarTextEditor: React.FC = () => {
         </div>
         
         <div className="flex items-center space-x-2 text-sm">
-          {suggestions.length > 0 && (
+          {(suggestions.length > 0 || (sentenceAnalysis?.qualityDistribution?.incomplete > 0)) && (
             <>
               <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded">
-                {suggestions.length} issue{suggestions.length !== 1 ? 's' : ''}
+                {suggestions.length + (sentenceAnalysis?.qualityDistribution?.incomplete || 0)} issue{(suggestions.length + (sentenceAnalysis?.qualityDistribution?.incomplete || 0)) !== 1 ? 's' : ''}
               </span>
               
               {/* Bulk Action Buttons */}
@@ -487,7 +601,12 @@ const GrammarTextEditor: React.FC = () => {
               </div>
             </>
           )}
-          {suggestions.length === 0 && content.length > 0 && !loading && (
+          {sentenceAnalysis?.qualityDistribution?.incomplete > 0 && (
+            <span className="px-2 py-1 bg-red-100 text-red-800 rounded">
+              {sentenceAnalysis.qualityDistribution.incomplete} incomplete sentence{sentenceAnalysis.qualityDistribution.incomplete !== 1 ? 's' : ''}
+            </span>
+          )}
+          {suggestions.length === 0 && (!sentenceAnalysis?.qualityDistribution?.incomplete || sentenceAnalysis.qualityDistribution.incomplete === 0) && content.length > 0 && !loading && !sentenceAnalysisLoading && (
             <span className="px-2 py-1 bg-green-100 text-green-800 rounded">
               No issues found
             </span>
@@ -511,7 +630,7 @@ const GrammarTextEditor: React.FC = () => {
         {/* Overlay for highlights */}
         <div
           ref={overlayRef}
-          className="grammar-overlay absolute inset-0 p-4 font-serif text-lg leading-relaxed text-transparent"
+          className="grammar-overlay absolute inset-0 p-4 font-serif text-lg leading-relaxed text-transparent z-10"
           style={{ 
             fontFamily: 'ui-serif, Georgia, serif',
             whiteSpace: 'pre-wrap',
@@ -666,6 +785,47 @@ const GrammarTextEditor: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Sentence Analysis Panel */}
+      <SentenceAnalysisPanel 
+        text={content}
+        onSentenceClick={(offset, length) => {
+          if (editorRef.current) {
+            editorRef.current.focus()
+            editorRef.current.setSelectionRange(offset, offset + length)
+          }
+        }}
+        onApplySuggestion={(offset, length, replacement) => {
+          // Apply the suggestion to the text
+          const newContent = 
+            content.substring(0, offset) + 
+            replacement + 
+            content.substring(offset + length)
+          
+          setContentState(newContent)
+          
+          if (editorRef.current) {
+            editorRef.current.value = newContent
+            // Position cursor after the replacement
+            const newCursorPosition = offset + replacement.length
+            editorRef.current.focus()
+            editorRef.current.setSelectionRange(newCursorPosition, newCursorPosition)
+          }
+          
+          // Update Redux state
+          dispatch(setContent([{
+            type: 'paragraph',
+            children: [{ text: newContent }]
+          }]))
+          
+          // Update current document content
+          dispatch(updateCurrentDocumentContent(newContent))
+          
+          // Trigger grammar check and auto-save
+          checkGrammar(newContent)
+          autoSave(newContent)
+        }}
+      />
     </div>
   )
 }
