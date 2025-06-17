@@ -175,6 +175,47 @@ function performClientSideGrammarCheck(text: string): Suggestion[] {
   
   // Basic grammar rules
   const grammarRules = [
+    // First sentence specific rules - use ^ to match start of text
+    {
+      pattern: /^(the|a|an)\s+\w+\s+(run|walk|jump|swim|fly|sleep|eat|drink|play|work|study|read|write|talk|sing|dance|cook|drive|sit|stand|lie|move|come|go|look|watch|listen|think|feel|be|do|get|make|take|give|see|know|say|tell|ask|help|learn|teach|buy|sell|build|clean|wash|fix|paint|open|close|start|stop|continue|begin|end|finish|try|want|need|love|like|hate|hope|believe|understand|remember|forget|choose|decide|plan|prepare|organize|manage|control|lead|follow|support|encourage|celebrate|enjoy|suffer|struggle|fight|win|lose|compete|practice|train|exercise|relax|rest|wake|dream)\b(?![.,!?;:])/gi,
+      message: "This appears to be an incomplete sentence. Consider adding 'is', 'was', 'are', or 'were' before the verb.",
+      replacement: (match: string) => {
+        const parts = match.split(/\s+/)
+        const article = parts[0]
+        const noun = parts[1]
+        const verb = parts[2]
+        
+        // Determine if singular or plural
+        const isPlural = article.toLowerCase() === 'the' && (noun.endsWith('s') || noun.endsWith('es'))
+        const auxVerb = isPlural ? 'are' : 'is'
+        
+        return `${article} ${noun} ${auxVerb} ${verb}`
+      },
+      type: 'grammar' as const
+    },
+    
+    // First sentence pronoun + verb without auxiliary
+    {
+      pattern: /^(he|she|it|i|you|we|they)\s+(run|walk|jump|swim|fly|sleep|eat|drink|play|work|study|read|write|talk|sing|dance|cook|drive|sit|stand|lie|move|come|go|look|watch|listen|think|feel|be|do|get|make|take|give|see|know|say|tell|ask|help|learn|teach|buy|sell|build|clean|wash|fix|paint|open|close|start|stop|continue|begin|end|finish|try|want|need|love|like|hate|hope|believe|understand|remember|forget|choose|decide|plan|prepare|organize|manage|control|lead|follow|support|encourage|celebrate|enjoy|suffer|struggle|fight|win|lose|compete|practice|train|exercise|relax|rest|wake|dream)\b(?![.,!?;:])/gi,
+      message: "This appears to be an incomplete sentence. Consider adding 'is', 'was', 'are', or 'were' before the verb.",
+      replacement: (match: string) => {
+        const parts = match.split(/\s+/)
+        const pronoun = parts[0].toLowerCase()
+        const verb = parts[1]
+        
+        // Determine correct auxiliary verb based on pronoun
+        let auxVerb = 'is'
+        if (pronoun === 'i') {
+          auxVerb = 'am'
+        } else if (pronoun === 'you' || pronoun === 'we' || pronoun === 'they') {
+          auxVerb = 'are'
+        }
+        
+        return `${parts[0]} ${auxVerb} ${verb}`
+      },
+      type: 'grammar' as const
+    },
+    
     // Subject-verb agreement errors
     {
       pattern: /\b(I|you|we|they)\s+was\b/gi,
@@ -186,6 +227,87 @@ function performClientSideGrammarCheck(text: string): Suggestion[] {
       pattern: /\b(he|she|it)\s+were\b/gi,
       message: "Subject-verb disagreement. Use 'was' instead of 'were' with singular subjects.",
       replacement: (match: string) => match.replace(/were/, 'was'),
+      type: 'grammar' as const
+    },
+    
+    // Present tense verb agreement errors
+    {
+      pattern: /\b(the\s+\w+)\s+(run|walk|jump|swim|fly|sleep|eat|drink|play|work|study|read|write|talk|sing|dance|cook|drive|sit|stand|move|come|go|look|watch|listen|think|feel|get|make|take|give|see|know|say|tell|ask|help|learn|teach|buy|sell|build|clean|wash|fix|paint|open|close|start|stop|continue|begin|end|finish|try|want|need|love|like|hate|hope|believe|understand|remember|forget|choose|decide|plan|prepare|organize|manage|control|lead|follow|support|encourage|celebrate|enjoy|suffer|struggle|fight|win|lose|compete|practice|train|exercise|relax|rest|wake|dream)\b(?!\w)/gi,
+      message: "Subject-verb disagreement. Singular subjects need 's' at the end of the verb.",
+      replacement: (match: string) => {
+        const parts = match.split(/\s+/)
+        const subject = parts.slice(0, -1).join(' ')
+        const verb = parts[parts.length - 1]
+        
+        // Add 's' to make it third person singular
+        const correctedVerb = verb.endsWith('s') ? verb : 
+                            verb === 'go' ? 'goes' :
+                            verb === 'do' ? 'does' :
+                            verb === 'have' ? 'has' :
+                            verb + 's'
+        
+        return `${subject} ${correctedVerb}`
+      },
+      type: 'grammar' as const
+    },
+    
+    // He/She/It + base form verb (should be third person singular)
+    {
+      pattern: /\b(he|she|it|He|She|It)\s+(run|walk|jump|swim|fly|sleep|eat|drink|play|work|study|read|write|talk|sing|dance|cook|drive|sit|stand|move|come|go|look|watch|listen|think|feel|get|make|take|give|see|know|say|tell|ask|help|learn|teach|buy|sell|build|clean|wash|fix|paint|open|close|start|stop|continue|begin|end|finish|try|want|need|love|like|hate|hope|believe|understand|remember|forget|choose|decide|plan|prepare|organize|manage|control|lead|follow|support|encourage|celebrate|enjoy|suffer|struggle|fight|win|lose|compete|practice|train|exercise|relax|rest|wake|dream)\b(?!\w)/gi,
+      message: "Subject-verb disagreement. Use the third person singular form of the verb with 'he', 'she', or 'it'.",
+      replacement: (match: string) => {
+        const parts = match.split(/\s+/)
+        const pronoun = parts[0]
+        const verb = parts[1]
+        
+        // Convert to third person singular
+        const correctedVerb = verb === 'go' ? 'goes' :
+                            verb === 'do' ? 'does' :
+                            verb === 'have' ? 'has' :
+                            verb + 's'
+        
+        return `${pronoun} ${correctedVerb}`
+      },
+      type: 'grammar' as const
+    },
+    
+    // Adjective/Adverb confusion - "runs good" should be "runs well"
+    {
+      pattern: /\b(runs?|walks?|talks?|works?|plays?|moves?|drives?|writes?|reads?|sings?|dances?|cooks?|sleeps?|eats?|drinks?|goes?|comes?|looks?|watches?|listens?|thinks?|feels?|gets?|makes?|takes?|gives?|sees?|knows?|says?|tells?|asks?|helps?|learns?|teaches?|buys?|sells?|builds?|cleans?|washes?|fixes?|paints?|opens?|closes?|starts?|stops?|continues?|begins?|ends?|finishes?|tries?|wants?|needs?|loves?|likes?|hates?|hopes?|believes?|understands?|remembers?|forgets?|chooses?|decides?|plans?|prepares?|organizes?|manages?|controls?|leads?|follows?|supports?|encourages?|celebrates?|enjoys?|suffers?|struggles?|fights?|wins?|loses?|competes?|practices?|trains?|exercises?|relaxes?|rests?|wakes?|dreams?)\s+(good|bad|quick|slow|loud|quiet|easy|hard|nice|beautiful|careful|careless|perfect|terrible|awful|amazing|wonderful|excellent|poor|great|fine)\b/gi,
+      message: "Use an adverb to describe how an action is performed. Most adverbs end in '-ly'.",
+      replacement: (match: string) => {
+        const parts = match.split(/\s+/)
+        const verb = parts[0]
+        const adjective = parts[1].toLowerCase()
+        
+        // Convert adjective to adverb
+        const adverbMap: { [key: string]: string } = {
+          'good': 'well',
+          'bad': 'badly',
+          'quick': 'quickly',
+          'slow': 'slowly',
+          'loud': 'loudly',
+          'quiet': 'quietly',
+          'easy': 'easily',
+          'hard': 'hard', // 'hard' can be both adjective and adverb
+          'nice': 'nicely',
+          'beautiful': 'beautifully',
+          'careful': 'carefully',
+          'careless': 'carelessly',
+          'perfect': 'perfectly',
+          'terrible': 'terribly',
+          'awful': 'awfully',
+          'amazing': 'amazingly',
+          'wonderful': 'wonderfully',
+          'excellent': 'excellently',
+          'poor': 'poorly',
+          'great': 'greatly',
+          'fine': 'finely'
+        }
+        
+        const adverb = adverbMap[adjective] || adjective + 'ly'
+        return `${verb} ${adverb}`
+      },
       type: 'grammar' as const
     },
     {

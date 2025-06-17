@@ -78,7 +78,7 @@ const GrammarTextEditor: React.FC = () => {
     }
     
     debounceRef.current = setTimeout(() => {
-      if (text.trim() && text.length > 10) { // Increased minimum length to reduce calls
+      if (text.trim() && text.length > 3) { // Reduced minimum length to catch short first sentences
         // Check rate limiting before making call
         if (canMakeApiCall(grammarCallTimesRef.current, 12)) { // Limit to 12 grammar calls per minute
           grammarCallTimesRef.current.push(Date.now())
