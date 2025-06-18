@@ -1,6 +1,11 @@
 import express from 'express'
 import axios from 'axios'
+import OpenAI from 'openai'
 import { AuthenticatedRequest } from '../middleware/auth'
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+})
 
 const router = express.Router()
 
@@ -901,16 +906,30 @@ router.post('/rewrite-tone', async (req: AuthenticatedRequest, res) => {
       })
     }
 
-    // For now, we'll use a simple rule-based approach to rewrite text
-    // In a production environment, you might want to integrate with an AI service like OpenAI
-    const rewrittenText = rewriteTextWithTone(text, tone.toLowerCase())
+    console.log('🚀🤖 ENHANCED OPENAI TONE REWRITE API v2.0 - Backend Implementation!')
+    
+    // Check if OpenAI API key is configured
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: 'OpenAI API key not configured'
+      })
+    }
+
+    const rewrittenText = await rewriteWithOpenAI(text, tone.toLowerCase())
+
+    const hasChanges = rewrittenText !== text && rewrittenText.trim() !== text.trim()
 
     res.status(200).json({
       success: true,
       originalText: text,
       rewrittenText,
       tone: tone.toLowerCase(),
-      wordCount: rewrittenText.split(/\s+/).filter(w => w.trim().length > 0).length
+      changes: hasChanges ? [`Text rewritten using AI for ${tone} tone`] : ['No changes needed'],
+      hasChanges,
+      method: 'openai',
+      version: 'Enhanced OpenAI Backend v2.0',
+      timestamp: new Date().toISOString()
     })
 
   } catch (error) {
@@ -1261,6 +1280,216 @@ function makeConcise(text: string): string {
     // Remove redundant phrases
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+// Enhanced OpenAI-powered tone rewriting function
+async function rewriteWithOpenAI(text: string, tone: string): Promise<string> {
+  const toneInstructions: Record<string, { instruction: string; examples: { before: string; after: string }; changes: string[]; temperature: number }> = {
+    'professional': {
+      instruction: 'Transform this text into a highly professional, business-appropriate tone. You MUST make significant changes to achieve a formal, polished style.',
+      examples: {
+        before: "Hey, this is awesome and I can't wait to see how it works out!",
+        after: "I am pleased to express my enthusiasm for this development and look forward to observing its implementation and outcomes."
+      },
+      changes: [
+        'Replace all contractions with full forms',
+        'Use sophisticated business vocabulary',
+        'Structure sentences formally',
+        'Add professional courtesy language',
+        'Eliminate casual expressions entirely'
+      ],
+      temperature: 0.4
+    },
+    'casual': {
+      instruction: 'Convert this text to a relaxed, conversational style that sounds like friendly chat. You MUST make it sound completely informal and approachable.',
+      examples: {
+        before: "I am writing to inform you that the project has been completed successfully.",
+        after: "Hey! Just wanted to let you know the project's all done and it turned out great!"
+      },
+      changes: [
+        'Use lots of contractions',
+        'Add casual filler words and phrases',
+        'Make sentences shorter and punchier',
+        'Include friendly exclamations',
+        'Use informal vocabulary throughout'
+      ],
+      temperature: 0.6
+    },
+    'formal': {
+      instruction: 'Elevate this text to an extremely formal, academic register with sophisticated language structures. You MUST use complex vocabulary and formal constructions.',
+      examples: {
+        before: "This is a good idea that will help our company.",
+        after: "This proposal represents a commendable initiative that shall facilitate the advancement of our organizational objectives."
+      },
+      changes: [
+        'Use complex sentence structures',
+        'Employ sophisticated academic vocabulary',
+        'Add formal transitional phrases',
+        'Use passive voice where appropriate',
+        'Eliminate all informal elements'
+      ],
+      temperature: 0.3
+    },
+    'friendly': {
+      instruction: 'Make this text warm, welcoming, and genuinely personable. You MUST infuse it with positive energy and approachable warmth.',
+      examples: {
+        before: "The meeting is scheduled for tomorrow.",
+        after: "I'm so excited to let you know our meeting is all set for tomorrow - looking forward to seeing you there!"
+      },
+      changes: [
+        'Add enthusiastic and welcoming language',
+        'Include positive emotional words',
+        'Use inclusive and warm phrasing',
+        'Add personal touches and encouragement',
+        'Make it sound genuinely caring'
+      ],
+      temperature: 0.5
+    },
+    'academic': {
+      instruction: 'Transform this into scholarly academic prose with precise terminology and rigorous intellectual structure. You MUST use academic conventions and scholarly language.',
+      examples: {
+        before: "Our research shows that this method works well.",
+        after: "The empirical evidence demonstrates that this methodological approach yields consistently favorable outcomes across multiple parameters."
+      },
+      changes: [
+        'Use precise academic terminology',
+        'Employ objective, third-person perspective',
+        'Add scholarly qualifiers and hedging',
+        'Structure arguments with academic rigor',
+        'Include formal academic phrases'
+      ],
+      temperature: 0.3
+    },
+    'creative': {
+      instruction: 'Completely reimagine this text with vivid, imaginative language that captivates and engages. You MUST use creative literary techniques and colorful expressions.',
+      examples: {
+        before: "The product launch was successful.",
+        after: "Our product burst onto the scene like a shooting star, dazzling the market and leaving competitors scrambling in its luminous wake."
+      },
+      changes: [
+        'Use vivid metaphors and imagery',
+        'Add creative adjectives and descriptors',
+        'Employ literary devices and figurative language',
+        'Create engaging, story-like elements',
+        'Transform mundane statements into compelling prose'
+      ],
+      temperature: 0.8
+    },
+    'persuasive': {
+      instruction: 'Rewrite this to be powerfully convincing and compelling. You MUST use strong persuasive techniques to make the content irresistibly appealing.',
+      examples: {
+        before: "You should consider this option.",
+        after: "Imagine the incredible transformation you'll experience when you choose this game-changing solution that smart leaders are already embracing!"
+      },
+      changes: [
+        'Use strong action verbs and power words',
+        'Add compelling emotional appeals',
+        'Include social proof and urgency',
+        'Frame benefits as transformative',
+        'Use persuasive psychological triggers'
+      ],
+      temperature: 0.6
+    },
+    'concise': {
+      instruction: 'Strip this text down to its absolute essentials while making it punchy and direct. You MUST eliminate every unnecessary word and make it incredibly tight.',
+      examples: {
+        before: "I would like to take this opportunity to inform you that we have successfully completed the project.",
+        after: "Project completed successfully."
+      },
+      changes: [
+        'Remove all redundant words and phrases',
+        'Use active voice exclusively',
+        'Eliminate unnecessary qualifiers',
+        'Make every word count',
+        'Create maximum impact with minimum words'
+      ],
+      temperature: 0.4
+    }
+  }
+
+  const selectedTone = toneInstructions[tone] || toneInstructions['professional']
+  
+  const estimatedTokens = Math.ceil(text.length / 3)
+  const maxTokens = Math.min(4000, Math.max(800, estimatedTokens * 2))
+
+  console.log('🔧 Enhanced OpenAI request details:', {
+    tone,
+    textLength: text.length,
+    estimatedInputTokens: estimatedTokens,
+    maxOutputTokens: maxTokens,
+    temperature: selectedTone.temperature
+  })
+
+  try {
+    const systemPrompt = `You are an expert text transformation specialist. Your job is to COMPLETELY REWRITE the given text to match the requested tone. 
+
+CRITICAL REQUIREMENTS:
+- You MUST make substantial changes to the text
+- The rewritten version should sound significantly different from the original
+- You MUST apply the tone transformation throughout the entire text
+- Never return text that is too similar to the original
+- Always aim for dramatic improvement in the requested style
+
+TONE: ${tone.toUpperCase()}
+INSTRUCTION: ${selectedTone.instruction}
+
+REQUIRED CHANGES:
+${selectedTone.changes.map(change => `• ${change}`).join('\n')}
+
+EXAMPLE TRANSFORMATION:
+Original: "${selectedTone.examples.before}"
+Target Style: "${selectedTone.examples.after}"
+
+Your rewrite should demonstrate this level of transformation. Be bold and make significant changes while preserving the core meaning.`
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt
+        },
+        {
+          role: "user",
+          content: `Transform this text to ${tone} tone (make substantial changes):\n\n"${text}"`
+        }
+      ],
+      max_tokens: maxTokens,
+      temperature: selectedTone.temperature,
+      top_p: 0.95,
+      frequency_penalty: 0.2,
+      presence_penalty: 0.2
+    })
+
+    let rewrittenText = completion.choices[0]?.message?.content?.trim()
+
+    if (!rewrittenText) {
+      console.error('OpenAI returned empty response')
+      throw new Error('OpenAI returned empty response')
+    }
+
+    // Remove quotes if OpenAI wrapped the response in quotes
+    if (rewrittenText.startsWith('"') && rewrittenText.endsWith('"')) {
+      rewrittenText = rewrittenText.slice(1, -1)
+    }
+
+    console.log('✅ Enhanced OpenAI completion successful:', {
+      inputTokens: completion.usage?.prompt_tokens || 'unknown',
+      outputTokens: completion.usage?.completion_tokens || 'unknown',
+      totalTokens: completion.usage?.total_tokens || 'unknown',
+      model: completion.model
+    })
+
+    return rewrittenText
+
+  } catch (error) {
+    console.error('Enhanced OpenAI API call failed:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      type: error instanceof Error ? error.constructor.name : 'Unknown'
+    })
+    
+    throw error
+  }
 }
 
 // Test endpoint to verify LanguageTool API

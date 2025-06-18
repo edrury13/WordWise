@@ -1,11 +1,24 @@
+import OpenAI from 'openai'
 import { createClient } from '@supabase/supabase-js'
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+})
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
+// Vercel edge function configuration
+export const config = {
+  maxDuration: 30, // 30 seconds timeout for OpenAI operations
+}
+
 export default async function handler(req, res) {
+  // UNIQUE IDENTIFIER: Enhanced OpenAI Version 2.0
+  console.log('🚀🤖 ENHANCED OPENAI TONE REWRITE API v2.0 - This is the NEW implementation!')
+  
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', true)
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -71,21 +84,32 @@ export default async function handler(req, res) {
       })
     }
 
-    console.log('📝 Processing tone rewrite request:', {
+    // Check if OpenAI API key is configured
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: 'OpenAI API key not configured'
+      })
+    }
+
+    console.log('🤖 Processing OpenAI tone rewrite request:', {
       textLength: text.length,
       tone: tone,
-      textPreview: text.substring(0, 100) + (text.length > 100 ? '...' : '')
+      textPreview: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+      userId: user.id
     })
 
-    // Apply tone rewriting transformations
-    const rewrittenText = applyToneRewriting(text, tone)
+    // Use OpenAI to rewrite the text
+    const rewrittenText = await rewriteWithOpenAI(text, tone)
     
-    const hasChanges = rewrittenText !== text
-    console.log('📊 Tone rewrite result:', {
+    const hasChanges = rewrittenText !== text && rewrittenText.trim() !== text.trim()
+    
+    console.log('📊 OpenAI tone rewrite result:', {
       hasChanges,
       originalLength: text.length,
       rewrittenLength: rewrittenText.length,
-      tone
+      tone,
+      userId: user.id
     })
 
     return res.status(200).json({
@@ -93,452 +117,357 @@ export default async function handler(req, res) {
       originalText: text,
       rewrittenText: rewrittenText,
       tone: tone,
-      changes: hasChanges ? ['Text modified for tone'] : [],
-      hasChanges
+      changes: hasChanges ? [`Text rewritten using AI for ${tone} tone`] : ['No changes needed'],
+      hasChanges,
+      method: 'openai',
+      version: 'Enhanced OpenAI v2.0',
+      timestamp: new Date().toISOString()
     })
 
   } catch (error) {
-    console.error('Tone rewrite API error:', error)
+    console.error('OpenAI tone rewrite error:', {
+      error: error.message,
+      type: error.constructor.name,
+      stack: error.stack
+    })
+
+    // Handle specific OpenAI errors
+    if (error instanceof OpenAI.APIError) {
+      if (error.status === 429) {
+        return res.status(429).json({
+          success: false,
+          error: 'OpenAI rate limit exceeded. Please try again in a moment.'
+        })
+      }
+      
+      if (error.status === 401) {
+        return res.status(500).json({
+          success: false,
+          error: 'OpenAI API authentication failed'
+        })
+      }
+
+      if (error.status === 400) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid request to OpenAI API'
+        })
+      }
+    }
+
+    // Handle timeout errors
+    if (error.name === 'AbortError' || error.code === 'ETIMEDOUT') {
+      return res.status(408).json({
+        success: false,
+        error: 'Request timeout. Please try with shorter text.'
+      })
+    }
+
     return res.status(500).json({
       success: false,
-      error: 'Internal server error'
+      error: 'Failed to rewrite text. Please try again.'
     })
   }
 }
 
-function applyToneRewriting(text, tone) {
-  console.log(`🎨 Applying tone rewriting: ${tone} to text length: ${text.length}`)
-  console.log(`📝 Input text: "${text}"`)
-  
-  // Quick test to ensure basic functionality works
-  if (text.includes("can't") && tone === 'professional') {
-    console.log('🧪 Quick test: Found "can\'t" in text for professional tone')
-  }
-  
-  const toneModifications = {
+async function rewriteWithOpenAI(text, tone) {
+  const toneInstructions = {
     'professional': {
-      replacements: [
-        // Contractions to full forms
-        { from: /\bcan't\b/gi, to: 'cannot' },
-        { from: /\bwon't\b/gi, to: 'will not' },
-        { from: /\bdon't\b/gi, to: 'do not' },
-        { from: /\bdidn't\b/gi, to: 'did not' },
-        { from: /\bisn't\b/gi, to: 'is not' },
-        { from: /\baren't\b/gi, to: 'are not' },
-        { from: /\bwasn't\b/gi, to: 'was not' },
-        { from: /\bweren't\b/gi, to: 'were not' },
-        { from: /\bhasn't\b/gi, to: 'has not' },
-        { from: /\bhaven't\b/gi, to: 'have not' },
-        { from: /\bhadn't\b/gi, to: 'had not' },
-        { from: /\bshouldn't\b/gi, to: 'should not' },
-        { from: /\bwouldn't\b/gi, to: 'would not' },
-        { from: /\bcouldn't\b/gi, to: 'could not' },
-        { from: /\bmustn't\b/gi, to: 'must not' },
-        { from: /\bmightn't\b/gi, to: 'might not' },
-        { from: /\bneedn't\b/gi, to: 'need not' },
-        { from: /\bI'm\b/gi, to: 'I am' },
-        { from: /\byou're\b/gi, to: 'you are' },
-        { from: /\bhe's\b/gi, to: 'he is' },
-        { from: /\bshe's\b/gi, to: 'she is' },
-        { from: /\bit's\b/gi, to: 'it is' },
-        { from: /\bwe're\b/gi, to: 'we are' },
-        { from: /\bthey're\b/gi, to: 'they are' },
-        { from: /\bI'll\b/gi, to: 'I will' },
-        { from: /\byou'll\b/gi, to: 'you will' },
-        { from: /\bhe'll\b/gi, to: 'he will' },
-        { from: /\bshe'll\b/gi, to: 'she will' },
-        { from: /\bit'll\b/gi, to: 'it will' },
-        { from: /\bwe'll\b/gi, to: 'we will' },
-        { from: /\bthey'll\b/gi, to: 'they will' },
-        { from: /\bI've\b/gi, to: 'I have' },
-        { from: /\byou've\b/gi, to: 'you have' },
-        { from: /\bwe've\b/gi, to: 'we have' },
-        { from: /\bthey've\b/gi, to: 'they have' },
-        { from: /\bI'd\b/gi, to: 'I would' },
-        { from: /\byou'd\b/gi, to: 'you would' },
-        { from: /\bhe'd\b/gi, to: 'he would' },
-        { from: /\bshe'd\b/gi, to: 'she would' },
-        { from: /\bwe'd\b/gi, to: 'we would' },
-        { from: /\bthey'd\b/gi, to: 'they would' },
-        
-        // Informal to formal words
-        { from: /\bkinda\b/gi, to: 'somewhat' },
-        { from: /\bsorta\b/gi, to: 'somewhat' },
-        { from: /\bgonna\b/gi, to: 'going to' },
-        { from: /\bwanna\b/gi, to: 'want to' },
-        { from: /\bgotta\b/gi, to: 'have to' },
-        { from: /\byeah\b/gi, to: 'yes' },
-        { from: /\byep\b/gi, to: 'yes' },
-        { from: /\bnope\b/gi, to: 'no' },
-        { from: /\bokay\b/gi, to: 'acceptable' },
-        { from: /\bOK\b/gi, to: 'acceptable' },
-        { from: /\bawesome\b/gi, to: 'excellent' },
-        { from: /\bgreat\b/gi, to: 'excellent' },
-        { from: /\bsuper\b/gi, to: 'very' },
-        { from: /\bpretty\s+(good|bad|nice|cool)\b/gi, to: 'quite $1' },
-        { from: /\bstuff\b/gi, to: 'items' },
-        { from: /\bthings\b/gi, to: 'matters' },
-        { from: /\bguys\b/gi, to: 'individuals' },
-        { from: /\bfunny\b/gi, to: 'amusing' },
-        { from: /\bweird\b/gi, to: 'unusual' },
-        { from: /\bbig\b/gi, to: 'significant' },
-        { from: /\bsmall\b/gi, to: 'minimal' },
-        { from: /\bfast\b/gi, to: 'rapid' },
-        { from: /\bslow\b/gi, to: 'gradual' },
-        
-        // Greetings and closings
-        { from: /\bHi\b/gi, to: 'Dear' },
-        { from: /\bHey\b/gi, to: 'Dear' },
-        { from: /\bThanks\b/gi, to: 'Thank you' },
-        { from: /\bBest\b/gi, to: 'Sincerely' },
-        { from: /\bCheers\b/gi, to: 'Best regards' },
-        { from: /\bSee you\b/gi, to: 'Until we meet again' },
-        { from: /\bTalk soon\b/gi, to: 'I look forward to our next communication' }
-      ]
+      instruction: 'Transform this text into a highly professional, business-appropriate tone. You MUST make significant changes to achieve a formal, polished style.',
+      examples: {
+        before: "Hey, this is awesome and I can't wait to see how it works out!",
+        after: "I am pleased to express my enthusiasm for this development and look forward to observing its implementation and outcomes."
+      },
+      changes: [
+        'Replace all contractions with full forms',
+        'Use sophisticated business vocabulary',
+        'Structure sentences formally',
+        'Add professional courtesy language',
+        'Eliminate casual expressions entirely'
+      ],
+      temperature: 0.4
     },
     'casual': {
-      replacements: [
-        // Full forms to contractions
-        { from: /\bcannot\b/gi, to: "can't" },
-        { from: /\bwill not\b/gi, to: "won't" },
-        { from: /\bdo not\b/gi, to: "don't" },
-        { from: /\bdid not\b/gi, to: "didn't" },
-        { from: /\bis not\b/gi, to: "isn't" },
-        { from: /\bare not\b/gi, to: "aren't" },
-        { from: /\bwas not\b/gi, to: "wasn't" },
-        { from: /\bwere not\b/gi, to: "weren't" },
-        { from: /\bhas not\b/gi, to: "hasn't" },
-        { from: /\bhave not\b/gi, to: "haven't" },
-        { from: /\bhad not\b/gi, to: "hadn't" },
-        { from: /\bshould not\b/gi, to: "shouldn't" },
-        { from: /\bwould not\b/gi, to: "wouldn't" },
-        { from: /\bcould not\b/gi, to: "couldn't" },
-        { from: /\bI am\b/gi, to: "I'm" },
-        { from: /\byou are\b/gi, to: "you're" },
-        { from: /\bhe is\b/gi, to: "he's" },
-        { from: /\bshe is\b/gi, to: "she's" },
-        { from: /\bit is\b/gi, to: "it's" },
-        { from: /\bwe are\b/gi, to: "we're" },
-        { from: /\bthey are\b/gi, to: "they're" },
-        { from: /\bI will\b/gi, to: "I'll" },
-        { from: /\byou will\b/gi, to: "you'll" },
-        { from: /\bhe will\b/gi, to: "he'll" },
-        { from: /\bshe will\b/gi, to: "she'll" },
-        { from: /\bwe will\b/gi, to: "we'll" },
-        { from: /\bthey will\b/gi, to: "they'll" },
-        
-        // Formal to informal words
-        { from: /\bsomewhat\b/gi, to: 'kinda' },
-        { from: /\bgoing to\b/gi, to: 'gonna' },
-        { from: /\bwant to\b/gi, to: 'wanna' },
-        { from: /\bhave to\b/gi, to: 'gotta' },
-        { from: /\byes\b/gi, to: 'yeah' },
-        { from: /\bacceptable\b/gi, to: 'okay' },
-        { from: /\bexcellent\b/gi, to: 'awesome' },
-        { from: /\bvery\b/gi, to: 'super' },
-        { from: /\bquite\s+(good|bad|nice|cool)\b/gi, to: 'pretty $1' },
-        { from: /\bitems\b/gi, to: 'stuff' },
-        { from: /\bmatters\b/gi, to: 'things' },
-        { from: /\bindividuals\b/gi, to: 'guys' },
-        { from: /\bamusing\b/gi, to: 'funny' },
-        { from: /\bunusual\b/gi, to: 'weird' },
-        { from: /\bsignificant\b/gi, to: 'big' },
-        { from: /\bminimal\b/gi, to: 'small' },
-        { from: /\brapid\b/gi, to: 'fast' },
-        { from: /\bgradual\b/gi, to: 'slow' },
-        
-        // Greetings and closings
-        { from: /\bDear\b/gi, to: 'Hey' },
-        { from: /\bThank you\b/gi, to: 'Thanks' },
-        { from: /\bSincerely\b/gi, to: 'Best' },
-        { from: /\bBest regards\b/gi, to: 'Cheers' }
-      ]
+      instruction: 'Convert this text to a relaxed, conversational style that sounds like friendly chat. You MUST make it sound completely informal and approachable.',
+      examples: {
+        before: "I am writing to inform you that the project has been completed successfully.",
+        after: "Hey! Just wanted to let you know the project's all done and it turned out great!"
+      },
+      changes: [
+        'Use lots of contractions',
+        'Add casual filler words and phrases',
+        'Make sentences shorter and punchier',
+        'Include friendly exclamations',
+        'Use informal vocabulary throughout'
+      ],
+      temperature: 0.6
+    },
+    'formal': {
+      instruction: 'Elevate this text to an extremely formal, academic register with sophisticated language structures. You MUST use complex vocabulary and formal constructions.',
+      examples: {
+        before: "This is a good idea that will help our company.",
+        after: "This proposal represents a commendable initiative that shall facilitate the advancement of our organizational objectives."
+      },
+      changes: [
+        'Use complex sentence structures',
+        'Employ sophisticated academic vocabulary',
+        'Add formal transitional phrases',
+        'Use passive voice where appropriate',
+        'Eliminate all informal elements'
+      ],
+      temperature: 0.3
     },
     'friendly': {
-      replacements: [
-        // Make greetings warmer
-        { from: /\bHello\b/gi, to: 'Hi there' },
-        { from: /\bHi\b/gi, to: 'Hey there' },
-        { from: /\bDear\b/gi, to: 'Hi' },
-        
-        // Warmer expressions
-        { from: /\bThank you\b/gi, to: 'Thanks so much' },
-        { from: /\bThanks\b/gi, to: 'Thanks a bunch' },
-        { from: /\bRegards\b/gi, to: 'Best wishes' },
-        { from: /\bSincerely\b/gi, to: 'Warmly' },
-        { from: /\bBest\b/gi, to: 'All the best' },
-        
-        // Add enthusiasm
-        { from: /\bgood\b/gi, to: 'great' },
-        { from: /\bnice\b/gi, to: 'wonderful' },
-        { from: /\bfine\b/gi, to: 'fantastic' },
-        { from: /\bokay\b/gi, to: 'perfect' },
-        { from: /\byes\b/gi, to: 'absolutely' },
-        
-        // Soften statements
-        { from: /\bI think\b/gi, to: 'I feel' },
-        { from: /\bI believe\b/gi, to: 'I feel' },
-        { from: /\bYou should\b/gi, to: 'You might want to' },
-        { from: /\bYou must\b/gi, to: 'You could' },
-        { from: /\bYou need to\b/gi, to: 'It would be great if you could' },
-        
-        // Add warmth to requests
-        { from: /\bPlease\b/gi, to: 'Please feel free to' },
-        { from: /\bCan you\b/gi, to: 'Would you mind' },
-        { from: /\bWill you\b/gi, to: 'Could you possibly' }
-      ]
+      instruction: 'Make this text warm, welcoming, and genuinely personable. You MUST infuse it with positive energy and approachable warmth.',
+      examples: {
+        before: "The meeting is scheduled for tomorrow.",
+        after: "I'm so excited to let you know our meeting is all set for tomorrow - looking forward to seeing you there!"
+      },
+      changes: [
+        'Add enthusiastic and welcoming language',
+        'Include positive emotional words',
+        'Use inclusive and warm phrasing',
+        'Add personal touches and encouragement',
+        'Make it sound genuinely caring'
+      ],
+      temperature: 0.5
     },
-          'formal': {
-        replacements: [
-          // Formal greetings
-          { from: /\bHi\b/gi, to: 'Dear' },
-          { from: /\bHey\b/gi, to: 'Dear' },
-          { from: /\bHello\b/gi, to: 'Dear' },
-          
-          // Formal closings
-          { from: /\bThanks\b/gi, to: 'Thank you' },
-          { from: /\bBest\b/gi, to: 'Sincerely' },
-          { from: /\bCheers\b/gi, to: 'Respectfully' },
-          { from: /\bSee you\b/gi, to: 'I look forward to hearing from you' },
-          
-          // Remove contractions (same as professional)
-          { from: /\bcan't\b/gi, to: 'cannot' },
-          { from: /\bwon't\b/gi, to: 'will not' },
-          { from: /\bdon't\b/gi, to: 'do not' },
-          { from: /\bdidn't\b/gi, to: 'did not' },
-          { from: /\bisn't\b/gi, to: 'is not' },
-          { from: /\baren't\b/gi, to: 'are not' },
-          { from: /\bI'm\b/gi, to: 'I am' },
-          { from: /\byou're\b/gi, to: 'you are' },
-          { from: /\bhe's\b/gi, to: 'he is' },
-          { from: /\bshe's\b/gi, to: 'she is' },
-          { from: /\bit's\b/gi, to: 'it is' },
-          { from: /\bwe're\b/gi, to: 'we are' },
-          { from: /\bthey're\b/gi, to: 'they are' },
-          
-          // Elevate language
-          { from: /\bget\b/gi, to: 'obtain' },
-          { from: /\bshow\b/gi, to: 'demonstrate' },
-          { from: /\bhelp\b/gi, to: 'assist' },
-          { from: /\bask\b/gi, to: 'inquire' },
-          { from: /\btell\b/gi, to: 'inform' },
-          { from: /\bgive\b/gi, to: 'provide' },
-          { from: /\bmake\b/gi, to: 'create' },
-          { from: /\buse\b/gi, to: 'utilize' },
-          { from: /\bstart\b/gi, to: 'commence' },
-          { from: /\bend\b/gi, to: 'conclude' },
-          { from: /\bbuy\b/gi, to: 'purchase' },
-          { from: /\bsell\b/gi, to: 'offer' },
-          { from: /\bfix\b/gi, to: 'resolve' },
-          { from: /\bfind\b/gi, to: 'locate' },
-          { from: /\bkeep\b/gi, to: 'maintain' },
-          { from: /\bstop\b/gi, to: 'cease' },
-          
-          // More formal expressions
-          { from: /\bI think\b/gi, to: 'I believe' },
-          { from: /\bI guess\b/gi, to: 'I presume' },
-          { from: /\bmaybe\b/gi, to: 'perhaps' },
-          { from: /\bprobably\b/gi, to: 'likely' },
-          { from: /\babout\b/gi, to: 'regarding' },
-          { from: /\bbecause\b/gi, to: 'due to the fact that' },
-          { from: /\bso\b/gi, to: 'therefore' },
-          { from: /\bbut\b/gi, to: 'however' },
-          { from: /\balso\b/gi, to: 'additionally' },
-          { from: /\bplus\b/gi, to: 'furthermore' }
-        ]
+    'academic': {
+      instruction: 'Transform this into scholarly academic prose with precise terminology and rigorous intellectual structure. You MUST use academic conventions and scholarly language.',
+      examples: {
+        before: "Our research shows that this method works well.",
+        after: "The empirical evidence demonstrates that this methodological approach yields consistently favorable outcomes across multiple parameters."
       },
-      'academic': {
-        replacements: [
-          // Academic language patterns
-          { from: /\bI think\b/gi, to: 'This analysis suggests' },
-          { from: /\bI believe\b/gi, to: 'The evidence indicates' },
-          { from: /\bI feel\b/gi, to: 'The research demonstrates' },
-          { from: /\bThis shows\b/gi, to: 'This evidence demonstrates' },
-          { from: /\bThis proves\b/gi, to: 'This substantiates the hypothesis that' },
-          { from: /\bIn conclusion\b/gi, to: 'The findings suggest' },
-          { from: /\bTo sum up\b/gi, to: 'In summary, the analysis reveals' },
-          { from: /\bBasically\b/gi, to: 'Fundamentally' },
-          { from: /\bObviously\b/gi, to: 'As the data clearly indicates' },
-          { from: /\bOf course\b/gi, to: 'As expected' },
-          
-          // Remove contractions
-          { from: /\bcan't\b/gi, to: 'cannot' },
-          { from: /\bwon't\b/gi, to: 'will not' },
-          { from: /\bdon't\b/gi, to: 'do not' },
-          { from: /\bisn't\b/gi, to: 'is not' },
-          { from: /\baren't\b/gi, to: 'are not' },
-          
-          // Academic vocabulary
-          { from: /\bimportant\b/gi, to: 'significant' },
-          { from: /\bbig\b/gi, to: 'substantial' },
-          { from: /\bsmall\b/gi, to: 'minimal' },
-          { from: /\bgood\b/gi, to: 'favorable' },
-          { from: /\bbad\b/gi, to: 'adverse' },
-          { from: /\bmany\b/gi, to: 'numerous' },
-          { from: /\ba lot of\b/gi, to: 'a substantial number of' }
-        ]
+      changes: [
+        'Use precise academic terminology',
+        'Employ objective, third-person perspective',
+        'Add scholarly qualifiers and hedging',
+        'Structure arguments with academic rigor',
+        'Include formal academic phrases'
+      ],
+      temperature: 0.3
+    },
+    'creative': {
+      instruction: 'Completely reimagine this text with vivid, imaginative language that captivates and engages. You MUST use creative literary techniques and colorful expressions.',
+      examples: {
+        before: "The product launch was successful.",
+        after: "Our product burst onto the scene like a shooting star, dazzling the market and leaving competitors scrambling in its luminous wake."
       },
-      'creative': {
-        replacements: [
-          // Creative and vivid language
-          { from: /\bvery\s+(\w+)\b/gi, to: 'incredibly $1' },
-          { from: /\breally\s+(\w+)\b/gi, to: 'remarkably $1' },
-          { from: /\bquite\s+(\w+)\b/gi, to: 'utterly $1' },
-          { from: /\bsaid\b/gi, to: 'whispered' },
-          { from: /\bwalked\b/gi, to: 'strolled' },
-          { from: /\bran\b/gi, to: 'dashed' },
-          { from: /\blooked\b/gi, to: 'gazed' },
-          { from: /\bsaw\b/gi, to: 'witnessed' },
-          { from: /\bheard\b/gi, to: 'detected' },
-          { from: /\bfelt\b/gi, to: 'sensed' },
-          { from: /\bthought\b/gi, to: 'pondered' },
-          { from: /\bknew\b/gi, to: 'realized' },
-          { from: /\bwent\b/gi, to: 'ventured' },
-          { from: /\bcame\b/gi, to: 'emerged' },
-          { from: /\bgot\b/gi, to: 'acquired' },
-          { from: /\bmade\b/gi, to: 'crafted' },
-          { from: /\btook\b/gi, to: 'seized' },
-          { from: /\bgave\b/gi, to: 'bestowed' },
-          { from: /\bput\b/gi, to: 'placed' },
-          { from: /\bfound\b/gi, to: 'discovered' }
-        ]
+      changes: [
+        'Use vivid metaphors and imagery',
+        'Add creative adjectives and descriptors',
+        'Employ literary devices and figurative language',
+        'Create engaging, story-like elements',
+        'Transform mundane statements into compelling prose'
+      ],
+      temperature: 0.8
+    },
+    'persuasive': {
+      instruction: 'Rewrite this to be powerfully convincing and compelling. You MUST use strong persuasive techniques to make the content irresistibly appealing.',
+      examples: {
+        before: "You should consider this option.",
+        after: "Imagine the incredible transformation you'll experience when you choose this game-changing solution that smart leaders are already embracing!"
       },
-      'persuasive': {
-        replacements: [
-          // Persuasive language patterns
-          { from: /\bI think\b/gi, to: 'Clearly' },
-          { from: /\bMaybe\b/gi, to: 'Undoubtedly' },
-          { from: /\bPerhaps\b/gi, to: 'Certainly' },
-          { from: /\bIt seems\b/gi, to: 'It is evident that' },
-          { from: /\bYou should\b/gi, to: 'You must' },
-          { from: /\bYou could\b/gi, to: 'You should' },
-          { from: /\bYou might\b/gi, to: 'You will' },
-          { from: /\bThis is\b/gi, to: 'This is absolutely' },
-          { from: /\bThis will\b/gi, to: 'This will definitely' },
-          { from: /\bThis can\b/gi, to: 'This will' },
-          { from: /\bConsider\b/gi, to: 'Imagine' },
-          { from: /\bTry\b/gi, to: 'Experience' },
-          { from: /\bLook at\b/gi, to: 'Witness' },
-          { from: /\bSome people\b/gi, to: 'Smart people' },
-          { from: /\bMany people\b/gi, to: 'Successful people' },
-          { from: /\bGood\b/gi, to: 'Exceptional' },
-          { from: /\bBetter\b/gi, to: 'Superior' },
-          { from: /\bBest\b/gi, to: 'Ultimate' },
-          { from: /\bWorks\b/gi, to: 'Delivers results' },
-          { from: /\bHelps\b/gi, to: 'Transforms' }
-        ]
+      changes: [
+        'Use strong action verbs and power words',
+        'Add compelling emotional appeals',
+        'Include social proof and urgency',
+        'Frame benefits as transformative',
+        'Use persuasive psychological triggers'
+      ],
+      temperature: 0.6
+    },
+    'concise': {
+      instruction: 'Strip this text down to its absolute essentials while making it punchy and direct. You MUST eliminate every unnecessary word and make it incredibly tight.',
+      examples: {
+        before: "I would like to take this opportunity to inform you that we have successfully completed the project.",
+        after: "Project completed successfully."
       },
-      'concise': {
-        replacements: [
-          // Make text more concise
-          { from: /\bin order to\b/gi, to: 'to' },
-          { from: /\bdue to the fact that\b/gi, to: 'because' },
-          { from: /\bfor the reason that\b/gi, to: 'because' },
-          { from: /\bin spite of the fact that\b/gi, to: 'although' },
-          { from: /\bat this point in time\b/gi, to: 'now' },
-          { from: /\bat the present time\b/gi, to: 'now' },
-          { from: /\bin the near future\b/gi, to: 'soon' },
-          { from: /\bprior to\b/gi, to: 'before' },
-          { from: /\bsubsequent to\b/gi, to: 'after' },
-          { from: /\bin the event that\b/gi, to: 'if' },
-          { from: /\bwith regard to\b/gi, to: 'about' },
-          { from: /\bwith respect to\b/gi, to: 'about' },
-          { from: /\bin relation to\b/gi, to: 'about' },
-          { from: /\bfor the purpose of\b/gi, to: 'for' },
-          { from: /\bis able to\b/gi, to: 'can' },
-          { from: /\bhas the ability to\b/gi, to: 'can' },
-          { from: /\bit is possible that\b/gi, to: 'maybe' },
-          { from: /\bit is important to note that\b/gi, to: 'note that' },
-          { from: /\bit should be noted that\b/gi, to: '' },
-          { from: /\bthe fact that\b/gi, to: 'that' },
-          { from: /\ba large number of\b/gi, to: 'many' },
-          { from: /\ba small number of\b/gi, to: 'few' }
-        ]
-      }
+      changes: [
+        'Remove all redundant words and phrases',
+        'Use active voice exclusively',
+        'Eliminate unnecessary qualifiers',
+        'Make every word count',
+        'Create maximum impact with minimum words'
+      ],
+      temperature: 0.4
+    }
   }
 
-  let rewrittenText = text
-  const modifications = toneModifications[tone.toLowerCase()] || { replacements: [] }
-  let changesCount = 0
+  const selectedTone = toneInstructions[tone] || toneInstructions['professional']
+  
+  // Estimate tokens to stay within limits
+  const estimatedTokens = Math.ceil(text.length / 3)
+  const maxTokens = Math.min(4000, Math.max(800, estimatedTokens * 2)) // Increased token allowance
 
-  console.log(`🔄 Applying ${modifications.replacements.length} potential modifications for tone: ${tone}`)
-
-  modifications.replacements.forEach(({ from, to }, index) => {
-    const beforeText = rewrittenText
-    rewrittenText = rewrittenText.replace(from, to)
-    if (rewrittenText !== beforeText) {
-      changesCount++
-      console.log(`✅ Transformation ${index + 1}: "${from}" → "${to}" | Match found`)
-    }
+  console.log('🔧 Enhanced OpenAI request details:', {
+    tone,
+    textLength: text.length,
+    estimatedInputTokens: estimatedTokens,
+    maxOutputTokens: maxTokens,
+    temperature: selectedTone.temperature,
+    hasExamples: !!selectedTone.examples
   })
 
-  console.log(`✅ Applied ${changesCount} changes. Original: ${text.length} chars, Rewritten: ${rewrittenText.length} chars`)
+  try {
+    const systemPrompt = `You are an expert text transformation specialist. Your job is to COMPLETELY REWRITE the given text to match the requested tone. 
 
-  // If no changes were made, try some fallback transformations
-  if (changesCount === 0 && text.length > 10) {
-    console.log('🔄 No changes made, applying fallback transformations...')
-    
-    switch (tone.toLowerCase()) {
-      case 'professional':
-        // Add more formal sentence starters and ensure proper capitalization
-        rewrittenText = rewrittenText.replace(/^([a-z])/gm, (match, p1) => p1.toUpperCase())
-        rewrittenText = rewrittenText.replace(/\.\s+([a-z])/g, (match, p1) => '. ' + p1.toUpperCase())
-        // Add a simple transformation to show something changed
-        if (rewrittenText === text) {
-          rewrittenText = `[Professional tone applied] ${text}`
+CRITICAL REQUIREMENTS:
+- You MUST make substantial changes to the text
+- The rewritten version should sound significantly different from the original
+- You MUST apply the tone transformation throughout the entire text
+- Never return text that is too similar to the original
+- Always aim for dramatic improvement in the requested style
+
+TONE: ${tone.toUpperCase()}
+INSTRUCTION: ${selectedTone.instruction}
+
+REQUIRED CHANGES:
+${selectedTone.changes.map(change => `• ${change}`).join('\n')}
+
+EXAMPLE TRANSFORMATION:
+Original: "${selectedTone.examples.before}"
+Target Style: "${selectedTone.examples.after}"
+
+Your rewrite should demonstrate this level of transformation. Be bold and make significant changes while preserving the core meaning.`
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt
+        },
+        {
+          role: "user",
+          content: `Transform this text to ${tone} tone (make substantial changes):\n\n"${text}"`
         }
-        break
-      case 'casual':
-        // Add some casual filler words
-        rewrittenText = text.replace(/^/, 'Well, ')
-        break
-      case 'friendly':
-        // Add some friendly exclamations
-        rewrittenText = text.replace(/\./g, (match, offset) => {
-          // Only replace some periods, not all
-          return Math.random() < 0.3 ? '!' : match
-        })
-        // If no periods to replace, add friendly prefix
-        if (rewrittenText === text) {
-          rewrittenText = `Hey there! ${text}`
-        }
-        break
-      case 'formal':
-        // Ensure proper capitalization and add formal prefix if needed
-        rewrittenText = rewrittenText.replace(/^([a-z])/gm, (match, p1) => p1.toUpperCase())
-        if (rewrittenText === text) {
-          rewrittenText = `Respectfully, ${text}`
-        }
-        break
-      case 'academic':
-        rewrittenText = `The analysis indicates that ${text.charAt(0).toLowerCase() + text.slice(1)}`
-        break
-      case 'creative':
-        rewrittenText = text.replace(/\b(is|was|are|were)\b/gi, (match) => `${match} brilliantly`)
-        if (rewrittenText === text) {
-          rewrittenText = `Imagine this: ${text}`
-        }
-        break
-      case 'persuasive':
-        rewrittenText = `Clearly, ${text.charAt(0).toLowerCase() + text.slice(1)}`
-        break
-      case 'concise':
-        // Remove unnecessary words
-        rewrittenText = text.replace(/\b(very|really|quite|rather|somewhat)\s+/gi, '')
-        if (rewrittenText === text) {
-          rewrittenText = text.replace(/\b(that|which)\s+/gi, '')
-        }
-        break
-      default:
-        // Generic fallback - add tone indicator
-        rewrittenText = `[${tone.charAt(0).toUpperCase() + tone.slice(1)} tone] ${text}`
+      ],
+      max_tokens: maxTokens,
+      temperature: selectedTone.temperature,
+      top_p: 0.95,
+      frequency_penalty: 0.2,
+      presence_penalty: 0.2
+    })
+
+    let rewrittenText = completion.choices[0]?.message?.content?.trim()
+
+    if (!rewrittenText) {
+      console.error('OpenAI returned empty response')
+      throw new Error('OpenAI returned empty response')
     }
+
+    // Remove quotes if OpenAI wrapped the response in quotes
+    if (rewrittenText.startsWith('"') && rewrittenText.endsWith('"')) {
+      rewrittenText = rewrittenText.slice(1, -1)
+    }
+
+    // Fallback logic if changes are too minimal
+    const similarity = calculateSimilarity(text.toLowerCase(), rewrittenText.toLowerCase())
+    console.log('📊 Similarity analysis:', {
+      similarity: `${(similarity * 100).toFixed(1)}%`,
+      originalLength: text.length,
+      rewrittenLength: rewrittenText.length,
+      lengthChange: `${(((rewrittenText.length - text.length) / text.length) * 100).toFixed(1)}%`
+    })
+
+    // If the text is too similar (>85% similarity), try again with more aggressive prompt
+    if (similarity > 0.85 && text.length > 10) {
+      console.log('🔄 Text too similar, attempting more aggressive rewrite...')
+      
+      const aggressiveCompletion = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content: `You are a text transformation expert. The previous attempt was too conservative. 
+
+CRITICAL: You MUST create a dramatically different version that clearly demonstrates the ${tone} tone.
+- Change sentence structures completely
+- Use entirely different vocabulary where possible
+- Rearrange ideas and presentation
+- Make it sound like a completely different person wrote it
+- Be much more aggressive in applying the ${tone} style
+
+${selectedTone.instruction}
+
+The result should be obviously and dramatically different from the original.`
+          },
+          {
+            role: "user",
+            content: `AGGRESSIVELY rewrite this in ${tone} tone (must be very different):\n\n"${text}"`
+          }
+        ],
+        max_tokens: maxTokens,
+        temperature: Math.min(0.9, selectedTone.temperature + 0.3), // Increase temperature
+        top_p: 0.95,
+        frequency_penalty: 0.3,
+        presence_penalty: 0.3
+      })
+
+      const aggressiveRewrite = aggressiveCompletion.choices[0]?.message?.content?.trim()
+      if (aggressiveRewrite && aggressiveRewrite.length > 0) {
+        rewrittenText = aggressiveRewrite.startsWith('"') && aggressiveRewrite.endsWith('"') 
+          ? aggressiveRewrite.slice(1, -1) 
+          : aggressiveRewrite
+      }
+    }
+
+    console.log('✅ Enhanced OpenAI completion successful:', {
+      inputTokens: completion.usage?.prompt_tokens || 'unknown',
+      outputTokens: completion.usage?.completion_tokens || 'unknown',
+      totalTokens: completion.usage?.total_tokens || 'unknown',
+      model: completion.model,
+      finalSimilarity: `${(calculateSimilarity(text.toLowerCase(), rewrittenText.toLowerCase()) * 100).toFixed(1)}%`
+    })
+
+    return rewrittenText
+
+  } catch (error) {
+    console.error('Enhanced OpenAI API call failed:', {
+      error: error.message,
+      type: error.constructor.name,
+      status: error.status,
+      code: error.code
+    })
     
-    if (rewrittenText !== text) {
-      changesCount = 1
-      console.log('✅ Applied fallback transformations')
+    throw error
+  }
+}
+
+// Helper function to calculate text similarity
+function calculateSimilarity(text1, text2) {
+  const words1 = new Set(text1.split(/\s+/))
+  const words2 = new Set(text2.split(/\s+/))
+  
+  const intersection = new Set([...words1].filter(word => words2.has(word)))
+  const union = new Set([...words1, ...words2])
+  
+  return intersection.size / union.size
+}
+
+// Helper function to split long texts into chunks if needed
+function splitIntoChunks(text, maxLength = 3000) {
+  if (text.length <= maxLength) {
+    return [text]
+  }
+
+  const chunks = []
+  const sentences = text.split(/(?<=[.!?])\s+/)
+  let currentChunk = ''
+
+  for (const sentence of sentences) {
+    if ((currentChunk + ' ' + sentence).length > maxLength && currentChunk) {
+      chunks.push(currentChunk.trim())
+      currentChunk = sentence
+    } else {
+      currentChunk += (currentChunk ? ' ' : '') + sentence
     }
   }
 
-  return rewrittenText
+  if (currentChunk.trim()) {
+    chunks.push(currentChunk.trim())
+  }
+
+  return chunks.length > 0 ? chunks : [text]
 } 

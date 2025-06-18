@@ -947,20 +947,28 @@ export const analyzeSentences = async (text: string) => {
   }
 }
 
-export const rewriteTone = async (text: string, tone: string) => {
+export const rewriteToneWithOpenAI = async (text: string, tone: string) => {
   try {
-    // Use backend API with Supabase authentication
+    // Use backend API with OpenAI integration
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')
+    
+    console.log('🔧 API Configuration Debug:', {
+      API_BASE_URL,
+      NODE_ENV: import.meta.env.NODE_ENV,
+      PROD: import.meta.env.PROD,
+      targetURL: `${API_BASE_URL}/language/rewrite-tone`
+    })
     
     // Get auth token from Supabase session (consistent with other functions)
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
     const token = session?.access_token
 
-    console.log('🎨 Tone rewrite request:', {
+    console.log('🤖 OpenAI Tone rewrite request:', {
       textLength: text.length,
       tone,
       hasToken: !!token,
-      sessionError: sessionError?.message
+      sessionError: sessionError?.message,
+      usingVercelAPI: true
     })
 
     if (!token) {
@@ -968,7 +976,7 @@ export const rewriteTone = async (text: string, tone: string) => {
       throw new Error('Authentication required. Please log in to use tone rewriting.')
     }
 
-    console.log('📡 Making tone rewrite API call...')
+    console.log('📡 Making OpenAI tone rewrite API call...')
 
     const response = await axios.post(
       `${API_BASE_URL}/language/rewrite-tone`,
@@ -978,15 +986,17 @@ export const rewriteTone = async (text: string, tone: string) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        timeout: 30000
+        timeout: 45000 // Increased timeout for OpenAI calls
       }
     )
 
-    console.log('✅ Tone rewrite API response:', {
+    console.log('✅ OpenAI Tone rewrite API response:', {
       success: response.data.success,
       originalLength: response.data.originalText?.length || 0,
       rewrittenLength: response.data.rewrittenText?.length || 0,
-      tone: response.data.tone
+      tone: response.data.tone,
+      method: response.data.method,
+      hasChanges: response.data.hasChanges
     })
 
     return response.data

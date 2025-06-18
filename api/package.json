@@ -4,6 +4,7 @@
   "type": "module",
   "dependencies": {
     "@supabase/supabase-js": "^2.38.4",
-    "axios": "^1.6.2"
+    "axios": "^1.6.2",
+    "openai": "^4.104.0"
   }
 } 

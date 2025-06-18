@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { rewriteTone } from '../services/languageService'
+import { rewriteToneWithOpenAI } from '../services/languageService'
 
 interface ToneRewritePanelProps {
   text: string
@@ -31,7 +31,7 @@ const ToneRewritePanel: React.FC<ToneRewritePanelProps> = ({ text, onRewrite, on
     setError(null)
 
     try {
-      const result = await rewriteTone(text, selectedTone)
+      const result = await rewriteToneWithOpenAI(text, selectedTone)
       if (result.success) {
         setRewrittenText(result.rewrittenText)
       } else {
