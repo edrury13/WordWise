@@ -1,6 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { rewriteGradeLevelWithOpenAI } from '../services/languageService'
 import { analyzeReadability } from '../services/languageService'
 import { 
   performGradeLevelRewriteOptimized,
@@ -8,9 +7,6 @@ import {
   applyGradeLevelRewrite,
   setShowGradeLevelPanel,
   setTargetGradeLevel,
-  setPreviewText,
-  clearGradeLevelRewriteError,
-  selectGradeLevelRewriteState,
   selectIsRewriting,
   selectLastRewriteResult,
   selectRewriteError,
