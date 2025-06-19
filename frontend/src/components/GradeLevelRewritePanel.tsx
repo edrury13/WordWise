@@ -294,9 +294,9 @@ const GradeLevelRewritePanel: React.FC<GradeLevelRewritePanelProps> = ({ text, o
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center mr-4">
-              <span className="mr-2">🎓</span>
-              Adjust Reading Level
-            </h2>
+            <span className="mr-2">🎓</span>
+            Adjust Reading Level
+          </h2>
             
             {/* Undo/Redo History Controls */}
             {(canUndo || canRedo || historyStats.totalItems > 0) && (
@@ -404,9 +404,9 @@ const GradeLevelRewritePanel: React.FC<GradeLevelRewritePanelProps> = ({ text, o
                 Original Text ({text.split(/\s+/).filter(w => w.trim().length > 0).length} words)
               </h4>
               <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg max-h-32 overflow-y-auto border">
-                <p className="text-gray-700 dark:text-gray-300 text-sm">
-                  {text.substring(0, 300)}{text.length > 300 ? '...' : ''}
-                </p>
+            <p className="text-gray-700 dark:text-gray-300 text-sm">
+              {text.substring(0, 300)}{text.length > 300 ? '...' : ''}
+            </p>
               </div>
             </div>
             
@@ -465,26 +465,26 @@ const GradeLevelRewritePanel: React.FC<GradeLevelRewritePanelProps> = ({ text, o
               >
                 <label
                   className={`flex items-start p-4 border rounded-lg cursor-pointer transition-all duration-200 ${
-                    selectedGradeLevel === level.value
+                  selectedGradeLevel === level.value
                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-200 dark:ring-blue-800'
                       : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="gradeLevel"
-                    value={level.value}
-                    checked={selectedGradeLevel === level.value}
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="gradeLevel"
+                  value={level.value}
+                  checked={selectedGradeLevel === level.value}
                     onChange={(e) => dispatch(setTargetGradeLevel(e.target.value))}
                     className="mt-1 mr-3 text-blue-600 focus:ring-blue-500"
-                  />
-                  <div className="flex-1">
+                />
+                <div className="flex-1">
                     <div className="font-medium text-gray-900 dark:text-white mb-1">
-                      {level.label}
-                    </div>
+                    {level.label}
+                  </div>
                     <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                      {level.description}
-                    </div>
+                    {level.description}
+                  </div>
                     <div className="flex items-center space-x-2 mb-2">
                       <div className="text-xs text-blue-600 dark:text-blue-400 font-mono bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded">
                         FK: {level.targetFK}
@@ -492,12 +492,12 @@ const GradeLevelRewritePanel: React.FC<GradeLevelRewritePanelProps> = ({ text, o
                       <div className="text-xs text-green-600 dark:text-green-400 font-mono bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded">
                         Ease: {level.targetReadingEase}
                       </div>
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-500">
-                      {level.details}
-                    </div>
                   </div>
-                </label>
+                    <div className="text-xs text-gray-500 dark:text-gray-500">
+                    {level.details}
+                  </div>
+                </div>
+              </label>
                 
                 {/* Tooltip */}
                 {showTooltip === level.value && (
@@ -704,35 +704,35 @@ const GradeLevelRewritePanel: React.FC<GradeLevelRewritePanelProps> = ({ text, o
             <div className="mt-6 pt-4 border-t border-blue-200 dark:border-blue-700">
               <div className="flex items-center justify-between mb-3">
                 <h6 className="font-semibold text-gray-700 dark:text-gray-300">Target Achievement Analysis</h6>
-                {(() => {
-                  const targetLevel = gradeLevelOptions.find(opt => opt.value === selectedGradeLevel)
-                  const achieved = readabilityData.new?.fleschKincaid || 0
-                  const targetRange = targetLevel?.targetFK || ''
-                  const [min, max] = targetRange.includes('-') 
-                    ? targetRange.split('-').map(n => parseFloat(n.replace('+', '')))
-                    : [parseFloat(targetRange.replace('+', '')), Infinity]
-                  
-                  const isInRange = achieved >= min && (max === Infinity || achieved <= max)
+                  {(() => {
+                    const targetLevel = gradeLevelOptions.find(opt => opt.value === selectedGradeLevel)
+                    const achieved = readabilityData.new?.fleschKincaid || 0
+                    const targetRange = targetLevel?.targetFK || ''
+                    const [min, max] = targetRange.includes('-') 
+                      ? targetRange.split('-').map(n => parseFloat(n.replace('+', '')))
+                      : [parseFloat(targetRange.replace('+', '')), Infinity]
+                    
+                    const isInRange = achieved >= min && (max === Infinity || achieved <= max)
                   const deviation = isInRange ? 0 : Math.min(Math.abs(achieved - min), max === Infinity ? Math.abs(achieved - min) : Math.abs(achieved - max))
-                  
-                  return (
+                    
+                    return (
                     <div className="flex items-center space-x-3">
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                        isInRange 
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                          isInRange 
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
                           : deviation < 1 
                             ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
                             : 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400'
-                      }`}>
+                        }`}>
                         {isInRange ? '🎯 Perfect Match' : deviation < 1 ? '🔸 Very Close' : '🔶 Near Target'}
-                      </span>
+                        </span>
                       <span className="text-sm text-gray-500 dark:text-gray-400">
                         Target: {targetRange}
-                      </span>
+                        </span>
                     </div>
-                  )
-                })()}
-              </div>
+                    )
+                  })()}
+                </div>
               
               {/* Achievement Progress Bar */}
               <div className="mb-3">
@@ -814,8 +814,8 @@ const GradeLevelRewritePanel: React.FC<GradeLevelRewritePanelProps> = ({ text, o
               </div>
               <div className="max-h-64 overflow-y-auto">
                 <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
-                  {rewrittenText}
-                </p>
+                {rewrittenText}
+              </p>
               </div>
             </div>
           </div>
