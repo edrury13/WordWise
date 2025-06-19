@@ -1,0 +1,99 @@
+graph TB
+    %% User Layer
+    User[👤 User] --> UI[🖥️ Frontend<br/>React + TypeScript]
+    
+    %% Frontend Components
+    UI --> Auth[🔐 Authentication<br/>Supabase Auth]
+    UI --> Dashboard[📊 Dashboard<br/>Document Management]
+    UI --> Editor[✏️ Text Editor<br/>Real-time Grammar Check]
+    
+    %% Authentication Flow
+    Auth --> Login[📝 Login/Register]
+    Auth --> GoogleAuth[🌐 Google OAuth]
+    Auth --> EmailConfirm[📧 Email Confirmation]
+    
+    %% Dashboard Features
+    Dashboard --> DocList[📄 Document List<br/>Sort & Search]
+    Dashboard --> CreateDoc[➕ Create Document]
+    Dashboard --> DeleteDoc[🗑️ Delete Document]
+    Dashboard --> ThemeToggle[🌙 Dark/Light Mode]
+    
+    %% Editor Core Features
+    Editor --> TextArea[📝 Rich Text Area<br/>Slate.js Editor]
+    Editor --> GrammarCheck[🔍 Grammar Checking<br/>Real-time Analysis]
+    Editor --> AutoSave[💾 Auto-save<br/>Every 10 seconds]
+    Editor --> ManualSave[💾 Manual Save<br/>Ctrl+S]
+    
+    %% Language Processing Features
+    GrammarCheck --> LanguageAPI[🧠 Language Processing API]
+    LanguageAPI --> LanguageTool[🔧 LanguageTool API<br/>Grammar & Spelling]
+    LanguageAPI --> OpenAI[🤖 OpenAI API<br/>Advanced Analysis]
+    
+    %% Analysis Panels
+    Editor --> SentencePanel[📖 Sentence Analysis<br/>Structure & Flow]
+    Editor --> ReadabilityPanel[📊 Readability Analysis<br/>Flesch-Kincaid Score]
+    Editor --> TonePanel[🎭 Tone Rewriting<br/>Professional/Casual/Formal]
+    Editor --> SuggestionPanel[💡 Grammar Suggestions<br/>Inline Corrections]
+    
+    %% Backend API
+    UI --> API[🔗 Backend API<br/>Express + TypeScript]
+    
+    %% API Routes
+    API --> AuthRoute[🔐 /api/auth<br/>Token Verification]
+    API --> DocRoute[📄 /api/documents<br/>CRUD Operations]
+    API --> LangRoute[🧠 /api/language<br/>Text Analysis]
+    
+    %% Language Processing Routes
+    LangRoute --> GrammarEndpoint["/check<br/>Grammar & Spelling"]
+    LangRoute --> ReadabilityEndpoint["/readability<br/>Text Metrics"]
+    LangRoute --> SentenceEndpoint["/sentence-analysis<br/>Structure Analysis"]
+    LangRoute --> ToneEndpoint["/rewrite-tone<br/>Style Rewriting"]
+    
+    %% Database Layer
+    API --> Supabase[(🗄️ Supabase<br/>PostgreSQL Database)]
+    Supabase --> DocsTable[📋 documents table<br/>User Documents]
+    Supabase --> AuthTable[👥 auth.users table<br/>User Management]
+    Supabase --> RLS[🔒 Row Level Security<br/>User Data Isolation]
+    
+    %% External Services
+    LanguageTool --> LTService[🌐 LanguageTool Service<br/>Grammar Rules Engine]
+    OpenAI --> AIService[🤖 OpenAI GPT<br/>Advanced Language Model]
+    
+    %% Data Flow
+    TextArea -->|Real-time typing| GrammarCheck
+    GrammarCheck -->|Debounced requests| LanguageAPI
+    LanguageAPI -->|Suggestions| SuggestionPanel
+    AutoSave -->|Document updates| DocRoute
+    DocRoute -->|Store/retrieve| Supabase
+    
+    %% State Management
+    UI --> Redux[🔄 Redux Store<br/>State Management]
+    Redux --> AuthSlice[🔐 Auth State]
+    Redux --> DocSlice[📄 Document State]
+    Redux --> EditorSlice[✏️ Editor State]
+    Redux --> SuggestionSlice[💡 Suggestion State]
+    
+    %% Key Features Highlight
+    subgraph "🎯 Core Features"
+        F1[📝 Real-time Grammar Check]
+        F2[💾 Auto-save Documents]
+        F3[📊 Readability Analysis]
+        F4[🎭 Tone Rewriting]
+        F5[🔐 User Authentication]
+        F6[📱 Responsive Design]
+    end
+    
+    %% Styling
+    classDef userLayer fill:#e1f5fe
+    classDef frontend fill:#f3e5f5
+    classDef backend fill:#e8f5e8
+    classDef database fill:#fff3e0
+    classDef external fill:#fce4ec
+    classDef features fill:#f1f8e9
+    
+    class User userLayer
+    class UI,Auth,Dashboard,Editor,TextArea,GrammarCheck frontend
+    class API,AuthRoute,DocRoute,LangRoute,GrammarEndpoint,ReadabilityEndpoint,SentenceEndpoint,ToneEndpoint backend
+    class Supabase,DocsTable,AuthTable,RLS database
+    class LanguageTool,OpenAI,LTService,AIService external
+    class F1,F2,F3,F4,F5,F6 features 

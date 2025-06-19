@@ -1062,6 +1062,7 @@ const GrammarTextEditor: React.FC = () => {
           localStorage.setItem(backupKey, content)
         }
       }
+
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
