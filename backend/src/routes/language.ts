@@ -68,68 +68,9 @@ router.post('/check', async (req: AuthenticatedRequest, res) => {
       text,
       language,
       enabledOnly: 'false',
-      // Level of checking (1 = default, 2 = picky)
       level: 'picky',
-      // Enable comprehensive sentence-level grammar categories
-      enabledCategories: 'GRAMMAR,SENTENCE_WHITESPACE,MISC,COMPOUNDING,SEMANTICS,PUNCTUATION,CASING,TYPOS',
-      // Enable specific sentence-level grammar rules
-      enabledRules: [
-        // Sentence structure and completeness
-        'FRAGMENT_SENTENCE',
-        'MISSING_VERB',
-        'INCOMPLETE_SENTENCE', 
-        'SENTENCE_FRAGMENT',
-        'RUN_ON_SENTENCE',
-        'COMMA_SPLICE',
-        
-        // Subject-verb agreement
-        'GRAMMAR_AGREEMENT',
-        'SUBJECT_VERB_AGREEMENT',
-        'VERB_FORM',
-        'VERB_AGREEMENT_VS_NOUN',
-        'SINGULAR_PLURAL_VERB',
-        
-        // Tense consistency
-        'TENSE_AGREEMENT',
-        'VERB_TENSE',
-        'PAST_TENSE_VERB',
-        'PRESENT_TENSE_VERB',
-        
-        // Pronoun usage
-        'PRONOUN_AGREEMENT',
-        'PRONOUN_REFERENCE',
-        'REFLEXIVE_PRONOUN',
-        'PERSONAL_PRONOUN_AGREEMENT',
-        
-        // Articles and determiners
-        'ARTICLE_MISSING',
-        'DT_DT', // Double determiners
-        'MISSING_DETERMINER',
-        'A_VS_AN',
-        'THE_SUPERLATIVE',
-        
-        // Prepositions
-        'PREPOSITION_VERB',
-        'MISSING_PREPOSITION',
-        'WRONG_PREPOSITION',
-        
-        // Sentence connectors
-        'CONJUNCTION_COMMA',
-        'MISSING_CONJUNCTION',
-        'COORDINATING_CONJUNCTION',
-        
-        // Punctuation in sentences
-        'COMMA_BEFORE_CONJUNCTION',
-        'MISSING_COMMA',
-        'UNNECESSARY_COMMA',
-        'APOSTROPHE_MISSING',
-        
-        // Capitalization
-        'SENTENCE_CAPITALIZATION',
-        'PROPER_NOUN_CAPITALIZATION'
-      ].join(','),
-      // Disable overly aggressive style suggestions to focus on grammar
-      disabledCategories: 'STYLE,COLLOQUIALISMS,REDUNDANCY,WORDINESS'
+      enabledCategories: 'GRAMMAR,SENTENCE_WHITESPACE,MISC,COMPOUNDING,SEMANTICS,PUNCTUATION,CASING,TYPOS,CONFUSED_WORDS,LOGIC,TYPOGRAPHY,PRONOUN_AGREEMENT,SUBJECT_VERB_AGREEMENT,STYLE,COLLOQUIALISMS,REDUNDANCY,WORDINESS,CREATIVE_WRITING',
+      enabledRules: 'FRAGMENT_SENTENCE,MISSING_VERB,INCOMPLETE_SENTENCE,SENTENCE_FRAGMENT,RUN_ON_SENTENCE,COMMA_SPLICE,GRAMMAR_AGREEMENT,SUBJECT_VERB_AGREEMENT,VERB_FORM,VERB_AGREEMENT_VS_NOUN,SINGULAR_PLURAL_VERB,TENSE_AGREEMENT,VERB_TENSE,PAST_TENSE_VERB,PRESENT_TENSE_VERB,PRONOUN_AGREEMENT,PRONOUN_REFERENCE,REFLEXIVE_PRONOUN,PERSONAL_PRONOUN_AGREEMENT,ARTICLE_MISSING,DT_DT,MISSING_DETERMINER,A_VS_AN,THE_SUPERLATIVE,PREPOSITION_VERB,MISSING_PREPOSITION,WRONG_PREPOSITION,CONJUNCTION_COMMA,MISSING_CONJUNCTION,COORDINATING_CONJUNCTION,COMMA_BEFORE_CONJUNCTION,MISSING_COMMA,UNNECESSARY_COMMA,APOSTROPHE_MISSING,SENTENCE_CAPITALIZATION,PROPER_NOUN_CAPITALIZATION'
     })
 
     console.log('Checking text with enhanced sentence-level grammar rules:', text.substring(0, 100) + '...')
@@ -285,34 +226,8 @@ router.post('/sentence-analysis', async (req: AuthenticatedRequest, res) => {
         language,
         enabledOnly: 'false',
         level: 'picky',
-        // Focus on sentence structure issues
-        enabledCategories: 'GRAMMAR,PUNCTUATION,CASING',
-        enabledRules: [
-          // Core sentence structure
-          'FRAGMENT_SENTENCE',
-          'MISSING_VERB',
-          'INCOMPLETE_SENTENCE',
-          'SENTENCE_FRAGMENT',
-          'RUN_ON_SENTENCE',
-          'COMMA_SPLICE',
-          
-          // Subject-verb agreement (critical for sentence validity)
-          'SUBJECT_VERB_AGREEMENT',
-          'GRAMMAR_AGREEMENT',
-          'VERB_FORM',
-          'SINGULAR_PLURAL_VERB',
-          
-          // Essential sentence components
-          'ARTICLE_MISSING',
-          'MISSING_DETERMINER',
-          'MISSING_PREPOSITION',
-          'MISSING_CONJUNCTION',
-          
-          // Sentence-level punctuation
-          'COMMA_BEFORE_CONJUNCTION',
-          'MISSING_COMMA',
-          'SENTENCE_CAPITALIZATION'
-        ].join(',')
+        enabledCategories: 'GRAMMAR,SENTENCE_WHITESPACE,MISC,COMPOUNDING,SEMANTICS,PUNCTUATION,CASING,TYPOS,CONFUSED_WORDS,LOGIC,TYPOGRAPHY,PRONOUN_AGREEMENT,SUBJECT_VERB_AGREEMENT,STYLE,COLLOQUIALISMS,REDUNDANCY,WORDINESS,CREATIVE_WRITING',
+        enabledRules: 'FRAGMENT_SENTENCE,MISSING_VERB,INCOMPLETE_SENTENCE,SENTENCE_FRAGMENT,RUN_ON_SENTENCE,COMMA_SPLICE,SUBJECT_VERB_AGREEMENT,GRAMMAR_AGREEMENT,VERB_FORM,SINGULAR_PLURAL_VERB,ARTICLE_MISSING,MISSING_DETERMINER,MISSING_PREPOSITION,MISSING_CONJUNCTION,COMMA_BEFORE_CONJUNCTION,MISSING_COMMA,SENTENCE_CAPITALIZATION'
       })
 
       try {
@@ -1511,9 +1426,8 @@ router.post('/test', async (req: AuthenticatedRequest, res) => {
       language: 'en-US',
       enabledOnly: 'false',
       level: 'picky',
-      enabledCategories: 'GRAMMAR,SENTENCE_WHITESPACE,MISC,COMPOUNDING,SEMANTICS',
-      enabledRules: 'FRAGMENT_SENTENCE,MISSING_VERB,INCOMPLETE_SENTENCE,SENTENCE_FRAGMENT,GRAMMAR_AGREEMENT,VERB_FORM',
-      disabledCategories: 'STYLE,COLLOQUIALISMS,REDUNDANCY'
+      enabledCategories: 'GRAMMAR,SENTENCE_WHITESPACE,MISC,COMPOUNDING,SEMANTICS,PUNCTUATION,CASING,TYPOS,CONFUSED_WORDS,LOGIC,TYPOGRAPHY,PRONOUN_AGREEMENT,SUBJECT_VERB_AGREEMENT,STYLE,COLLOQUIALISMS,REDUNDANCY,WORDINESS,CREATIVE_WRITING',
+      enabledRules: 'FRAGMENT_SENTENCE,MISSING_VERB,INCOMPLETE_SENTENCE,SENTENCE_FRAGMENT,GRAMMAR_AGREEMENT,VERB_FORM'
     })
 
     const response = await axios.post<LanguageToolResponse>(
