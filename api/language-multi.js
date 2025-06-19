@@ -74,6 +74,8 @@ export default async function handler(req, res) {
       return await handleReadabilityCheck(text, res)
     } else if (url.includes('/rewrite-tone')) {
       return await handleTextRewrite(text, body.tone, res)
+    } else if (url.includes('/rewrite-grade-level')) {
+      return await handleGradeLevelRewrite(text, body.gradeLevel, res)
     }
 
     return res.status(404).json({
@@ -195,6 +197,44 @@ async function handleTextRewrite(text, tone, res) {
   return res.status(200).json({
     success: true,
     rewrittenText: text // Return original text for now
+  })
+}
+
+async function handleGradeLevelRewrite(text, gradeLevel, res) {
+  // Validate grade level
+  const validGradeLevels = ['elementary', 'middle-school', 'high-school', 'college', 'graduate']
+  if (!gradeLevel || !validGradeLevels.includes(gradeLevel.toLowerCase())) {
+    return res.status(400).json({
+      success: false,
+      error: `Invalid grade level. Must be one of: ${validGradeLevels.join(', ')}`
+    })
+  }
+
+  // Calculate readability scores
+  const originalReadability = calculateReadability(text)
+  
+  // For now, return original text with readability info
+  // In production, this would call OpenAI for actual rewriting
+  return res.status(200).json({
+    success: true,
+    originalText: text,
+    rewrittenText: text, // Placeholder - would be OpenAI rewritten text
+    gradeLevel: gradeLevel.toLowerCase(),
+    originalReadability: {
+      fleschKincaid: originalReadability.fleschKincaid,
+      readingEase: originalReadability.fleschReadingEase,
+      level: originalReadability.readabilityLevel
+    },
+    newReadability: {
+      fleschKincaid: originalReadability.fleschKincaid,
+      readingEase: originalReadability.fleschReadingEase,
+      level: originalReadability.readabilityLevel
+    },
+    changes: ['Grade level rewrite not implemented in serverless fallback'],
+    hasChanges: false,
+    method: 'fallback',
+    version: 'Grade Level Rewrite Fallback v1.0',
+    timestamp: new Date().toISOString()
   })
 }
 

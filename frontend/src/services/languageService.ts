@@ -1020,4 +1020,83 @@ export const rewriteToneWithOpenAI = async (text: string, tone: string) => {
     
     throw error
   }
+}
+
+export const rewriteGradeLevelWithOpenAI = async (text: string, gradeLevel: string) => {
+  try {
+    // Use backend API with OpenAI integration
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')
+    
+    console.log('🎓 Grade Level API Configuration Debug:', {
+      API_BASE_URL,
+      NODE_ENV: import.meta.env.NODE_ENV,
+      PROD: import.meta.env.PROD,
+      targetURL: `${API_BASE_URL}/language/rewrite-grade-level`
+    })
+    
+    // Get auth token from Supabase session (consistent with other functions)
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    const token = session?.access_token
+
+    console.log('🎓 OpenAI Grade Level rewrite request:', {
+      textLength: text.length,
+      gradeLevel,
+      hasToken: !!token,
+      sessionError: sessionError?.message,
+      usingVercelAPI: true
+    })
+
+    if (!token) {
+      console.warn('🚨 No authentication token available for grade level rewriting')
+      throw new Error('Authentication required. Please log in to use grade level rewriting.')
+    }
+
+    console.log('📡 Making OpenAI grade level rewrite API call...')
+
+    const response = await axios.post(
+      `${API_BASE_URL}/language/rewrite-grade-level`,
+      { text, gradeLevel },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        timeout: 45000 // Increased timeout for OpenAI calls
+      }
+    )
+
+    console.log('✅ OpenAI Grade Level rewrite API response:', {
+      success: response.data.success,
+      originalLength: response.data.originalText?.length || 0,
+      rewrittenLength: response.data.rewrittenText?.length || 0,
+      gradeLevel: response.data.gradeLevel,
+      method: response.data.method,
+      hasChanges: response.data.hasChanges,
+      originalFK: response.data.originalReadability?.fleschKincaid,
+      newFK: response.data.newReadability?.fleschKincaid,
+      originalLevel: response.data.originalReadability?.level,
+      newLevel: response.data.newReadability?.level
+    })
+
+    return response.data
+  } catch (error) {
+    console.error('❌ Grade level rewriting failed:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      isAxiosError: axios.isAxiosError(error),
+      status: axios.isAxiosError(error) ? error.response?.status : null,
+      data: axios.isAxiosError(error) ? error.response?.data : null
+    })
+    
+    if (axios.isAxiosError(error)) {
+      if (error.response?.status === 429) {
+        throw new Error('Rate limited. Please wait a moment before trying again.')
+      } else if (error.response?.status === 401) {
+        throw new Error('Authentication failed. Please log in again.')
+      } else if (error.response?.data?.error) {
+        throw new Error(error.response.data.error)
+      }
+    }
+    
+    throw error
+  }
 } 
