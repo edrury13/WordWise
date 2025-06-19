@@ -9,6 +9,18 @@ import { analyzeSentences } from '../services/languageService'
 import SentenceAnalysisPanel from './SentenceAnalysisPanel'
 import ToneRewritePanel from './ToneRewritePanel'
 import GradeLevelRewritePanel from './GradeLevelRewritePanel'
+import { 
+  selectShowGradeLevelPanel, 
+  setShowGradeLevelPanel,
+  selectCanUndo,
+  selectCanRedo,
+  undoRewrite,
+  redoRewrite,
+  processRetryQueue,
+  selectRetryQueue,
+  selectPerformanceMetrics,
+  clearCache
+} from '../store/slices/editorSlice'
 import toast from 'react-hot-toast'
 
 const GrammarTextEditor: React.FC = () => {
@@ -27,7 +39,14 @@ const GrammarTextEditor: React.FC = () => {
   const [sentenceAnalysisLoading, setSentenceAnalysisLoading] = useState(false)
   const [combinedSuggestions, setCombinedSuggestions] = useState<Suggestion[]>([])
   const [showToneRewritePanel, setShowToneRewritePanel] = useState(false)
-  const [showGradeLevelRewritePanel, setShowGradeLevelRewritePanel] = useState(false)
+  // Grade level rewrite panel state managed by Redux
+  const showGradeLevelRewritePanel = useSelector(selectShowGradeLevelPanel)
+  const canUndo = useSelector(selectCanUndo)
+  const canRedo = useSelector(selectCanRedo)
+  
+  // Performance monitoring state
+  const retryQueue = useSelector(selectRetryQueue)
+  const performanceMetrics = useSelector(selectPerformanceMetrics)
   
   // Undo functionality state
   const [lastAppliedSuggestion, setLastAppliedSuggestion] = useState<{
@@ -55,6 +74,7 @@ const GrammarTextEditor: React.FC = () => {
   const autoSaveRef = useRef<NodeJS.Timeout>()
   const currentDocumentIdRef = useRef<string | null>(null)
   const sentenceDebounceRef = useRef<NodeJS.Timeout>()
+  const retryQueueTimerRef = useRef<NodeJS.Timeout>()
 
   // Rate limiting tracking
   const grammarCallTimesRef = useRef<number[]>([])
@@ -730,9 +750,23 @@ const GrammarTextEditor: React.FC = () => {
       manualSave()
     } else if (event.ctrlKey && event.key === 'z') {
       event.preventDefault()
-      undoLastSuggestion()
+      // Check if we have rewrite history to undo
+      if (canUndo) {
+        dispatch(undoRewrite())
+        console.log('↶ Keyboard shortcut: Undo rewrite applied')
+      } else {
+        // Fall back to suggestion undo
+        undoLastSuggestion()
+      }
+    } else if (event.ctrlKey && event.key === 'y') {
+      event.preventDefault()
+      // Redo rewrite history
+      if (canRedo) {
+        dispatch(redoRewrite())
+        console.log('↷ Keyboard shortcut: Redo rewrite applied')
+      }
     }
-  }, [manualSave, undoLastSuggestion])
+  }, [manualSave, undoLastSuggestion, canUndo, canRedo, dispatch])
 
   // Accept all suggestions
   const handleAcceptAllSuggestions = useCallback(() => {
@@ -993,6 +1027,48 @@ const GrammarTextEditor: React.FC = () => {
     previousSuggestionsCountRef.current = suggestions.length
   }, [suggestions.length, activeSidebarTab])
 
+  // Performance monitoring: Process retry queue periodically
+  useEffect(() => {
+    const processRetries = () => {
+      if (retryQueue.length > 0) {
+        console.log(`🔄 Processing ${retryQueue.length} items in retry queue`)
+        dispatch(processRetryQueue())
+      }
+    }
+
+    // Process retries every 30 seconds
+    const intervalId = setInterval(processRetries, 30000)
+    
+    // Also process immediately if there are items in the queue
+    if (retryQueue.length > 0) {
+      retryQueueTimerRef.current = setTimeout(processRetries, 5000) // Wait 5 seconds before first retry
+    }
+
+    return () => {
+      clearInterval(intervalId)
+      if (retryQueueTimerRef.current) {
+        clearTimeout(retryQueueTimerRef.current)
+      }
+    }
+  }, [retryQueue.length, dispatch])
+
+  // Performance monitoring: Show notifications for performance issues
+  useEffect(() => {
+    if (performanceMetrics.rateLimitHits > 0 && performanceMetrics.rateLimitHits % 5 === 0) {
+      toast.error('⏳ Frequent rate limiting detected. Consider typing more slowly to improve performance.')
+    }
+    
+    if (performanceMetrics.averageResponseTime > 10000) { // 10 seconds
+      toast('🐌 Slow response times detected. Consider clearing the cache or checking your connection.', {
+        icon: '⚠️',
+        style: {
+          background: '#fbbf24',
+          color: '#92400e',
+        },
+      })
+    }
+  }, [performanceMetrics.rateLimitHits, performanceMetrics.averageResponseTime])
+
   // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
@@ -1004,6 +1080,9 @@ const GrammarTextEditor: React.FC = () => {
       }
       if (sentenceDebounceRef.current) {
         clearTimeout(sentenceDebounceRef.current)
+      }
+      if (retryQueueTimerRef.current) {
+        clearTimeout(retryQueueTimerRef.current)
       }
     }
   }, [])
@@ -1224,17 +1303,54 @@ const GrammarTextEditor: React.FC = () => {
             </label>
           </div>
           
-          {/* Undo Button */}
+          {/* Undo/Redo Buttons for Rewrite History */}
+          {(canUndo || canRedo) && (
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={() => dispatch(undoRewrite())}
+                disabled={!canUndo}
+                className={`px-3 py-1 text-xs rounded transition-colors flex items-center space-x-1 ${
+                  canUndo
+                    ? 'bg-blue-100 hover:bg-blue-200 dark:bg-blue-900 dark:hover:bg-blue-800 text-blue-800 dark:text-blue-200'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                }`}
+                title={canUndo ? "Undo rewrite (Ctrl+Z)" : "No rewrites to undo"}
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                </svg>
+                <span>Undo</span>
+              </button>
+              
+              <button
+                onClick={() => dispatch(redoRewrite())}
+                disabled={!canRedo}
+                className={`px-3 py-1 text-xs rounded transition-colors flex items-center space-x-1 ${
+                  canRedo
+                    ? 'bg-blue-100 hover:bg-blue-200 dark:bg-blue-900 dark:hover:bg-blue-800 text-blue-800 dark:text-blue-200'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                }`}
+                title={canRedo ? "Redo rewrite (Ctrl+Y)" : "No rewrites to redo"}
+              >
+                <span>Redo</span>
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10H11a8 8 0 00-8 8v2m18-10l-6-6m6 6l-6 6" />
+                </svg>
+              </button>
+            </div>
+          )}
+
+          {/* Undo Button for Suggestions */}
           {lastAppliedSuggestion && (
             <button
               onClick={undoLastSuggestion}
               className="px-3 py-1 bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-900 dark:hover:bg-yellow-800 text-yellow-800 dark:text-yellow-200 text-xs rounded transition-colors flex items-center space-x-1"
-              title="Undo last suggestion (Ctrl+Z)"
+              title="Undo last suggestion"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
               </svg>
-              <span>Undo</span>
+              <span>Undo Suggestion</span>
             </button>
           )}
           
@@ -1255,7 +1371,7 @@ const GrammarTextEditor: React.FC = () => {
           {/* Grade Level Rewrite Button */}
           {content.trim().length > 0 && (
             <button
-              onClick={() => setShowGradeLevelRewritePanel(true)}
+                                  onClick={() => dispatch(setShowGradeLevelPanel(true))}
               className="px-3 py-1 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900 dark:hover:bg-blue-800 text-blue-800 dark:text-blue-200 text-xs rounded transition-colors flex items-center space-x-1"
               title="Adjust reading level for different audiences"
             >
@@ -1264,6 +1380,38 @@ const GrammarTextEditor: React.FC = () => {
               </svg>
               <span>🎓 Adjust Grade Level</span>
             </button>
+          )}
+
+          {/* Performance Management */}
+          {(performanceMetrics.requestCount > 0 || retryQueue.length > 0) && (
+            <div className="flex items-center space-x-1">
+              {/* Clear Cache Button */}
+              <button
+                onClick={() => {
+                  dispatch(clearCache())
+                  toast.success('🗑️ Cache cleared to improve performance')
+                }}
+                className="px-2 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 text-xs rounded transition-colors"
+                title={`Clear cache (${performanceMetrics.cacheHits + performanceMetrics.cacheMisses} items)`}
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+              
+              {/* Retry Queue Indicator */}
+              {retryQueue.length > 0 && (
+                <div 
+                  className="px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 text-xs rounded flex items-center space-x-1"
+                  title={`${retryQueue.length} requests queued for retry`}
+                >
+                  <svg className="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>{retryQueue.length}</span>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -1597,7 +1745,7 @@ const GrammarTextEditor: React.FC = () => {
         <GradeLevelRewritePanel
           text={content}
           onRewrite={handleGradeLevelRewrite}
-          onClose={() => setShowGradeLevelRewritePanel(false)}
+                      onClose={() => dispatch(setShowGradeLevelPanel(false))}
         />
       )}
     </div>

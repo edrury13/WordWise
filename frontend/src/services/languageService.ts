@@ -1022,81 +1022,208 @@ export const rewriteToneWithOpenAI = async (text: string, tone: string) => {
   }
 }
 
-export const rewriteGradeLevelWithOpenAI = async (text: string, gradeLevel: string) => {
-  try {
-    // Use backend API with OpenAI integration
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')
-    
-    console.log('🎓 Grade Level API Configuration Debug:', {
-      API_BASE_URL,
-      NODE_ENV: import.meta.env.NODE_ENV,
-      PROD: import.meta.env.PROD,
-      targetURL: `${API_BASE_URL}/language/rewrite-grade-level`
-    })
-    
-    // Get auth token from Supabase session (consistent with other functions)
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    const token = session?.access_token
+// Performance optimization utilities
+interface PendingRequest {
+  text: string
+  gradeLevel: string
+  timestamp: number
+  resolve: (result: any) => void
+  reject: (error: any) => void
+}
 
-    console.log('🎓 OpenAI Grade Level rewrite request:', {
-      textLength: text.length,
-      gradeLevel,
-      hasToken: !!token,
-      sessionError: sessionError?.message,
-      usingVercelAPI: true
-    })
-
-    if (!token) {
-      console.warn('🚨 No authentication token available for grade level rewriting')
-      throw new Error('Authentication required. Please log in to use grade level rewriting.')
-    }
-
-    console.log('📡 Making OpenAI grade level rewrite API call...')
-
-    const response = await axios.post(
-      `${API_BASE_URL}/language/rewrite-grade-level`,
-      { text, gradeLevel },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 45000 // Increased timeout for OpenAI calls
-      }
-    )
-
-    console.log('✅ OpenAI Grade Level rewrite API response:', {
-      success: response.data.success,
-      originalLength: response.data.originalText?.length || 0,
-      rewrittenLength: response.data.rewrittenText?.length || 0,
-      gradeLevel: response.data.gradeLevel,
-      method: response.data.method,
-      hasChanges: response.data.hasChanges,
-      originalFK: response.data.originalReadability?.fleschKincaid,
-      newFK: response.data.newReadability?.fleschKincaid,
-      originalLevel: response.data.originalReadability?.level,
-      newLevel: response.data.newReadability?.level
-    })
-
-    return response.data
-  } catch (error) {
-    console.error('❌ Grade level rewriting failed:', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      isAxiosError: axios.isAxiosError(error),
-      status: axios.isAxiosError(error) ? error.response?.status : null,
-      data: axios.isAxiosError(error) ? error.response?.data : null
-    })
-    
-    if (axios.isAxiosError(error)) {
-      if (error.response?.status === 429) {
-        throw new Error('Rate limited. Please wait a moment before trying again.')
-      } else if (error.response?.status === 401) {
-        throw new Error('Authentication failed. Please log in again.')
-      } else if (error.response?.data?.error) {
-        throw new Error(error.response.data.error)
-      }
-    }
-    
-    throw error
+class GradeLevelRewriteOptimizer {
+  private pendingRequests: Map<string, PendingRequest[]> = new Map()
+  private requestDedupeWindow = 1000 // 1 second window for deduplication
+  
+  private generateRequestKey(text: string, gradeLevel: string): string {
+    // Create a shorter hash for deduplication
+    const textSample = text.slice(0, 200) + text.slice(-100)
+    return `${gradeLevel}:${btoa(textSample).slice(0, 15)}`
   }
+  
+  async optimizedRewrite(text: string, gradeLevel: string): Promise<any> {
+    const requestKey = this.generateRequestKey(text, gradeLevel)
+    
+    return new Promise((resolve, reject) => {
+      // Check if there's already a pending request for the same text/grade level
+      const existingRequests = this.pendingRequests.get(requestKey) || []
+      
+      if (existingRequests.length > 0) {
+        // Add to existing request queue - will be resolved when the first request completes
+        console.log('🎯 Deduplicating grade level rewrite request:', { requestKey, queueLength: existingRequests.length + 1 })
+        existingRequests.push({
+          text,
+          gradeLevel,
+          timestamp: Date.now(),
+          resolve,
+          reject
+        })
+        this.pendingRequests.set(requestKey, existingRequests)
+        return
+      }
+      
+      // This is the first request for this text/grade level combination
+      const newRequest: PendingRequest = {
+        text,
+        gradeLevel,
+        timestamp: Date.now(),
+        resolve,
+        reject
+      }
+      
+      this.pendingRequests.set(requestKey, [newRequest])
+      
+      // Execute the actual API call
+      this.executeRewrite(text, gradeLevel)
+        .then(result => {
+          // Resolve all pending requests with the same result
+          const allRequests = this.pendingRequests.get(requestKey) || []
+          console.log(`✅ Resolving ${allRequests.length} deduplicated requests for:`, requestKey)
+          
+          allRequests.forEach(req => req.resolve(result))
+          this.pendingRequests.delete(requestKey)
+        })
+        .catch(error => {
+          // Reject all pending requests with the same error
+          const allRequests = this.pendingRequests.get(requestKey) || []
+          console.log(`❌ Rejecting ${allRequests.length} deduplicated requests for:`, requestKey)
+          
+          allRequests.forEach(req => req.reject(error))
+          this.pendingRequests.delete(requestKey)
+        })
+    })
+  }
+  
+  private async executeRewrite(text: string, gradeLevel: string): Promise<any> {
+    // Implement the actual API call here
+    try {
+      // Use backend API with OpenAI integration
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')
+      
+      console.log('🎓 Grade Level API Configuration Debug:', {
+        API_BASE_URL,
+        NODE_ENV: import.meta.env.NODE_ENV,
+        PROD: import.meta.env.PROD,
+        targetURL: `${API_BASE_URL}/language/rewrite-grade-level`
+      })
+      
+      // Get auth token from Supabase session (consistent with other functions)
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      const token = session?.access_token
+
+      console.log('🎓 OpenAI Grade Level rewrite request:', {
+        textLength: text.length,
+        gradeLevel,
+        hasToken: !!token,
+        sessionError: sessionError?.message,
+        usingVercelAPI: true
+      })
+
+      if (!token) {
+        console.warn('🚨 No authentication token available for grade level rewriting')
+        throw new Error('Authentication required. Please log in to use grade level rewriting.')
+      }
+
+      console.log('📡 Making OpenAI grade level rewrite API call...')
+
+      const response = await axios.post(
+        `${API_BASE_URL}/language/rewrite-grade-level`,
+        { text, gradeLevel },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          timeout: 45000 // Increased timeout for OpenAI calls
+        }
+      )
+
+      console.log('✅ OpenAI Grade Level rewrite API response:', {
+        success: response.data.success,
+        originalLength: response.data.originalText?.length || 0,
+        rewrittenLength: response.data.rewrittenText?.length || 0,
+        gradeLevel: response.data.gradeLevel,
+        method: response.data.method,
+        hasChanges: response.data.hasChanges,
+        originalFK: response.data.originalReadability?.fleschKincaid,
+        newFK: response.data.newReadability?.fleschKincaid,
+        originalLevel: response.data.originalReadability?.level,
+        newLevel: response.data.newReadability?.level
+      })
+
+      return response.data
+    } catch (error) {
+      console.error('❌ Grade level rewriting failed:', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        isAxiosError: axios.isAxiosError(error),
+        status: axios.isAxiosError(error) ? error.response?.status : null,
+        data: axios.isAxiosError(error) ? error.response?.data : null
+      })
+      
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 429) {
+          throw new Error('Rate limited. Please wait a moment before trying again.')
+        } else if (error.response?.status === 401) {
+          throw new Error('Authentication failed. Please log in again.')
+        } else if (error.response?.data?.error) {
+          throw new Error(error.response.data.error)
+        }
+      }
+      
+      throw error
+    }
+  }
+  
+  // Cleanup old pending requests (in case of timeouts)
+  cleanup(): void {
+    const now = Date.now()
+    const timeout = 30000 // 30 seconds timeout
+    
+    for (const [key, requests] of this.pendingRequests.entries()) {
+      const validRequests = requests.filter(req => (now - req.timestamp) < timeout)
+      
+      if (validRequests.length === 0) {
+        this.pendingRequests.delete(key)
+      } else if (validRequests.length < requests.length) {
+        this.pendingRequests.set(key, validRequests)
+      }
+    }
+  }
+  
+  // Get current optimization stats
+  getStats() {
+    const totalPendingRequests = Array.from(this.pendingRequests.values())
+      .reduce((sum, requests) => sum + requests.length, 0)
+    
+    return {
+      uniqueRequests: this.pendingRequests.size,
+      totalPendingRequests,
+      averageQueueSize: this.pendingRequests.size > 0 
+        ? totalPendingRequests / this.pendingRequests.size 
+        : 0
+    }
+  }
+}
+
+// Create singleton instance
+const gradeLevelOptimizer = new GradeLevelRewriteOptimizer()
+
+// Cleanup pending requests periodically
+setInterval(() => {
+  gradeLevelOptimizer.cleanup()
+}, 60000) // Every minute
+
+// Original function for backward compatibility
+export const rewriteGradeLevelWithOpenAI = async (text: string, gradeLevel: string) => {
+  return gradeLevelOptimizer.optimizedRewrite(text, gradeLevel)
+}
+
+// Enhanced rewrite function with optimization (same as above, different name for clarity)
+export const rewriteGradeLevelWithOptimization = async (text: string, gradeLevel: string) => {
+  return gradeLevelOptimizer.optimizedRewrite(text, gradeLevel)
+}
+
+// Export optimizer stats for monitoring
+export const getGradeLevelOptimizerStats = () => {
+  return gradeLevelOptimizer.getStats()
 } 

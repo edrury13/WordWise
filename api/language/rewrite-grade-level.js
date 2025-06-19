@@ -133,9 +133,27 @@ async function rewriteGradeLevelWithOpenAI(text, gradeLevel) {
   const gradeLevelInstructions = {
     'elementary': {
       instruction: 'Rewrite this text for elementary school students (grades 1-5). Use very simple words, short sentences, and basic concepts that young children can understand.',
+      detailedGuidelines: {
+        sentenceLength: 'Keep sentences between 5-12 words. Aim for an average of 8 words per sentence.',
+        vocabularyComplexity: 'Use only high-frequency words from the first 1000 most common English words. Avoid words with more than 2-3 syllables.',
+        syllableCount: 'Target average of 1.2-1.4 syllables per word. Replace polysyllabic words with simpler alternatives.',
+        conceptDepth: 'Explain one concept at a time. Use concrete examples. Avoid abstract ideas. Use familiar comparisons to everyday objects or experiences.',
+        syntaxComplexity: 'Use simple subject-verb-object structure. Avoid compound sentences, complex clauses, or passive voice.',
+        connectors: 'Use basic connectors: and, but, so, then, first, next, last.',
+        pronouns: 'Use clear pronoun references. Avoid ambiguous "it", "this", "that" without clear antecedents.'
+      },
+      specificInstructions: [
+        'Break long sentences into 2-3 shorter ones',
+        'Replace complex terms with simple explanations',
+        'Use present tense when possible',
+        'Add simple transition words between ideas',
+        'Use concrete nouns rather than abstract concepts',
+        'Replace technical jargon with everyday language',
+        'Use active voice exclusively'
+      ],
       examples: {
         before: "The implementation of this methodology requires significant consideration of various factors.",
-        after: "This way of doing things needs us to think about many things first."
+        after: "This way of doing things needs us to think about many things first. We must look at each part carefully."
       },
       changes: [
         'Use only simple, common words that elementary students know',
@@ -145,13 +163,32 @@ async function rewriteGradeLevelWithOpenAI(text, gradeLevel) {
         'Avoid technical terms and big words'
       ],
       temperature: 0.3,
-      targetFK: '3-5'
+      targetFK: '3-5',
+      targetReadingEase: '80-90'
     },
     'middle-school': {
       instruction: 'Rewrite this text for middle school students (grades 6-8). Use clear language and moderate complexity that pre-teens can understand.',
+      detailedGuidelines: {
+        sentenceLength: 'Keep sentences between 10-18 words. Aim for an average of 14 words per sentence.',
+        vocabularyComplexity: 'Use vocabulary from the first 3000 most common English words. Include some academic vocabulary with context clues.',
+        syllableCount: 'Target average of 1.4-1.6 syllables per word. Use moderate complexity words but provide context.',
+        conceptDepth: 'Introduce concepts with brief explanations. Use familiar analogies. Connect new ideas to students\' experiences.',
+        syntaxComplexity: 'Use mix of simple and compound sentences. Limited use of complex sentences with clear subordinate clauses.',
+        connectors: 'Use transitional phrases: however, therefore, for example, in addition, as a result, on the other hand.',
+        pronouns: 'Use clear pronoun references with occasional complex antecedents if clearly defined.'
+      },
+      specificInstructions: [
+        'Combine related short sentences into compound sentences',
+        'Define new vocabulary terms in context',
+        'Use cause-and-effect relationships',
+        'Include examples that relate to teen experiences',
+        'Use both simple and compound sentence structures',
+        'Introduce academic vocabulary gradually',
+        'Use transitional phrases to connect ideas'
+      ],
       examples: {
         before: "The implementation of this methodology requires significant consideration of various factors.",
-        after: "Using this method means we need to think carefully about several important things."
+        after: "Using this method means we need to think carefully about several important things. We must consider different factors that could affect the outcome."
       },
       changes: [
         'Use clear, straightforward vocabulary',
@@ -161,13 +198,32 @@ async function rewriteGradeLevelWithOpenAI(text, gradeLevel) {
         'Balance simplicity with some complexity'
       ],
       temperature: 0.4,
-      targetFK: '6-8'
+      targetFK: '6-8',
+      targetReadingEase: '70-80'
     },
     'high-school': {
       instruction: 'Rewrite this text for high school students (grades 9-12). Use standard academic language that teenagers can understand.',
+      detailedGuidelines: {
+        sentenceLength: 'Keep sentences between 15-25 words. Aim for an average of 18-20 words per sentence.',
+        vocabularyComplexity: 'Use vocabulary from academic word lists. Include domain-specific terminology with definitions when first introduced.',
+        syllableCount: 'Target average of 1.6-1.8 syllables per word. Use sophisticated vocabulary appropriately.',
+        conceptDepth: 'Present concepts with supporting details. Use analytical thinking. Connect ideas across disciplines.',
+        syntaxComplexity: 'Use complex sentences with subordinate clauses. Balance simple, compound, and complex structures.',
+        connectors: 'Use sophisticated transitions: furthermore, consequently, nevertheless, moreover, in contrast, specifically.',
+        pronouns: 'Use complex pronoun structures with clear antecedents across sentence boundaries.'
+      },
+      specificInstructions: [
+        'Combine ideas using complex sentence structures',
+        'Use academic vocabulary with context support',
+        'Include analytical and evaluative language',
+        'Use varied sentence beginnings and structures',
+        'Incorporate domain-specific terminology appropriately',
+        'Use both deductive and inductive reasoning patterns',
+        'Include cause-effect and compare-contrast structures'
+      ],
       examples: {
         before: "The implementation of this methodology requires significant consideration of various factors.",
-        after: "Implementing this approach requires careful consideration of several important factors."
+        after: "Implementing this approach requires careful consideration of several important factors, which must be analyzed thoroughly before proceeding."
       },
       changes: [
         'Use standard academic vocabulary',
@@ -177,13 +233,32 @@ async function rewriteGradeLevelWithOpenAI(text, gradeLevel) {
         'Balance complexity with clarity'
       ],
       temperature: 0.4,
-      targetFK: '9-12'
+      targetFK: '9-12',
+      targetReadingEase: '60-70'
     },
     'college': {
       instruction: 'Rewrite this text for college students and adults. Use sophisticated language and complex concepts appropriate for higher education.',
+      detailedGuidelines: {
+        sentenceLength: 'Use sentences between 20-35 words. Aim for an average of 22-25 words per sentence.',
+        vocabularyComplexity: 'Use advanced academic vocabulary, technical terminology, and discipline-specific jargon appropriately.',
+        syllableCount: 'Target average of 1.8-2.0 syllables per word. Use polysyllabic academic terms when precise.',
+        conceptDepth: 'Present complex, abstract concepts with nuanced analysis. Use critical thinking and synthesis.',
+        syntaxComplexity: 'Use sophisticated sentence structures with multiple clauses, embeddings, and complex relationships.',
+        connectors: 'Use advanced transitions: notwithstanding, albeit, insofar as, whereas, given that, to the extent that.',
+        pronouns: 'Use complex pronoun relationships and sophisticated referential structures.'
+      },
+      specificInstructions: [
+        'Use embedded clauses and complex syntax',
+        'Employ abstract and theoretical language',
+        'Include sophisticated analytical frameworks',
+        'Use parallel structures and sophisticated rhetoric',
+        'Incorporate interdisciplinary connections',
+        'Use hedging language and academic qualifiers',
+        'Employ nominalizations and academic register'
+      ],
       examples: {
         before: "This way of doing things needs us to think about many things first.",
-        after: "The implementation of this methodology requires comprehensive analysis of multiple contributing factors."
+        after: "The implementation of this methodology requires comprehensive analysis of multiple contributing factors, necessitating systematic evaluation of interdependent variables."
       },
       changes: [
         'Use advanced vocabulary and terminology',
@@ -193,13 +268,32 @@ async function rewriteGradeLevelWithOpenAI(text, gradeLevel) {
         'Demonstrate higher-level thinking'
       ],
       temperature: 0.5,
-      targetFK: '13-16'
+      targetFK: '13-16',
+      targetReadingEase: '50-60'
     },
     'graduate': {
       instruction: 'Rewrite this text for graduate-level readers and professionals. Use highly sophisticated language, technical terminology, and complex analytical concepts.',
+      detailedGuidelines: {
+        sentenceLength: 'Use sentences between 25-45 words. Aim for an average of 28-32 words per sentence.',
+        vocabularyComplexity: 'Use highly specialized terminology, technical jargon, and field-specific vocabulary. Employ abstract nominalizations.',
+        syllableCount: 'Target average of 2.0+ syllables per word. Use polysyllabic academic and technical terms extensively.',
+        conceptDepth: 'Present highly abstract, theoretical concepts with sophisticated analysis, synthesis, and critical evaluation.',
+        syntaxComplexity: 'Use highly complex sentence structures with multiple embedded clauses, parenthetical expressions, and sophisticated relationships.',
+        connectors: 'Use highly sophisticated transitions: concomitantly, paradigmatically, vis-à-vis, qua, ipso facto, mutatis mutandis.',
+        pronouns: 'Use sophisticated pronoun structures with complex antecedents across multiple sentences and paragraphs.'
+      },
+      specificInstructions: [
+        'Use highly technical and specialized vocabulary',
+        'Employ complex theoretical frameworks',
+        'Use sophisticated analytical methodologies',
+        'Include interdisciplinary theoretical perspectives',
+        'Use advanced rhetorical strategies',
+        'Employ meta-analytical commentary',
+        'Use specialized disciplinary discourse patterns'
+      ],
       examples: {
         before: "This way of doing things needs us to think about many things first.",
-        after: "The operationalization of this theoretical framework necessitates a multifaceted evaluation of interdependent variables and their potential ramifications across diverse contextual parameters."
+        after: "The operationalization of this theoretical framework necessitates a comprehensive, multifaceted evaluation of interdependent variables and their potential ramifications across diverse contextual parameters, requiring systematic methodological consideration of epistemological assumptions."
       },
       changes: [
         'Use highly technical and specialized vocabulary',
@@ -209,7 +303,8 @@ async function rewriteGradeLevelWithOpenAI(text, gradeLevel) {
         'Demonstrate expert-level analysis and synthesis'
       ],
       temperature: 0.6,
-      targetFK: '17+'
+      targetFK: '17+',
+      targetReadingEase: '30-50'
     }
   }
 
@@ -222,6 +317,7 @@ async function rewriteGradeLevelWithOpenAI(text, gradeLevel) {
   console.log('🎓 Grade Level OpenAI request details:', {
     gradeLevel,
     targetFK: selectedLevel.targetFK,
+    targetReadingEase: selectedLevel.targetReadingEase,
     textLength: text.length,
     estimatedInputTokens: estimatedTokens,
     maxOutputTokens: maxTokens,
@@ -229,27 +325,53 @@ async function rewriteGradeLevelWithOpenAI(text, gradeLevel) {
   })
 
   try {
-    const systemPrompt = `You are an expert educational content specialist who rewrites text for specific grade levels. Your job is to COMPLETELY REWRITE the given text to match the target reading level.
+    const systemPrompt = `You are an expert educational content specialist and linguistic engineer who rewrites text for specific grade levels. Your expertise includes psycholinguistics, readability science, and educational content design.
 
 CRITICAL REQUIREMENTS:
 - You MUST rewrite for ${gradeLevel.toUpperCase()} level (Flesch-Kincaid Grade Level: ${selectedLevel.targetFK})
+- Target Reading Ease Score: ${selectedLevel.targetReadingEase}
 - The rewritten version should be significantly different from the original
 - You MUST preserve all the original meaning and information
 - Never lose important details or concepts
-- Always aim for the target reading level while maintaining accuracy
+- Always aim for the exact target reading level while maintaining accuracy
 
 GRADE LEVEL: ${gradeLevel.toUpperCase()}
 TARGET FLESCH-KINCAID: ${selectedLevel.targetFK}
+TARGET READING EASE: ${selectedLevel.targetReadingEase}
+
+SPECIFIC LINGUISTIC GUIDELINES:
+📏 SENTENCE LENGTH: ${selectedLevel.detailedGuidelines.sentenceLength}
+📚 VOCABULARY COMPLEXITY: ${selectedLevel.detailedGuidelines.vocabularyComplexity}
+🔤 SYLLABLE COUNT: ${selectedLevel.detailedGuidelines.syllableCount}
+🧠 CONCEPT DEPTH: ${selectedLevel.detailedGuidelines.conceptDepth}
+⚙️ SYNTAX COMPLEXITY: ${selectedLevel.detailedGuidelines.syntaxComplexity}
+🔗 CONNECTORS: ${selectedLevel.detailedGuidelines.connectors}
+👥 PRONOUNS: ${selectedLevel.detailedGuidelines.pronouns}
+
 INSTRUCTION: ${selectedLevel.instruction}
 
-REQUIRED CHANGES:
+SPECIFIC IMPLEMENTATION REQUIREMENTS:
+${selectedLevel.specificInstructions.map(instruction => `• ${instruction}`).join('\n')}
+
+MANDATORY CHANGES:
 ${selectedLevel.changes.map(change => `• ${change}`).join('\n')}
 
 EXAMPLE TRANSFORMATION:
 Original: "${selectedLevel.examples.before}"
 Target Level: "${selectedLevel.examples.after}"
 
-Your rewrite should demonstrate this level of transformation. Make substantial changes while preserving the core meaning and targeting the specified grade level.`
+QUALITY ASSURANCE CHECKLIST:
+✓ Sentence length matches target range
+✓ Vocabulary complexity appropriate for grade level
+✓ Syllable count per word within target range
+✓ Concept explanation depth matches audience
+✓ Syntax complexity appropriate for readers
+✓ Transitional words/phrases match sophistication level
+✓ All original meaning preserved
+✓ Target Flesch-Kincaid grade level achieved
+✓ Target Reading Ease score achieved
+
+Your rewrite should demonstrate this level of transformation while meeting all linguistic specifications and targeting the exact grade level metrics.`
 
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
@@ -260,7 +382,7 @@ Your rewrite should demonstrate this level of transformation. Make substantial c
         },
         {
           role: "user",
-          content: `Rewrite this text for ${gradeLevel} grade level (target FK: ${selectedLevel.targetFK}):\n\n"${text}"`
+          content: `Rewrite this text for ${gradeLevel} grade level (target FK: ${selectedLevel.targetFK}, target Reading Ease: ${selectedLevel.targetReadingEase}):\n\n"${text}"\n\nRemember to follow all linguistic guidelines for sentence length, vocabulary complexity, syllable count, and concept depth specified for this grade level.`
         }
       ],
       max_tokens: maxTokens,
