@@ -18,7 +18,11 @@ const GrammarTestPanel: React.FC = () => {
   const [cacheStats, setCacheStats] = useState<any>(null)
   const [performanceStats, setPerformanceStats] = useState<any>(null)
   const [healthStatus, setHealthStatus] = useState<any>(null)
-  const [activeTab, setActiveTab] = useState<'test' | 'cache' | 'performance' | 'health'>('test')
+  const [activeTab, setActiveTab] = useState<'testing' | 'categories' | 'quality' | 'cache' | 'performance' | 'health'>('testing')
+  // Configuration for enhanced testing
+  // const [documentType, setDocumentType] = useState<'formal' | 'casual' | 'technical' | 'creative' | 'academic' | 'business' | 'email'>('formal')
+  // const [userLevel, setUserLevel] = useState<'beginner' | 'intermediate' | 'advanced' | 'expert'>('intermediate')
+  // const [qualityThreshold, setQualityThreshold] = useState(60)
 
   // Auto-refresh stats every 5 seconds
   useEffect(() => {
@@ -129,14 +133,16 @@ const GrammarTestPanel: React.FC = () => {
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-800 mb-4">Enhanced Grammar System Test Panel</h2>
         <div className="flex gap-2 mb-4">
-          <TabButton tab="test" label="Testing" />
+          <TabButton tab="testing" label="Testing" />
+          <TabButton tab="categories" label="Categories" />
+          <TabButton tab="quality" label="Quality Analysis" />
           <TabButton tab="cache" label="Cache Stats" />
           <TabButton tab="performance" label="Performance" />
           <TabButton tab="health" label="Health Check" />
         </div>
       </div>
 
-      {activeTab === 'test' && (
+      {activeTab === 'testing' && (
         <div className="space-y-6">
           {/* API Test Section */}
           <div className="border rounded-lg p-4">
@@ -265,6 +271,230 @@ const GrammarTestPanel: React.FC = () => {
                 )}
               </div>
             )}
+          </div>
+        </div>
+              )}
+
+      {activeTab === 'categories' && (
+        <div className="space-y-6">
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Standardized Grammar Categories</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Core Grammar Categories */}
+              <div className="bg-white rounded-lg p-4 border">
+                <h4 className="font-semibold text-blue-600 mb-3">Core Grammar</h4>
+                <ul className="text-sm space-y-1 text-gray-600">
+                  <li>• Subject-Verb Agreement</li>
+                  <li>• Verb Tense Consistency</li>
+                  <li>• Pronoun Agreement</li>
+                  <li>• Article Usage</li>
+                  <li>• Preposition Usage</li>
+                  <li>• Adjective-Adverb Confusion</li>
+                  <li>• Incomplete Sentence</li>
+                  <li>• Run-on Sentence</li>
+                  <li>• Sentence Fragment</li>
+                  <li>• Comma Splice</li>
+                  <li>• Dangling Modifier</li>
+                  <li>• Misplaced Modifier</li>
+                  <li>• Parallel Structure</li>
+                  <li>• Conditional Sentences</li>
+                  <li>• Passive Voice Overuse</li>
+                </ul>
+              </div>
+
+              {/* Punctuation & Mechanics */}
+              <div className="bg-white rounded-lg p-4 border">
+                <h4 className="font-semibold text-green-600 mb-3">Punctuation & Mechanics</h4>
+                <ul className="text-sm space-y-1 text-gray-600">
+                  <li>• Comma Usage</li>
+                  <li>• Apostrophe Usage</li>
+                  <li>• Quotation Marks</li>
+                  <li>• Semicolon Usage</li>
+                  <li>• Capitalization</li>
+                  <li>• Hyphenation</li>
+                </ul>
+              </div>
+
+              {/* Word Choice & Usage */}
+              <div className="bg-white rounded-lg p-4 border">
+                <h4 className="font-semibold text-purple-600 mb-3">Word Choice & Usage</h4>
+                <ul className="text-sm space-y-1 text-gray-600">
+                  <li>• Commonly Confused Words</li>
+                  <li>• Homophones</li>
+                  <li>• Word Choice</li>
+                  <li>• Redundancy</li>
+                  <li>• Wordiness</li>
+                  <li>• Colloquialisms</li>
+                  <li>• Jargon Usage</li>
+                  <li>• Archaic Language</li>
+                </ul>
+              </div>
+
+              {/* Style & Clarity */}
+              <div className="bg-white rounded-lg p-4 border">
+                <h4 className="font-semibold text-orange-600 mb-3">Style & Clarity</h4>
+                <ul className="text-sm space-y-1 text-gray-600">
+                  <li>• Sentence Variety</li>
+                  <li>• Transition Words</li>
+                  <li>• Paragraph Structure</li>
+                  <li>• Tone Consistency</li>
+                  <li>• Formality Level</li>
+                  <li>• Audience Appropriateness</li>
+                </ul>
+              </div>
+
+              {/* Advanced Grammar */}
+              <div className="bg-white rounded-lg p-4 border">
+                <h4 className="font-semibold text-red-600 mb-3">Advanced Grammar</h4>
+                <ul className="text-sm space-y-1 text-gray-600">
+                  <li>• Subjunctive Mood</li>
+                  <li>• Gerund-Infinitive</li>
+                  <li>• Reported Speech</li>
+                  <li>• Complex Sentence Structure</li>
+                </ul>
+              </div>
+
+              {/* Suggestion Types */}
+              <div className="bg-white rounded-lg p-4 border">
+                <h4 className="font-semibold text-indigo-600 mb-3">Suggestion Types</h4>
+                <ul className="text-sm space-y-1 text-gray-600">
+                  <li>• Grammar (Core errors)</li>
+                  <li>• Spelling (Typos)</li>
+                  <li>• Style (Readability)</li>
+                  <li>• Clarity (Comprehension)</li>
+                  <li>• Engagement (Tone)</li>
+                  <li>• Delivery (Formatting)</li>
+                  <li>• Consistency (Uniformity)</li>
+                  <li>• Conciseness (Wordiness)</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Severity Levels</h3>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div className="bg-red-50 rounded-lg p-3 text-center border">
+                <div className="text-red-600 font-bold">CRITICAL</div>
+                <div className="text-xs text-red-500 mt-1">Must fix</div>
+              </div>
+              <div className="bg-orange-50 rounded-lg p-3 text-center border">
+                <div className="text-orange-600 font-bold">HIGH</div>
+                <div className="text-xs text-orange-500 mt-1">Should fix</div>
+              </div>
+              <div className="bg-yellow-50 rounded-lg p-3 text-center border">
+                <div className="text-yellow-600 font-bold">MEDIUM</div>
+                <div className="text-xs text-yellow-500 mt-1">Consider fixing</div>
+              </div>
+              <div className="bg-blue-50 rounded-lg p-3 text-center border">
+                <div className="text-blue-600 font-bold">LOW</div>
+                <div className="text-xs text-blue-500 mt-1">Optional fix</div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3 text-center border">
+                <div className="text-gray-600 font-bold">SUGGESTION</div>
+                <div className="text-xs text-gray-500 mt-1">Enhancement</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'quality' && (
+        <div className="space-y-6">
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Quality Scoring Framework</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white rounded-lg p-4 border">
+                <h4 className="font-semibold text-blue-600 mb-3">Quality Factors</h4>
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-sm font-medium">Accuracy</span>
+                      <span className="text-sm text-gray-500">30%</span>
+                    </div>
+                    <div className="text-xs text-gray-600">
+                      How accurate the suggestion is
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-sm font-medium">Relevance</span>
+                      <span className="text-sm text-gray-500">25%</span>
+                    </div>
+                    <div className="text-xs text-gray-600">
+                      How relevant to the context
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-sm font-medium">Impact</span>
+                      <span className="text-sm text-gray-500">25%</span>
+                    </div>
+                    <div className="text-xs text-gray-600">
+                      How much it improves the text
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-sm font-medium">Confidence</span>
+                      <span className="text-sm text-gray-500">20%</span>
+                    </div>
+                    <div className="text-xs text-gray-600">
+                      How confident we are in the suggestion
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg p-4 border">
+                <h4 className="font-semibold text-green-600 mb-3">Impact Categories</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm">Correctness</span>
+                    <span className="text-xs text-green-600">Fixes • Improves • Neutral</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm">Clarity</span>
+                    <span className="text-xs text-blue-600">Improves • Neutral • Degrades</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm">Readability</span>
+                    <span className="text-xs text-purple-600">Improves • Neutral • Degrades</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm">Engagement</span>
+                    <span className="text-xs text-orange-600">Improves • Neutral • Degrades</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm">Formality</span>
+                    <span className="text-xs text-indigo-600">Increases • Neutral • Decreases</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Quality Thresholds</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-green-50 rounded-lg p-4 text-center border">
+                <div className="text-2xl font-bold text-green-600">80%+</div>
+                <div className="text-sm text-green-700">High Quality</div>
+                <div className="text-xs text-green-600 mt-1">Highly recommended suggestions</div>
+              </div>
+              <div className="bg-yellow-50 rounded-lg p-4 text-center border">
+                <div className="text-2xl font-bold text-yellow-600">60-79%</div>
+                <div className="text-sm text-yellow-700">Medium Quality</div>
+                <div className="text-xs text-yellow-600 mt-1">Good suggestions to consider</div>
+              </div>
+              <div className="bg-red-50 rounded-lg p-4 text-center border">
+                <div className="text-2xl font-bold text-red-600">&lt;60%</div>
+                <div className="text-sm text-red-700">Low Quality</div>
+                <div className="text-xs text-red-600 mt-1">May need review or filtering</div>
+              </div>
+            </div>
           </div>
         </div>
       )}

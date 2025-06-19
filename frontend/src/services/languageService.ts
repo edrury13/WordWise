@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { supabase } from '../config/supabase'
 import { Suggestion, ReadabilityScore } from '../store/slices/suggestionSlice'
-import { grammarEngine, GrammarSuggestion } from '../grammar'
+import { grammarEngine, GrammarSuggestion, SuggestionType, SuggestionSeverity } from '../grammar'
 
 // const LANGUAGETOOL_API_URL = import.meta.env.VITE_LANGUAGETOOL_API_URL || 'https://api.languagetool.org/v2'
 
@@ -248,58 +248,197 @@ const sentenceCache = new IntelligentCache<any>(25, 20 * 60 * 1000) // 20 minute
 
 // Note: APIResponse interface removed as it's not currently used
 
-// Enhanced rate limiter with exponential backoff
-class AdvancedRateLimiter {
+// Enhanced rate limiting system with adaptive throttling and request prioritization
+class AdaptiveRateLimiter {
   private lastCallTime: number = 0
   private failureCount: number = 0
+  private successCount: number = 0
   private baseInterval: number
   private maxInterval: number
   private backoffMultiplier: number
+  private recoveryFactor: number
+  private requestQueue: Array<{ priority: number, timestamp: number, resolve: () => void }> = []
+  private isProcessingQueue: boolean = false
+  private circuitBreakerThreshold: number = 5
+  private circuitBreakerResetTime: number = 60000 // 1 minute
+  private circuitBreakerOpenTime: number = 0
+  private averageResponseTime: number = 0
+  private responseTimeHistory: number[] = []
+  private maxHistoryLength: number = 10
 
-  constructor(baseInterval: number = 1000, maxInterval: number = 30000, backoffMultiplier: number = 2) {
+  constructor(
+    baseInterval: number = 1000, 
+    maxInterval: number = 30000, 
+    backoffMultiplier: number = 1.5,
+    recoveryFactor: number = 0.8
+  ) {
     this.baseInterval = baseInterval
     this.maxInterval = maxInterval
     this.backoffMultiplier = backoffMultiplier
+    this.recoveryFactor = recoveryFactor
   }
 
-  async throttle(): Promise<void> {
-    const now = Date.now()
-    const interval = Math.min(
-      this.baseInterval * Math.pow(this.backoffMultiplier, this.failureCount),
-      this.maxInterval
-    )
-    const timeSinceLastCall = now - this.lastCallTime
+  private isCircuitBreakerOpen(): boolean {
+    if (this.failureCount >= this.circuitBreakerThreshold) {
+      if (Date.now() - this.circuitBreakerOpenTime > this.circuitBreakerResetTime) {
+        // Reset circuit breaker
+        this.failureCount = 0
+        this.circuitBreakerOpenTime = 0
+        console.log('🔄 Circuit breaker reset')
+        return false
+      }
+      return true
+    }
+    return false
+  }
+
+  private calculateDynamicInterval(): number {
+    // Base interval with exponential backoff
+    let interval = this.baseInterval * Math.pow(this.backoffMultiplier, this.failureCount)
     
-    if (timeSinceLastCall < interval) {
-      const waitTime = interval - timeSinceLastCall
-      console.log(`⏳ Rate limiting: waiting ${waitTime}ms (failures: ${this.failureCount})`)
-      await new Promise(resolve => setTimeout(resolve, waitTime))
+    // Apply success-based recovery
+    if (this.successCount > 0) {
+      interval *= Math.pow(this.recoveryFactor, Math.min(this.successCount, 5))
     }
     
-    this.lastCallTime = Date.now()
+    // Adjust based on average response time
+    if (this.averageResponseTime > 5000) { // If responses are slow
+      interval *= 1.5
+    } else if (this.averageResponseTime < 1000) { // If responses are fast
+      interval *= 0.8
+    }
+    
+    return Math.min(interval, this.maxInterval)
   }
 
-  onSuccess(): void {
+  private updateResponseTime(responseTime: number): void {
+    this.responseTimeHistory.push(responseTime)
+    if (this.responseTimeHistory.length > this.maxHistoryLength) {
+      this.responseTimeHistory.shift()
+    }
+    
+    this.averageResponseTime = this.responseTimeHistory.reduce((sum, time) => sum + time, 0) / this.responseTimeHistory.length
+  }
+
+  private async processQueue(): Promise<void> {
+    if (this.isProcessingQueue || this.requestQueue.length === 0) return
+    
+    this.isProcessingQueue = true
+    
+    // Sort queue by priority (higher priority first)
+    this.requestQueue.sort((a, b) => b.priority - a.priority)
+    
+    while (this.requestQueue.length > 0) {
+      const request = this.requestQueue.shift()!
+      const interval = this.calculateDynamicInterval()
+      const timeSinceLastCall = Date.now() - this.lastCallTime
+      
+      if (timeSinceLastCall < interval) {
+        const waitTime = interval - timeSinceLastCall
+        await new Promise(resolve => setTimeout(resolve, waitTime))
+      }
+      
+      this.lastCallTime = Date.now()
+      request.resolve()
+    }
+    
+    this.isProcessingQueue = false
+  }
+
+  async throttle(priority: number = 1): Promise<void> {
+    // Check circuit breaker
+    if (this.isCircuitBreakerOpen()) {
+      throw new Error('Circuit breaker is open - too many failures')
+    }
+
+    // For high priority requests, process immediately if possible
+    if (priority >= 5 && this.requestQueue.length === 0) {
+      const interval = this.calculateDynamicInterval() * 0.5 // Reduce wait for high priority
+      const timeSinceLastCall = Date.now() - this.lastCallTime
+      
+      if (timeSinceLastCall >= interval) {
+        this.lastCallTime = Date.now()
+        return
+      }
+    }
+
+    // Add to queue
+    return new Promise<void>((resolve) => {
+      this.requestQueue.push({
+        priority,
+        timestamp: Date.now(),
+        resolve
+      })
+      
+      // Start processing queue
+      this.processQueue()
+    })
+  }
+
+  onSuccess(responseTime?: number): void {
+    this.successCount++
     this.failureCount = Math.max(0, this.failureCount - 1)
+    
+    if (responseTime) {
+      this.updateResponseTime(responseTime)
+    }
+    
+    // Reset circuit breaker on success
+    if (this.circuitBreakerOpenTime > 0) {
+      this.circuitBreakerOpenTime = 0
+    }
   }
 
-  onFailure(): void {
+  onFailure(isServerError: boolean = true): void {
     this.failureCount++
+    this.successCount = Math.max(0, this.successCount - 1)
+    
+    // Open circuit breaker if threshold reached
+    if (this.failureCount >= this.circuitBreakerThreshold && isServerError) {
+      this.circuitBreakerOpenTime = Date.now()
+      console.warn('🚨 Circuit breaker opened due to excessive failures')
+    }
   }
 
   getStats() {
     return {
       failureCount: this.failureCount,
-      currentInterval: Math.min(
-        this.baseInterval * Math.pow(this.backoffMultiplier, this.failureCount),
-        this.maxInterval
-      )
+      successCount: this.successCount,
+      currentInterval: this.calculateDynamicInterval(),
+      queueLength: this.requestQueue.length,
+      circuitBreakerOpen: this.isCircuitBreakerOpen(),
+      averageResponseTime: Math.round(this.averageResponseTime),
+      isProcessingQueue: this.isProcessingQueue
     }
+  }
+
+  getHealth(): 'healthy' | 'degraded' | 'unhealthy' {
+    if (this.isCircuitBreakerOpen()) return 'unhealthy'
+    if (this.failureCount > 2 || this.averageResponseTime > 5000) return 'degraded'
+    return 'healthy'
+  }
+
+  reset(): void {
+    this.failureCount = 0
+    this.successCount = 0
+    this.circuitBreakerOpenTime = 0
+    this.requestQueue = []
+    this.responseTimeHistory = []
+    this.averageResponseTime = 0
   }
 }
 
-const grammarRateLimiter = new AdvancedRateLimiter(1000, 30000, 1.5)
-const sentenceRateLimiter = new AdvancedRateLimiter(1500, 45000, 2)
+// Request priority levels
+const REQUEST_PRIORITY = {
+  LOW: 1,        // Background operations
+  NORMAL: 3,     // Regular user operations
+  HIGH: 5,       // User-initiated actions
+  CRITICAL: 7    // Error recovery, retries
+} as const
+
+// Enhanced rate limiters with different configurations
+const grammarRateLimiter = new AdaptiveRateLimiter(800, 25000, 1.4, 0.85)  // Faster recovery for grammar
+const sentenceRateLimiter = new AdaptiveRateLimiter(1200, 35000, 1.6, 0.8) // More conservative for sentence analysis
 
 // Standardized error handling
 class APIError extends Error {
@@ -344,7 +483,8 @@ function handleAPIError(error: any, operation: string): APIError {
 
 export const checkGrammarAndSpelling = async (
   text: string,
-  language: string = 'en-US'
+  language: string = 'en-US',
+  priority: number = REQUEST_PRIORITY.NORMAL
 ): Promise<{ suggestions: Suggestion[], apiStatus: 'api' | 'client-fallback' | 'mixed' }> => {
   const startTime = Date.now()
   
@@ -356,6 +496,8 @@ export const checkGrammarAndSpelling = async (
     console.log('🔍 Grammar check:', {
       textLength: text.length,
       language,
+      priority,
+      rateLimiterHealth: grammarRateLimiter.getHealth(),
       isProd: import.meta.env.PROD
     })
 
@@ -366,8 +508,8 @@ export const checkGrammarAndSpelling = async (
       return cachedResult
     }
 
-    // Apply rate limiting
-    await grammarRateLimiter.throttle()
+    // Apply adaptive rate limiting with priority
+    await grammarRateLimiter.throttle(priority)
 
     let apiResult: { suggestions: Suggestion[], apiStatus: 'api' | 'client-fallback' | 'mixed' } | null = null
     let apiError: APIError | null = null
@@ -405,16 +547,19 @@ export const checkGrammarAndSpelling = async (
         severity: getSeverity(match.rule.issueType),
       })) || []
 
-      // Add centralized grammar engine suggestions
+      // Add centralized grammar engine suggestions with enhanced configuration
       const grammarEngineResult = await grammarEngine.checkText(text, {
         language: language,
-        minConfidence: 70,
-        maxSuggestions: 25
+        minConfidence: priority >= REQUEST_PRIORITY.HIGH ? 60 : 70, // Lower threshold for high priority
+        maxSuggestions: priority >= REQUEST_PRIORITY.HIGH ? 35 : 25,
+        qualityThreshold: priority >= REQUEST_PRIORITY.HIGH ? 55 : 65,
+        prioritizeByImpact: true,
+        enableAdvancedRules: priority >= REQUEST_PRIORITY.HIGH
       })
       
       const clientSideSuggestions = grammarEngineResult.suggestions.map((gs: GrammarSuggestion): Suggestion => ({
         id: gs.id,
-        type: gs.type,
+        type: mapGrammarTypeToSuggestionType(gs.type),
         message: gs.message,
         replacements: gs.replacements,
         offset: gs.offset,
@@ -422,10 +567,10 @@ export const checkGrammarAndSpelling = async (
         context: gs.context,
         explanation: gs.explanation,
         category: gs.category,
-        severity: gs.severity
+        severity: mapGrammarSeverityToSuggestionSeverity(gs.severity)
       }))
       
-      // Merge suggestions, avoiding duplicates
+      // Enhanced duplicate detection with overlap analysis
       const mergedSuggestions = [...suggestions]
       
       clientSideSuggestions.forEach((clientSuggestion: Suggestion) => {
@@ -435,7 +580,11 @@ export const checkGrammarAndSpelling = async (
           const apiStart = apiSuggestion.offset
           const apiEnd = apiSuggestion.offset + apiSuggestion.length
           
-          return (clientStart < apiEnd && clientEnd > apiStart)
+          // More sophisticated overlap detection
+          const overlapLength = Math.max(0, Math.min(clientEnd, apiEnd) - Math.max(clientStart, apiStart))
+          const overlapPercentage = overlapLength / Math.min(clientSuggestion.length, apiSuggestion.length)
+          
+          return overlapPercentage > 0.5 // 50% overlap threshold
         })
         
         if (!hasOverlappingSuggestion) {
@@ -444,23 +593,31 @@ export const checkGrammarAndSpelling = async (
       })
 
       apiResult = { suggestions: mergedSuggestions, apiStatus: 'api' }
-      grammarRateLimiter.onSuccess()
+      
+      const responseTime = Date.now() - startTime
+      grammarRateLimiter.onSuccess(responseTime)
 
       console.log('✅ LanguageTool API success:', {
         fromAPI: suggestions.length,
         fromEngine: clientSideSuggestions.length,
         total: mergedSuggestions.length,
-        duration: Date.now() - startTime
+        duration: responseTime,
+        rateLimiterStats: grammarRateLimiter.getStats()
       })
 
     } catch (error) {
       apiError = handleAPIError(error, 'LanguageTool API')
-      grammarRateLimiter.onFailure()
+      
+      // Determine if this is a server error for circuit breaker
+      const isServerError = apiError.status >= 500 || apiError.code === 'TIMEOUT' || apiError.code === 'RATE_LIMIT'
+      grammarRateLimiter.onFailure(isServerError)
       
       console.warn('🔄 LanguageTool API failed:', {
         error: apiError.message,
         code: apiError.code,
-        status: apiError.status
+        status: apiError.status,
+        isServerError,
+        rateLimiterStats: grammarRateLimiter.getStats()
       })
     }
 
@@ -469,13 +626,15 @@ export const checkGrammarAndSpelling = async (
       console.log('🔄 Using centralized grammar engine as fallback')
       const fallbackResult = await grammarEngine.checkText(text, {
         language: language,
-        minConfidence: 60,
-        maxSuggestions: 50
+        minConfidence: 50, // Lower threshold for fallback
+        maxSuggestions: 50,
+        qualityThreshold: 45,
+        enableAdvancedRules: false // Disable advanced rules for speed
       })
       
       const fallbackSuggestions = fallbackResult.suggestions.map((gs: GrammarSuggestion): Suggestion => ({
         id: gs.id,
-        type: gs.type,
+        type: mapGrammarTypeToSuggestionType(gs.type),
         message: gs.message,
         replacements: gs.replacements,
         offset: gs.offset,
@@ -483,7 +642,7 @@ export const checkGrammarAndSpelling = async (
         context: gs.context,
         explanation: gs.explanation,
         category: gs.category,
-        severity: gs.severity
+        severity: mapGrammarSeverityToSuggestionSeverity(gs.severity)
       }))
       
       apiResult = { suggestions: fallbackSuggestions, apiStatus: 'client-fallback' }
@@ -499,7 +658,9 @@ export const checkGrammarAndSpelling = async (
       suggestions: apiResult.suggestions.length,
       status: apiResult.apiStatus,
       duration,
-      cached: false
+      priority,
+      cached: false,
+      rateLimiterHealth: grammarRateLimiter.getHealth()
     })
 
     return apiResult
@@ -510,17 +671,19 @@ export const checkGrammarAndSpelling = async (
     const apiError = handleAPIError(error, 'Grammar check')
     console.error('❌ Grammar check failed:', apiError)
     
-    // Final fallback to centralized grammar engine
+    // Final fallback to centralized grammar engine with minimal settings
     try {
       const fallbackResult = await grammarEngine.checkText(text, {
         language: language,
-        minConfidence: 50,
-        maxSuggestions: 50
+        minConfidence: 40, // Very low threshold for emergency fallback
+        maxSuggestions: 30,
+        qualityThreshold: 35,
+        enableAdvancedRules: false // Disable advanced rules for speed
       })
       
       const fallbackSuggestions = fallbackResult.suggestions.map((gs: GrammarSuggestion): Suggestion => ({
         id: gs.id,
-        type: gs.type,
+        type: mapGrammarTypeToSuggestionType(gs.type),
         message: gs.message,
         replacements: gs.replacements,
         offset: gs.offset,
@@ -528,7 +691,7 @@ export const checkGrammarAndSpelling = async (
         context: gs.context,
         explanation: gs.explanation,
         category: gs.category,
-        severity: gs.severity
+        severity: mapGrammarSeverityToSuggestionSeverity(gs.severity)
       }))
       
       return { suggestions: fallbackSuggestions, apiStatus: 'client-fallback' }
@@ -570,6 +733,38 @@ function getSeverity(issueType: string): Suggestion['severity'] {
     return 'medium'
   }
   return 'low'
+}
+
+function mapGrammarSeverityToSuggestionSeverity(grammarSeverity: SuggestionSeverity): 'low' | 'medium' | 'high' {
+  switch (grammarSeverity) {
+    case 'critical':
+    case 'high':
+      return 'high'
+    case 'medium':
+      return 'medium'
+    case 'low':
+    case 'suggestion':
+      return 'low'
+    default:
+      return 'medium'
+  }
+}
+
+function mapGrammarTypeToSuggestionType(grammarType: SuggestionType): 'grammar' | 'spelling' | 'style' | 'clarity' | 'engagement' | 'delivery' {
+  switch (grammarType) {
+    case 'consistency':
+    case 'conciseness':
+      return 'style' // Map new types to existing ones
+    case 'grammar':
+    case 'spelling':
+    case 'style':
+    case 'clarity':
+    case 'engagement':
+    case 'delivery':
+      return grammarType
+    default:
+      return 'style' // Default fallback
+  }
 }
 
 // These functions have been replaced by the centralized grammar engine
