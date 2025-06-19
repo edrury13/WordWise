@@ -1,0 +1,21 @@
+{
+  "name": "@wordwise/grammar-engine",
+  "version": "1.0.0",
+  "description": "Centralized grammar rule management for WordWise",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "files": [
+    "*.js",
+    "*.d.ts",
+    "index.js",
+    "index.d.ts"
+  ]
+} 

@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { supabase } from '../config/supabase'
 import { Suggestion, ReadabilityScore } from '../store/slices/suggestionSlice'
+import { grammarEngine, GrammarSuggestion } from '../grammar'
 
 // const LANGUAGETOOL_API_URL = import.meta.env.VITE_LANGUAGETOOL_API_URL || 'https://api.languagetool.org/v2'
 
@@ -128,13 +129,30 @@ export const checkGrammarAndSpelling = async (
         style: suggestions.filter((s: Suggestion) => s.type === 'style').length,
       })
 
-      // Add specific client-side rules for common errors that LanguageTool might miss
-      const clientSideSupplementalSuggestions = performSupplementalGrammarCheck(text)
+      // Add centralized grammar engine suggestions
+      const grammarEngineResult = await grammarEngine.checkText(text, {
+        language: language,
+        minConfidence: 70,
+        maxSuggestions: 25
+      })
+      
+      const clientSideSuggestions = grammarEngineResult.suggestions.map((gs: GrammarSuggestion): Suggestion => ({
+        id: gs.id,
+        type: gs.type,
+        message: gs.message,
+        replacements: gs.replacements,
+        offset: gs.offset,
+        length: gs.length,
+        context: gs.context,
+        explanation: gs.explanation,
+        category: gs.category,
+        severity: gs.severity
+      }))
       
       // Merge with LanguageTool suggestions, avoiding duplicates
       const mergedSuggestions = [...suggestions]
       
-      clientSideSupplementalSuggestions.forEach((clientSuggestion: Suggestion) => {
+      clientSideSuggestions.forEach((clientSuggestion: Suggestion) => {
         // Check if there's already a suggestion covering this text range
         const hasOverlappingSuggestion = suggestions.some((apiSuggestion: Suggestion) => {
           const clientStart = clientSuggestion.offset
@@ -152,9 +170,9 @@ export const checkGrammarAndSpelling = async (
         }
       })
 
-      console.log('📋 Final suggestions after supplemental check:', {
+      console.log('📋 Final suggestions after centralized grammar check:', {
         fromLanguageTool: suggestions.length,
-        supplemental: clientSideSupplementalSuggestions.length,
+        fromGrammarEngine: clientSideSuggestions.length,
         total: mergedSuggestions.length
       })
 
@@ -167,14 +185,52 @@ export const checkGrammarAndSpelling = async (
       
       // Handle rate limiting specifically
       if (axios.isAxiosError(languageToolError) && languageToolError.response?.status === 429) {
-        console.warn('🚨 LanguageTool rate limit exceeded - using client-side grammar checking as fallback')
-        return { suggestions: performClientSideGrammarCheck(text), apiStatus: 'client-fallback' }
+        console.warn('🚨 LanguageTool rate limit exceeded - using centralized grammar engine as fallback')
+        const fallbackResult = await grammarEngine.checkText(text, {
+          language: language,
+          minConfidence: 60,
+          maxSuggestions: 50
+        })
+        
+        const fallbackSuggestions = fallbackResult.suggestions.map((gs: GrammarSuggestion): Suggestion => ({
+          id: gs.id,
+          type: gs.type,
+          message: gs.message,
+          replacements: gs.replacements,
+          offset: gs.offset,
+          length: gs.length,
+          context: gs.context,
+          explanation: gs.explanation,
+          category: gs.category,
+          severity: gs.severity
+        }))
+        
+        return { suggestions: fallbackSuggestions, apiStatus: 'client-fallback' }
       }
     }
 
-    // Fallback to client-side checking only if LanguageTool API fails
-    console.log('🔄 Using client-side grammar checking as fallback')
-    return { suggestions: performClientSideGrammarCheck(text), apiStatus: 'client-fallback' }
+    // Fallback to centralized grammar engine if LanguageTool API fails
+    console.log('🔄 Using centralized grammar engine as fallback')
+    const fallbackResult = await grammarEngine.checkText(text, {
+      language: language,
+      minConfidence: 60,
+      maxSuggestions: 50
+    })
+    
+    const fallbackSuggestions = fallbackResult.suggestions.map((gs: GrammarSuggestion): Suggestion => ({
+      id: gs.id,
+      type: gs.type,
+      message: gs.message,
+      replacements: gs.replacements,
+      offset: gs.offset,
+      length: gs.length,
+      context: gs.context,
+      explanation: gs.explanation,
+      category: gs.category,
+      severity: gs.severity
+    }))
+    
+    return { suggestions: fallbackSuggestions, apiStatus: 'client-fallback' }
   } catch (error) {
     console.error('❌ Grammar check failed:', {
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -185,14 +241,52 @@ export const checkGrammarAndSpelling = async (
     
     // Handle rate limiting specifically
     if (axios.isAxiosError(error) && error.response?.status === 429) {
-      console.warn('🚨 Rate limit exceeded - using client-side grammar checking as fallback')
-      return { suggestions: performClientSideGrammarCheck(text), apiStatus: 'client-fallback' }
+      console.warn('🚨 Rate limit exceeded - using centralized grammar engine as fallback')
+      const fallbackResult = await grammarEngine.checkText(text, {
+        language: language,
+        minConfidence: 60,
+        maxSuggestions: 50
+      })
+      
+      const fallbackSuggestions = fallbackResult.suggestions.map((gs: GrammarSuggestion): Suggestion => ({
+        id: gs.id,
+        type: gs.type,
+        message: gs.message,
+        replacements: gs.replacements,
+        offset: gs.offset,
+        length: gs.length,
+        context: gs.context,
+        explanation: gs.explanation,
+        category: gs.category,
+        severity: gs.severity
+      }))
+      
+      return { suggestions: fallbackSuggestions, apiStatus: 'client-fallback' }
     }
     
-    // Fallback to client-side checking if backend fails
+    // Fallback to centralized grammar engine if backend fails
     if (axios.isAxiosError(error)) {
-      console.warn('🔄 Backend API failed, using client-side grammar checking as fallback')
-      return { suggestions: performClientSideGrammarCheck(text), apiStatus: 'client-fallback' }
+      console.warn('🔄 Backend API failed, using centralized grammar engine as fallback')
+      const fallbackResult = await grammarEngine.checkText(text, {
+        language: language,
+        minConfidence: 60,
+        maxSuggestions: 50
+      })
+      
+      const fallbackSuggestions = fallbackResult.suggestions.map((gs: GrammarSuggestion): Suggestion => ({
+        id: gs.id,
+        type: gs.type,
+        message: gs.message,
+        replacements: gs.replacements,
+        offset: gs.offset,
+        length: gs.length,
+        context: gs.context,
+        explanation: gs.explanation,
+        category: gs.category,
+        severity: gs.severity
+      }))
+      
+      return { suggestions: fallbackSuggestions, apiStatus: 'client-fallback' }
     }
     
     throw new Error('Failed to check grammar and spelling')

@@ -2,6 +2,8 @@ import express from 'express'
 import axios from 'axios'
 import OpenAI from 'openai'
 import { AuthenticatedRequest } from '../middleware/auth'
+// TODO: Import centralized grammar engine when backend integration is complete
+// import { grammarEngine, GrammarSuggestion } from '../../../shared/grammar'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
