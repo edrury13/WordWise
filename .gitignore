@@ -107,3 +107,4 @@ Thumbs.db
 !vercel.json
 !api/
 !DEPLOYMENT.md 
+backend/.env
