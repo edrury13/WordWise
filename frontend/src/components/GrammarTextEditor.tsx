@@ -180,7 +180,7 @@ const GrammarTextEditor: React.FC = () => {
       })).then((action) => {
         if (action.type === 'documents/updateDocument/fulfilled') {
           setLastSaveStatus('saved')
-          dispatch(setLastSaved(new Date()))
+          dispatch(setLastSaved(Date.now()))
           
           // Clean up localStorage backup after successful save
           const backupKey = `wordwise-backup-${currentDocument.id}`
@@ -211,7 +211,7 @@ const GrammarTextEditor: React.FC = () => {
     })).then((action) => {
       if (action.type === 'documents/updateDocument/fulfilled') {
         setLastSaveStatus('saved')
-        dispatch(setLastSaved(new Date()))
+        dispatch(setLastSaved(Date.now()))
         
         // Clean up localStorage backup after successful manual save
         const backupKey = `wordwise-backup-${currentDocument.id}`

@@ -267,18 +267,93 @@ function calculateReadability(text) {
   return {
     fleschKincaid: Math.round(fleschKincaid * 100) / 100,
     fleschReadingEase: Math.round(fleschKincaid * 100) / 100,
-    readabilityLevel: getReadabilityLevel(fleschKincaid),
+    readabilityLevel: getReadingEaseLevel(fleschReadingEase),
     readingEaseLevel: getReadingEaseLevel(fleschKincaid)
   }
 }
 
 function countSyllables(word) {
-  word = word.toLowerCase()
-  if (word.length <= 3) return 1
-  word = word.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, '')
-  word = word.replace(/^y/, '')
-  const matches = word.match(/[aeiouy]{1,2}/g)
-  return matches ? matches.length : 1
+  // Enhanced syllable counting algorithm with better accuracy
+  if (!word || typeof word !== 'string') return 1
+  
+  word = word.toLowerCase().trim()
+  if (word.length === 0) return 1
+  if (word.length <= 2) return 1
+  
+  // Dictionary of common words with known syllable counts for accuracy
+  const syllableDict = {
+    'the': 1, 'be': 1, 'to': 1, 'of': 1, 'and': 1, 'a': 1, 'in': 1, 'that': 1,
+    'have': 1, 'i': 1, 'it': 1, 'for': 1, 'not': 1, 'on': 1, 'with': 1, 'he': 1,
+    'as': 1, 'you': 1, 'do': 1, 'at': 1, 'this': 1, 'but': 1, 'his': 1, 'by': 1,
+    'from': 1, 'they': 1, 'we': 1, 'say': 1, 'her': 1, 'she': 1, 'or': 1, 'an': 1,
+    'will': 1, 'my': 1, 'one': 1, 'all': 1, 'would': 1, 'there': 1, 'their': 1,
+    'what': 1, 'so': 1, 'up': 1, 'out': 1, 'if': 1, 'about': 2, 'who': 1, 'get': 1,
+    'which': 1, 'go': 1, 'me': 1, 'when': 1, 'make': 1, 'can': 1, 'like': 1,
+    'time': 1, 'no': 1, 'just': 1, 'him': 1, 'know': 1, 'take': 1, 'people': 2,
+    'into': 2, 'year': 1, 'your': 1, 'good': 1, 'some': 1, 'could': 1, 'them': 1,
+    'see': 1, 'other': 2, 'than': 1, 'then': 1, 'now': 1, 'look': 1, 'only': 2,
+    'come': 1, 'its': 1, 'over': 2, 'think': 1, 'also': 2, 'work': 1,
+    'life': 1, 'new': 1, 'years': 1, 'way': 1, 'may': 1, 'says': 1,
+    'each': 1, 'how': 1, 'these': 1, 'two': 1, 'more': 1, 'very': 2,
+    'first': 1, 'where': 1, 'much': 1, 'well': 1, 'were': 1, 'been': 1,
+    'had': 1, 'has': 1, 'said': 1,
+    // Common problematic words
+    'every': 2, 'really': 3, 'being': 2, 'through': 1, 'should': 1, 'before': 2,
+    'because': 2, 'different': 3, 'another': 3, 'important': 3, 'business': 2,
+    'interest': 3, 'probably': 3, 'beautiful': 3, 'family': 3, 'general': 3,
+    'several': 3, 'special': 2, 'available': 4, 'possible': 3, 'necessary': 4,
+    'development': 4, 'experience': 4, 'information': 4, 'education': 4,
+    'government': 3, 'organization': 5, 'technology': 4, 'university': 5,
+    'community': 4, 'especially': 4, 'everything': 3, 'individual': 5,
+    'environment': 4, 'management': 3, 'performance': 3, 'relationship': 4,
+    'opportunity': 5, 'responsibility': 6, 'understanding': 4, 'communication': 5
+  }
+  
+  // Remove punctuation and normalize
+  word = word.replace(/[^a-z]/g, '')
+  if (word.length === 0) return 1
+  
+  // Check dictionary first for accuracy
+  if (syllableDict.hasOwnProperty(word)) {
+    return syllableDict[word]
+  }
+  
+  // Count vowel groups as syllables
+  let syllableCount = 0
+  let previousWasVowel = false
+  
+  for (let i = 0; i < word.length; i++) {
+    const char = word[i]
+    const isVowel = /[aeiouy]/.test(char)
+    
+    if (isVowel && !previousWasVowel) {
+      syllableCount++
+    }
+    previousWasVowel = isVowel
+  }
+  
+  // Handle special cases and adjustments
+  
+  // Silent e at the end (but not if it's the only vowel sound)
+  if (word.endsWith('e') && syllableCount > 1) {
+    const beforeE = word[word.length - 2]
+    // Don't remove the e if it follows certain patterns
+    if (!/[aeiou]/.test(beforeE) && !word.endsWith('le') && !word.endsWith('re') && !word.endsWith('se')) {
+      syllableCount--
+    }
+  }
+  
+  // Handle -ed endings
+  if (word.endsWith('ed')) {
+    const beforeEd = word.substring(word.length - 3, word.length - 2)
+    // Only count -ed as syllable if it follows t or d
+    if (!/[td]/.test(beforeEd)) {
+      syllableCount--
+    }
+  }
+  
+  // Ensure minimum of 1 syllable
+  return Math.max(1, syllableCount)
 }
 
 function getReadabilityLevel(score) {

@@ -67,7 +67,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
           id: documentId, 
           content: text 
         })).then(() => {
-          dispatch(setLastSaved(new Date()))
+          dispatch(setLastSaved(Date.now()))
         })
       }, 3000) // Auto-save after 3 seconds of no typing
     },

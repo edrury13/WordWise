@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { analyzeReadability } from '../services/languageService'
 import { 
-  performGradeLevelRewriteOptimized,
-  performGradeLevelRewriteDebounced,
+  performGradeLevelRewrite,
   applyGradeLevelRewrite,
   setShowGradeLevelPanel,
   setTargetGradeLevel,
@@ -197,15 +196,8 @@ const GradeLevelRewritePanel: React.FC<GradeLevelRewritePanelProps> = ({ text, o
         })
       }
       
-      // Trigger debounced preview for real-time feedback (low priority)
-      if (text.length > 50 && text.length < 2000) { // Only for reasonable text lengths
-        dispatch(performGradeLevelRewriteDebounced({
-          text,
-          gradeLevel: selectedGradeLevel,
-          currentContent,
-          debounceMs: 2000 // 2 second delay for preview
-        }))
-      }
+      // Note: Removed automatic rewrite trigger - user must click "Rewrite Text" button
+      // This prevents unwanted automatic rewrites when opening the panel or changing grade levels
     } else {
       setEstimatedReadability(null)
     }
@@ -218,7 +210,7 @@ const GradeLevelRewritePanel: React.FC<GradeLevelRewritePanelProps> = ({ text, o
     dispatch(setTargetGradeLevel(selectedGradeLevel))
     
     try {
-      await dispatch(performGradeLevelRewriteOptimized({
+      await dispatch(performGradeLevelRewrite({
         text,
         gradeLevel: selectedGradeLevel,
         currentContent,

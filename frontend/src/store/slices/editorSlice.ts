@@ -8,7 +8,7 @@ export interface GradeLevelRewriteResult {
   originalText: string
   rewrittenText: string
   gradeLevel: string
-  timestamp: Date
+  timestamp: number // Changed from Date to number for serialization
   originalReadability: {
     fleschKincaid: number
     readingEase: number
@@ -47,7 +47,7 @@ export interface RewriteHistoryItem {
   type: 'grade-level' | 'tone' | 'manual'
   originalContent: any[]
   newContent: any[]
-  timestamp: Date
+  timestamp: number // Changed from Date to number for serialization
   gradeLevel?: string
   tone?: string
   description: string
@@ -125,7 +125,7 @@ interface EditorState {
   isFullscreen: boolean
   showStats: boolean
   autoSaveEnabled: boolean
-  lastSaved: Date | null
+  lastSaved: number | null // Changed from Date to number for serialization
   // Grade Level Rewrite State
   gradeLevelRewrite: GradeLevelRewriteState
   // Rewrite History for Undo functionality
@@ -312,7 +312,7 @@ export const performGradeLevelRewriteOptimized = createAsyncThunk(
         originalText: text,
         rewrittenText: result.rewrittenText,
         gradeLevel,
-        timestamp: new Date(),
+        timestamp: Date.now(),
         originalReadability: result.originalReadability || {
           fleschKincaid: 0,
           readingEase: 0,
@@ -636,7 +636,7 @@ const editorSlice = createSlice({
     }>) => {
       const historyItem: RewriteHistoryItem = {
         id: `history-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        timestamp: new Date(),
+        timestamp: Date.now(),
         ...action.payload
       }
 
@@ -730,7 +730,7 @@ const editorSlice = createSlice({
         type: 'grade-level',
         originalContent: [...originalContent],
         newContent: [...newContent],
-        timestamp: new Date(),
+        timestamp: Date.now(),
         gradeLevel: rewriteResult.gradeLevel,
         description: `Grade level rewrite to ${rewriteResult.gradeLevel} level`,
         readabilityBefore: rewriteResult.originalReadability,
@@ -811,7 +811,7 @@ const editorSlice = createSlice({
     setAutoSave: (state, action: PayloadAction<boolean>) => {
       state.autoSaveEnabled = action.payload
     },
-    setLastSaved: (state, action: PayloadAction<Date>) => {
+    setLastSaved: (state, action: PayloadAction<number>) => {
       state.lastSaved = action.payload
     },
     resetEditor: (state) => {

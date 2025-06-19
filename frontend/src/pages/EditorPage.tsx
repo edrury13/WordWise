@@ -81,7 +81,7 @@ const EditorPage: React.FC = () => {
         title: documentTitle
       })).then((action: any) => {
         if (action.type === 'documents/updateDocument/fulfilled') {
-          dispatchRef.current(setLastSaved(new Date()))
+          dispatchRef.current(setLastSaved(Date.now()))
         }
        }).catch((error: any) => {
          console.error('Failed to save document:', error)
