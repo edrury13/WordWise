@@ -11,6 +11,117 @@ const openai = new OpenAI({
 
 const router = express.Router()
 
+// Standardized API response format
+interface StandardAPIResponse<T = any> {
+  success: boolean
+  data?: T
+  error?: string
+  code?: string
+  timestamp: number
+  performance?: {
+    duration: number
+    source: 'api' | 'cache' | 'fallback'
+  }
+}
+
+// Enhanced error handling
+class APIError extends Error {
+  public code: string
+  public status: number
+  public source: string
+
+  constructor(message: string, code: string = 'UNKNOWN', status: number = 500, source: string = 'api') {
+    super(message)
+    this.name = 'APIError'
+    this.code = code
+    this.status = status
+    this.source = source
+  }
+}
+
+// Standardized response helpers
+const createSuccessResponse = <T>(data: T, duration?: number, source: 'api' | 'cache' | 'fallback' = 'api'): StandardAPIResponse<T> => {
+  return {
+    success: true,
+    data,
+    timestamp: Date.now(),
+    ...(duration && { performance: { duration, source } })
+  }
+}
+
+const createErrorResponse = (error: APIError | Error | string, code?: string): StandardAPIResponse<never> => {
+  const errorMessage = error instanceof Error ? error.message : String(error)
+  const errorCode = error instanceof APIError ? error.code : (code || 'UNKNOWN')
+  
+  return {
+    success: false,
+    error: errorMessage,
+    code: errorCode,
+    timestamp: Date.now()
+  }
+}
+
+// Enhanced request validation
+const validateTextInput = (text: any, maxLength: number = 50000): void => {
+  if (!text || typeof text !== 'string') {
+    throw new APIError('Text is required and must be a string', 'INVALID_INPUT', 400, 'validation')
+  }
+  
+  if (text.trim().length === 0) {
+    throw new APIError('Text cannot be empty', 'INVALID_INPUT', 400, 'validation')
+  }
+  
+  if (text.length > maxLength) {
+    throw new APIError(`Text is too long (maximum ${maxLength} characters)`, 'TEXT_TOO_LONG', 400, 'validation')
+  }
+}
+
+// Enhanced LanguageTool API wrapper with retry logic
+const callLanguageToolAPI = async (text: string, language: string = 'en-US', retries: number = 2): Promise<any> => {
+  const languageToolUrl = process.env.LANGUAGETOOL_API_URL || 'https://api.languagetool.org/v2'
+  
+  const params = new URLSearchParams({
+    text,
+    language,
+    enabledOnly: 'false',
+    level: 'picky',
+    enabledCategories: 'GRAMMAR,SENTENCE_WHITESPACE,MISC,COMPOUNDING,SEMANTICS,PUNCTUATION,CASING,TYPOS,CONFUSED_WORDS,LOGIC,TYPOGRAPHY,PRONOUN_AGREEMENT,SUBJECT_VERB_AGREEMENT,STYLE,COLLOQUIALISMS,REDUNDANCY,WORDINESS,CREATIVE_WRITING',
+    enabledRules: 'FRAGMENT_SENTENCE,MISSING_VERB,INCOMPLETE_SENTENCE,SENTENCE_FRAGMENT,RUN_ON_SENTENCE,COMMA_SPLICE,GRAMMAR_AGREEMENT,SUBJECT_VERB_AGREEMENT,VERB_FORM,VERB_AGREEMENT_VS_NOUN,SINGULAR_PLURAL_VERB,TENSE_AGREEMENT,VERB_TENSE,PAST_TENSE_VERB,PRESENT_TENSE_VERB,PRONOUN_AGREEMENT,PRONOUN_REFERENCE,REFLEXIVE_PRONOUN,PERSONAL_PRONOUN_AGREEMENT,ARTICLE_MISSING,DT_DT,MISSING_DETERMINER,A_VS_AN,THE_SUPERLATIVE,PREPOSITION_VERB,MISSING_PREPOSITION,WRONG_PREPOSITION,CONJUNCTION_COMMA,MISSING_CONJUNCTION,COORDINATING_CONJUNCTION,COMMA_BEFORE_CONJUNCTION,MISSING_COMMA,UNNECESSARY_COMMA,APOSTROPHE_MISSING,SENTENCE_CAPITALIZATION,PROPER_NOUN_CAPITALIZATION'
+  })
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await axios.post(`${languageToolUrl}/check`, params, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        timeout: 30000,
+      })
+      
+      return response.data
+    } catch (error) {
+      if (attempt === retries) {
+        // Last attempt failed, throw the error
+        if (axios.isAxiosError(error)) {
+          if (error.response?.status === 429) {
+            throw new APIError('Rate limit exceeded for language check service', 'RATE_LIMIT', 429, 'languagetool')
+          }
+          if (error.code === 'ECONNABORTED') {
+            throw new APIError('Language check service timeout', 'TIMEOUT', 408, 'languagetool')
+          }
+          if (error.response?.status === 503) {
+            throw new APIError('Language check service unavailable', 'SERVICE_UNAVAILABLE', 503, 'languagetool')
+          }
+        }
+        throw new APIError('Language check service error', 'SERVICE_ERROR', 500, 'languagetool')
+      }
+      
+      // Wait before retry (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000))
+    }
+  }
+}
+
 interface LanguageToolMatch {
   offset: number
   length: number
@@ -38,72 +149,30 @@ interface LanguageToolResponse {
 
 // Check grammar and spelling
 router.post('/check', async (req: AuthenticatedRequest, res) => {
+  const startTime = Date.now()
+  
   try {
     if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        error: 'User not authenticated'
-      })
+      const errorResponse = createErrorResponse('User not authenticated', 'AUTH_REQUIRED')
+      return res.status(401).json(errorResponse)
     }
 
     const { text, language = 'en-US' } = req.body
 
-    if (!text || typeof text !== 'string') {
-      return res.status(400).json({
-        success: false,
-        error: 'Text is required and must be a string'
-      })
-    }
+    // Enhanced validation
+    validateTextInput(text)
 
-    if (text.length > 50000) {
-      return res.status(400).json({
-        success: false,
-        error: 'Text is too long (maximum 50,000 characters)'
-      })
-    }
-
-    // Use LanguageTool API with enhanced grammar checking
-    const languageToolUrl = process.env.LANGUAGETOOL_API_URL || 'https://api.languagetool.org/v2'
-    
-    // Enhanced parameters for better grammar detection
-    const params = new URLSearchParams({
-      text,
+    console.log('🔍 Grammar check request:', {
+      textLength: text.length,
       language,
-      enabledOnly: 'false',
-      level: 'picky',
-      enabledCategories: 'GRAMMAR,SENTENCE_WHITESPACE,MISC,COMPOUNDING,SEMANTICS,PUNCTUATION,CASING,TYPOS,CONFUSED_WORDS,LOGIC,TYPOGRAPHY,PRONOUN_AGREEMENT,SUBJECT_VERB_AGREEMENT,STYLE,COLLOQUIALISMS,REDUNDANCY,WORDINESS,CREATIVE_WRITING',
-      enabledRules: 'FRAGMENT_SENTENCE,MISSING_VERB,INCOMPLETE_SENTENCE,SENTENCE_FRAGMENT,RUN_ON_SENTENCE,COMMA_SPLICE,GRAMMAR_AGREEMENT,SUBJECT_VERB_AGREEMENT,VERB_FORM,VERB_AGREEMENT_VS_NOUN,SINGULAR_PLURAL_VERB,TENSE_AGREEMENT,VERB_TENSE,PAST_TENSE_VERB,PRESENT_TENSE_VERB,PRONOUN_AGREEMENT,PRONOUN_REFERENCE,REFLEXIVE_PRONOUN,PERSONAL_PRONOUN_AGREEMENT,ARTICLE_MISSING,DT_DT,MISSING_DETERMINER,A_VS_AN,THE_SUPERLATIVE,PREPOSITION_VERB,MISSING_PREPOSITION,WRONG_PREPOSITION,CONJUNCTION_COMMA,MISSING_CONJUNCTION,COORDINATING_CONJUNCTION,COMMA_BEFORE_CONJUNCTION,MISSING_COMMA,UNNECESSARY_COMMA,APOSTROPHE_MISSING,SENTENCE_CAPITALIZATION,PROPER_NOUN_CAPITALIZATION'
+      userId: req.user.id
     })
 
-    console.log('Checking text with enhanced sentence-level grammar rules:', text.substring(0, 100) + '...')
-    
-    const response = await axios.post<LanguageToolResponse>(
-      `${languageToolUrl}/check`,
-      params,
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        timeout: 30000, // 30 second timeout
-      }
-    )
-
-    console.log('LanguageTool response:', {
-      matchCount: response.data.matches.length,
-      matches: response.data.matches.map(m => ({
-        rule: m.rule.id,
-        category: m.rule.category.id,
-        issueType: m.rule.issueType,
-        message: m.message.substring(0, 50),
-        replacements: m.replacements.map(r => r.value),
-        offset: m.offset,
-        length: m.length,
-        context: m.context.text
-      }))
-    })
+    // Call LanguageTool API with retry logic
+    const ltResponse = await callLanguageToolAPI(text, language)
 
     // Transform LanguageTool response to our format
-    const suggestions = response.data.matches.map((match, index) => ({
+    const suggestions = ltResponse.matches.map((match: LanguageToolMatch, index: number) => ({
       id: `${match.rule.id}-${match.offset}-${index}`,
       type: getSuggestionType(match.rule.category.id, match.rule.issueType),
       message: match.message,
@@ -116,39 +185,38 @@ router.post('/check', async (req: AuthenticatedRequest, res) => {
       severity: getSeverity(match.rule.issueType),
     }))
 
-    res.status(200).json({
-      success: true,
+    const responseData = {
       suggestions,
       stats: {
         totalIssues: suggestions.length,
-        grammarIssues: suggestions.filter(s => s.type === 'grammar').length,
-        spellingIssues: suggestions.filter(s => s.type === 'spelling').length,
-        styleIssues: suggestions.filter(s => s.type === 'style').length,
-      }
-    })
-  } catch (error) {
-    console.error('Language check error:', error)
-    
-    if (axios.isAxiosError(error)) {
-      if (error.code === 'ECONNABORTED') {
-        return res.status(408).json({
-          success: false,
-          error: 'Language check service timeout'
-        })
-      }
-      
-      if (error.response?.status === 429) {
-        return res.status(429).json({
-          success: false,
-          error: 'Rate limit exceeded for language check service'
-        })
+        grammarIssues: suggestions.filter((s: any) => s.type === 'grammar').length,
+        spellingIssues: suggestions.filter((s: any) => s.type === 'spelling').length,
+        styleIssues: suggestions.filter((s: any) => s.type === 'style').length,
       }
     }
 
-    res.status(500).json({
-      success: false,
-      error: 'Failed to check text'
+    const duration = Date.now() - startTime
+    const successResponse = createSuccessResponse(responseData, duration, 'api')
+
+    console.log('✅ Grammar check complete:', {
+      suggestions: suggestions.length,
+      duration,
+      userId: req.user.id
     })
+
+    res.status(200).json(successResponse)
+
+  } catch (error) {
+    const duration = Date.now() - startTime
+    console.error('❌ Grammar check error:', error)
+    
+    if (error instanceof APIError) {
+      const errorResponse = createErrorResponse(error)
+      return res.status(error.status).json(errorResponse)
+    }
+
+    const errorResponse = createErrorResponse('Failed to check text', 'INTERNAL_ERROR')
+    res.status(500).json(errorResponse)
   }
 })
 
