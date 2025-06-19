@@ -205,13 +205,13 @@ const SentenceAnalysisPanel: React.FC<SentenceAnalysisPanelProps> = ({ text, onS
         <div className="mt-3 pt-3 border-t border-current border-opacity-20">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
             <div className="flex items-center justify-between">
-              <span>Flesch-Kincaid Grade Level: <span className="font-medium">{analysis.fleschKincaidScore}</span></span>
-              <span className="text-xs px-2 py-1 rounded bg-white dark:bg-gray-800 border">
-                {analysis.readabilityLevel}
+              <span>Flesch-Kincaid Grade Level:</span>
+              <span className="text-xs px-2 py-1 rounded bg-white dark:bg-gray-800 border font-medium">
+                {analysis.fleschKincaidScore}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span>Flesch Reading Ease: <span className="font-medium">{analysis.fleschReadingEase}</span></span>
+              <span>Flesch Reading Ease:</span>
               <span className="text-xs px-2 py-1 rounded bg-white dark:bg-gray-800 border">
                 {analysis.readingEaseLevel}
               </span>

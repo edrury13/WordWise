@@ -33,6 +33,7 @@ graph TB
     Editor --> SentencePanel[📖 Sentence Analysis<br/>Structure & Flow]
     Editor --> ReadabilityPanel[📊 Readability Analysis<br/>Flesch-Kincaid Score]
     Editor --> TonePanel[🎭 Tone Rewriting<br/>Professional/Casual/Formal]
+    Editor --> GradeLevelPanel[🎓 Grade Level Rewriting<br/>Elementary to Graduate Level]
     Editor --> SuggestionPanel[💡 Grammar Suggestions<br/>Inline Corrections]
     
     %% Backend API
@@ -48,6 +49,7 @@ graph TB
     LangRoute --> ReadabilityEndpoint["/readability<br/>Text Metrics"]
     LangRoute --> SentenceEndpoint["/sentence-analysis<br/>Structure Analysis"]
     LangRoute --> ToneEndpoint["/rewrite-tone<br/>Style Rewriting"]
+    LangRoute --> GradeLevelEndpoint["/rewrite-grade-level<br/>Reading Level Adjustment"]
     
     %% Database Layer
     API --> Supabase[(🗄️ Supabase<br/>PostgreSQL Database)]
@@ -79,6 +81,7 @@ graph TB
         F2[💾 Auto-save Documents]
         F3[📊 Readability Analysis]
         F4[🎭 Tone Rewriting]
+        F7[🎓 Grade Level Rewriting]
         F5[🔐 User Authentication]
         F6[📱 Responsive Design]
     end
@@ -96,4 +99,4 @@ graph TB
     class API,AuthRoute,DocRoute,LangRoute,GrammarEndpoint,ReadabilityEndpoint,SentenceEndpoint,ToneEndpoint backend
     class Supabase,DocsTable,AuthTable,RLS database
     class LanguageTool,OpenAI,LTService,AIService external
-    class F1,F2,F3,F4,F5,F6 features 
+    class F1,F2,F3,F4,F5,F6,F7 features 

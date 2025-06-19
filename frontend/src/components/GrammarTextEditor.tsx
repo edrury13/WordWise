@@ -8,6 +8,7 @@ import { Suggestion } from '../store/slices/suggestionSlice'
 import { analyzeSentences } from '../services/languageService'
 import SentenceAnalysisPanel from './SentenceAnalysisPanel'
 import ToneRewritePanel from './ToneRewritePanel'
+import GradeLevelRewritePanel from './GradeLevelRewritePanel'
 import toast from 'react-hot-toast'
 
 const GrammarTextEditor: React.FC = () => {
@@ -26,6 +27,7 @@ const GrammarTextEditor: React.FC = () => {
   const [sentenceAnalysisLoading, setSentenceAnalysisLoading] = useState(false)
   const [combinedSuggestions, setCombinedSuggestions] = useState<Suggestion[]>([])
   const [showToneRewritePanel, setShowToneRewritePanel] = useState(false)
+  const [showGradeLevelRewritePanel, setShowGradeLevelRewritePanel] = useState(false)
   
   // Undo functionality state
   const [lastAppliedSuggestion, setLastAppliedSuggestion] = useState<{
@@ -209,6 +211,30 @@ const GrammarTextEditor: React.FC = () => {
 
   // Handle tone rewrite
   const handleToneRewrite = useCallback((rewrittenText: string) => {
+    setContentState(rewrittenText)
+    
+    if (editorRef.current) {
+      editorRef.current.value = rewrittenText
+      editorRef.current.focus()
+    }
+    
+    // Update Redux state
+    dispatch(setContent([{
+      type: 'paragraph',
+      children: [{ text: rewrittenText }]
+    }]))
+    
+    // Update current document content
+    dispatch(updateCurrentDocumentContent(rewrittenText))
+    
+    // Trigger grammar check, sentence analysis, and auto-save
+    checkGrammar(rewrittenText)
+    checkSentenceStructure(rewrittenText)
+    autoSave(rewrittenText)
+  }, [dispatch, checkGrammar, checkSentenceStructure, autoSave])
+
+  // Handle grade level rewrite
+  const handleGradeLevelRewrite = useCallback((rewrittenText: string) => {
     setContentState(rewrittenText)
     
     if (editorRef.current) {
@@ -1225,6 +1251,20 @@ const GrammarTextEditor: React.FC = () => {
               <span>Rewrite Tone</span>
             </button>
           )}
+
+          {/* Grade Level Rewrite Button */}
+          {content.trim().length > 0 && (
+            <button
+              onClick={() => setShowGradeLevelRewritePanel(true)}
+              className="px-3 py-1 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900 dark:hover:bg-blue-800 text-blue-800 dark:text-blue-200 text-xs rounded transition-colors flex items-center space-x-1"
+              title="Adjust reading level for different audiences"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+              </svg>
+              <span>🎓 Adjust Grade Level</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1543,16 +1583,21 @@ const GrammarTextEditor: React.FC = () => {
         </>
       )}
 
-
-
-
-
       {/* Tone Rewrite Panel */}
       {showToneRewritePanel && (
         <ToneRewritePanel
           text={content}
           onRewrite={handleToneRewrite}
           onClose={() => setShowToneRewritePanel(false)}
+        />
+      )}
+
+      {/* Grade Level Rewrite Panel */}
+      {showGradeLevelRewritePanel && (
+        <GradeLevelRewritePanel
+          text={content}
+          onRewrite={handleGradeLevelRewrite}
+          onClose={() => setShowGradeLevelRewritePanel(false)}
         />
       )}
     </div>
