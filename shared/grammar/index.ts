@@ -7,5 +7,8 @@ export * from './rules'
 // Export engine
 export * from './engine'
 
+// Export enhanced patterns and validators
+export * from './enhanced-patterns'
+
 // Export convenience functions
-export { grammarEngine as defaultEngine, createGrammarEngine } from './engine' 
+export { createGrammarEngine } from './engine' 

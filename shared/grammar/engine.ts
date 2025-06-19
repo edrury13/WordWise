@@ -3,11 +3,10 @@ import {
   GrammarSuggestion, 
   RuleEngineConfig, 
   RuleEngineResult, 
-  RuleContext,
-  SuggestionType,
-  SuggestionSeverity 
+  RuleContext
 } from './types'
-import { GRAMMAR_RULES, getActiveRules, getRulesByPriority, getRulesByCategory } from './rules'
+import { GRAMMAR_RULES, getActiveRules, getRulesByPriority } from './rules'
+import { contextValidators } from './enhanced-patterns'
 
 export class GrammarRuleEngine {
   private version = '1.0.0'
@@ -25,15 +24,19 @@ export class GrammarRuleEngine {
       enabledCategories: [
         'subject-verb-agreement',
         'incomplete-sentence', 
-        'verb-form',
-        'adjective-adverb',
-        'contractions',
-        'article-usage',
-        'pronoun-agreement'
+        'adjective-adverb-confusion',
+        'commonly-confused-words',
+        'sentence-fragment',
+        'comma-usage',
+        'apostrophe-usage',
+        'redundancy'
       ],
       minConfidence: 70,
       maxSuggestions: 50,
       language: 'en-US',
+      qualityThreshold: 60,
+      prioritizeByImpact: true,
+      enableAdvancedRules: false,
       ...config
     }
   }
@@ -41,328 +44,419 @@ export class GrammarRuleEngine {
   /**
    * Main method to check text for grammar issues
    */
-  async checkText(text: string, options: Partial<RuleEngineConfig> = {}): Promise<RuleEngineResult> {
+  async checkText(text: string, config?: Partial<RuleEngineConfig>): Promise<RuleEngineResult> {
     const startTime = Date.now()
-    this.performanceStats.totalChecks++
-
-    // Merge options with default config
-    const mergedConfig = { ...this.config, ...options }
+    const mergedConfig = { ...this.config, ...config }
     
-    // Generate cache key
-    const cacheKey = this.generateCacheKey(text, mergedConfig)
+    console.log('🔍 Grammar Engine: checkText called', {
+      textLength: text.length,
+      textPreview: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+      config: mergedConfig
+    })
     
     // Check cache first
+    const cacheKey = this.generateCacheKey(text, mergedConfig)
     if (this.cache.has(cacheKey)) {
       this.performanceStats.cacheHits++
+      console.log('📋 Grammar Engine: Using cached result')
       return this.cache.get(cacheKey)!
     }
 
-    // Create rule context
+    // Get relevant rules
+    const rules = this.getRelevantRules(mergedConfig)
+    console.log('📋 Grammar Engine: Processing rules', {
+      totalRules: rules.length,
+      ruleIds: rules.map(r => r.id)
+    })
+    
     const context: RuleContext = {
-      fullText: text,
-      wordCount: text.split(/\s+/).length,
+      text,
       language: mergedConfig.language,
-      documentType: mergedConfig.documentType
+      documentType: mergedConfig.documentType,
+      userLevel: mergedConfig.userLevel
     }
 
-    // Get applicable rules
-    const applicableRules = this.getApplicableRules(mergedConfig)
+    // Process all rules
+    const allSuggestions: GrammarSuggestion[] = []
+    const categoryBreakdown: Record<string, number> = {}
     
-    // Process rules and generate suggestions
-    const suggestions: GrammarSuggestion[] = []
-    let rulesChecked = 0
-
-    for (const rule of applicableRules) {
-      try {
-        const ruleSuggestions = await this.processRule(rule, text, context)
-        suggestions.push(...ruleSuggestions)
-        rulesChecked++
-      } catch (error) {
-        console.warn(`Error processing rule ${rule.id}:`, error)
+    for (const rule of rules) {
+      const ruleSuggestions = await this.processRule(rule, context)
+      allSuggestions.push(...ruleSuggestions)
+      
+      // Update category breakdown
+      if (ruleSuggestions.length > 0) {
+        categoryBreakdown[rule.category] = (categoryBreakdown[rule.category] || 0) + ruleSuggestions.length
       }
     }
 
-    // Sort suggestions by priority and confidence
-    suggestions.sort((a, b) => {
-      // First by severity (high > medium > low)
-      const severityOrder = { high: 3, medium: 2, low: 1 }
-      const severityDiff = severityOrder[b.severity] - severityOrder[a.severity]
-      if (severityDiff !== 0) return severityDiff
-      
-      // Then by confidence
-      return b.confidence - a.confidence
-    })
-
-    // Limit suggestions
-    const limitedSuggestions = suggestions.slice(0, mergedConfig.maxSuggestions)
-
-    // Filter by minimum confidence
-    const filteredSuggestions = limitedSuggestions.filter(
-      s => s.confidence >= mergedConfig.minConfidence
+    // Filter by quality threshold
+    const qualityFilteredSuggestions = allSuggestions.filter(
+      suggestion => suggestion.confidence >= (mergedConfig.qualityThreshold || 60)
     )
 
-    const endTime = Date.now()
-    const executionTime = endTime - startTime
-    this.performanceStats.totalExecutionTime += executionTime
+    // Sort suggestions by priority, quality, and impact
+    const sortedSuggestions = this.sortSuggestions(qualityFilteredSuggestions, mergedConfig)
+
+    // Limit results
+    const finalSuggestions = sortedSuggestions.slice(0, mergedConfig.maxSuggestions)
+
+    // Calculate quality statistics
+    const qualityStats = this.calculateQualityStats(finalSuggestions)
 
     const result: RuleEngineResult = {
-      suggestions: filteredSuggestions,
-      stats: {
-        rulesChecked,
-        suggestionsFound: filteredSuggestions.length,
-        executionTime
-      },
-      metadata: {
-        version: this.version,
-        source: 'client',
-        language: mergedConfig.language
-      }
+      suggestions: finalSuggestions,
+      totalRulesProcessed: rules.length,
+      executionTime: Date.now() - startTime,
+      qualityStats,
+      categoryBreakdown: categoryBreakdown as Record<any, number>
     }
 
     // Cache result
     this.cache.set(cacheKey, result)
     
+    // Update performance stats
+    this.performanceStats.totalChecks++
+    this.performanceStats.totalExecutionTime += result.executionTime
+
+    console.log('✅ Grammar Engine: checkText complete', {
+      suggestionsFound: result.suggestions.length,
+      executionTime: result.executionTime,
+      rulesProcessed: result.totalRulesProcessed,
+      categoryBreakdown: result.categoryBreakdown
+    })
+
     return result
   }
 
   /**
-   * Process a single rule against text
+   * Process a single rule against text with enhanced quality scoring
    */
   private async processRule(
     rule: GrammarRule,
-    text: string,
     context: RuleContext
   ): Promise<GrammarSuggestion[]> {
-    const startTime = Date.now()
     const suggestions: GrammarSuggestion[] = []
-
-    try {
-      // Track performance for this rule
-      if (!this.performanceStats.rulePerfStats.has(rule.id)) {
-        this.performanceStats.rulePerfStats.set(rule.id, { calls: 0, totalTime: 0 })
-      }
-      const ruleStats = this.performanceStats.rulePerfStats.get(rule.id)!
-      ruleStats.calls++
-
-      let match: RegExpMatchArray | null
-      const regex = new RegExp(rule.pattern.source, rule.pattern.flags)
+    let match: RegExpExecArray | null
+    
+    // Reset regex state
+    rule.pattern.lastIndex = 0
+    
+    while ((match = rule.pattern.exec(context.text)) !== null) {
+      const matchText = match[0]
+      const offset = match.index ?? 0 // Handle undefined case with nullish coalescing
       
-      while ((match = regex.exec(text)) !== null) {
-        // Check rule conditions if any
-        if (rule.conditions && !this.checkRuleConditions(rule, text, match, context)) {
-          continue
-        }
-
-        const matchText = match[0]
-        const matchOffset = match.index
-
-        // Generate replacements
-        let replacements: string[]
+      // Enhanced context for this specific match
+      const matchContext: RuleContext = {
+        ...context,
+        precedingText: context.text.substring(Math.max(0, offset - 50), offset),
+        followingText: context.text.substring(offset + matchText.length, Math.min(context.text.length, offset + matchText.length + 50))
+      }
+      
+      // Calculate quality score using enhanced factors
+      const qualityScore = this.calculateQualityScore(rule, matchContext, matchText)
+      
+      // Apply quality threshold with rule-specific adjustments
+      const effectiveThreshold = (this.config.qualityThreshold || 60) * (rule.priority / 100)
+      if (qualityScore < effectiveThreshold) {
+        console.log(`🔍 Grammar Engine: Rule ${rule.id} suggestion below threshold`, {
+          quality: qualityScore,
+          threshold: effectiveThreshold,
+          match: matchText.substring(0, 30) + (matchText.length > 30 ? '...' : '')
+        })
+        continue
+      }
+      
+      // Generate replacements using the rule's replacement function
+      let replacements: string[] = []
+      if (rule.replacement) {
         try {
           const replacement = rule.replacement(matchText, match.slice(1))
-          replacements = Array.isArray(replacement) ? replacement : [replacement]
+          if (replacement && replacement !== matchText) {
+            replacements = Array.isArray(replacement) ? replacement : [replacement]
+          }
         } catch (error) {
-          console.warn(`Error generating replacement for rule ${rule.id}:`, error)
-          continue
+          console.warn(`⚠️ Grammar Engine: Error generating replacement for rule ${rule.id}:`, error)
         }
-
-        // Calculate confidence based on rule priority and other factors
-        const confidence = this.calculateConfidence(rule, matchText, context)
-
-        // Create suggestion
-        const suggestion: GrammarSuggestion = {
-          id: `${rule.id}-${matchOffset}-${Date.now()}`,
-          ruleId: rule.id,
-          type: rule.type,
-          message: rule.message,
-          replacements,
-          offset: matchOffset,
-          length: matchText.length,
-          context: this.getContextSnippet(text, matchOffset, matchText.length),
-          explanation: rule.description || rule.message,
-          category: rule.category,
-          severity: rule.severity,
-          confidence,
-          source: 'client'
-        }
-
-        suggestions.push(suggestion)
-
-        // Prevent infinite loops with global regex
-        if (!rule.pattern.global) break
       }
-
-      const endTime = Date.now()
-      ruleStats.totalTime += endTime - startTime
-
-    } catch (error) {
-      console.error(`Error processing rule ${rule.id}:`, error)
+      
+      // Enhanced validation of replacements
+      if (replacements.length > 0) {
+        replacements = replacements.filter(replacement => {
+          // Basic validation
+          if (!contextValidators.validateSentenceStructure(context.text, replacement, offset, matchText.length)) {
+            return false
+          }
+          
+          // Tense consistency validation
+          if (!contextValidators.validateTenseConsistency(matchContext, replacement)) {
+            return false
+          }
+          
+          return true
+        })
+      }
+      
+      // Skip if no valid replacements
+      if (replacements.length === 0) {
+        console.log(`🔍 Grammar Engine: No valid replacements for rule ${rule.id}`, {
+          match: matchText.substring(0, 30) + (matchText.length > 30 ? '...' : '')
+        })
+        continue
+      }
+      
+      // Create suggestion with enhanced metadata
+      const suggestion: GrammarSuggestion = {
+        id: `${rule.id}-${offset}-${Date.now()}`,
+        type: rule.type,
+        message: rule.message,
+        replacements: replacements.slice(0, 3), // Limit to top 3 replacements
+        offset,
+        length: matchText.length,
+        context: matchText,
+        explanation: rule.examples?.[0]?.explanation || rule.message,
+        category: rule.category,
+        subcategory: rule.subcategory,
+        severity: rule.severity,
+        confidence: Math.round(qualityScore),
+        ruleId: rule.id,
+        rulePriority: rule.priority,
+        qualityFactors: rule.qualityFactors?.map(factor => ({
+          name: factor.name,
+          score: Math.round(factor.calculator(matchContext, matchText)),
+          weight: factor.weight
+        })) || [],
+        impactAnalysis: this.analyzeImpact(rule, matchText, replacements[0]),
+        tags: rule.tags || []
+      }
+      
+      suggestions.push(suggestion)
+      
+      // Prevent infinite loops for global patterns
+      if (!rule.pattern.global) break
+      if (rule.pattern.lastIndex === (match.index ?? 0)) {
+        rule.pattern.lastIndex++
+      }
     }
-
+    
     return suggestions
   }
 
   /**
-   * Check if rule conditions are met
+   * Calculate enhanced quality score using multiple factors
    */
-  private checkRuleConditions(
+  private calculateQualityScore(
     rule: GrammarRule,
-    text: string,
-    match: RegExpMatchArray,
-    context: RuleContext
-  ): boolean {
-    if (!rule.conditions) return true
+    context: RuleContext,
+    matchText: string
+  ): number {
+    if (!rule.qualityFactors || rule.qualityFactors.length === 0) {
+      return rule.baseQualityScore || 80 // Default score if no factors
+    }
+    
+    let totalScore = 0
+    let totalWeight = 0
+    
+    for (const factor of rule.qualityFactors) {
+      const score = factor.calculator(context, matchText)
+      totalScore += score * factor.weight
+      totalWeight += factor.weight
+    }
+    
+    const weightedAverage = totalWeight > 0 ? totalScore / totalWeight : 0
+    
+    // Combine with base score
+    const finalScore = (rule.baseQualityScore || 80) * 0.5 + weightedAverage * 0.5
+    
+    return Math.min(100, Math.max(0, finalScore))
+  }
 
-    return rule.conditions.every(condition => {
-      try {
-        return condition.check(text, match, context)
-      } catch (error) {
-        console.warn(`Error checking condition for rule ${rule.id}:`, error)
-        return false
+  /**
+   * Provides a structured analysis of a suggestion's impact on the text.
+   */
+  private analyzeImpact(
+    rule: GrammarRule,
+    _original: string,
+    _replacement: string
+  ): {
+    correctness: 'fixes' | 'improves' | 'neutral'
+    clarity: 'improves' | 'neutral' | 'degrades'
+    readability: 'improves' | 'neutral' | 'degrades'
+    engagement: 'improves' | 'neutral' | 'degrades'
+    formality: 'increases' | 'neutral' | 'decreases'
+  } {
+    // Default impact based on rule severity and type
+    const correctness = rule.severity === 'critical' ? 'fixes' : 'improves'
+    let clarity: 'improves' | 'neutral' | 'degrades' = 'neutral'
+    let readability: 'improves' | 'neutral' | 'degrades' = 'neutral'
+    
+    if (rule.category.includes('clarity') || rule.category.includes('conciseness')) {
+      clarity = 'improves'
+    }
+    if (rule.category.includes('readability') || rule.category.includes('sentence-structure')) {
+      readability = 'improves'
+    }
+
+    return {
+      correctness,
+      clarity,
+      readability,
+      engagement: 'neutral', // Requires deeper semantic analysis
+      formality: 'neutral' // Requires deeper stylistic analysis
+    }
+  }
+
+  /**
+   * Sorts suggestions based on configured priority
+   */
+  private sortSuggestions(
+    suggestions: GrammarSuggestion[],
+    config: RuleEngineConfig
+  ): GrammarSuggestion[] {
+    return suggestions.sort((a, b) => {
+      // Primary sort: priority
+      const priorityDiff = b.rulePriority - a.rulePriority
+      if (priorityDiff !== 0) return priorityDiff
+      
+      // Secondary sort: quality/confidence
+      const qualityDiff = b.confidence - a.confidence
+      if (qualityDiff !== 0) return qualityDiff
+      
+      // Tertiary sort: impact score
+      if (config.prioritizeByImpact) {
+        const impactScoreA = this.calculateImpactScore(a.impactAnalysis)
+        const impactScoreB = this.calculateImpactScore(b.impactAnalysis)
+        const impactDiff = impactScoreB - impactScoreA
+        if (impactDiff !== 0) return impactDiff
       }
+      
+      // Final sort: position in text
+      return a.offset - b.offset
     })
   }
-
-  /**
-   * Calculate confidence score for a suggestion
-   */
-  private calculateConfidence(
-    rule: GrammarRule,
-    matchText: string,
-    context: RuleContext
-  ): number {
-    let baseConfidence = 85 // Base confidence
-
-    // Adjust based on rule priority
-    baseConfidence += (rule.priority - 50) * 0.3
-
-    // Adjust based on match length (longer matches often more reliable)
-    if (matchText.length > 10) baseConfidence += 5
-    if (matchText.length < 3) baseConfidence -= 10
-
-    // Adjust based on context
-    if (context.wordCount < 10) baseConfidence -= 5 // Very short texts less reliable
-
-    // Ensure confidence is within bounds
-    return Math.max(0, Math.min(100, Math.round(baseConfidence)))
-  }
-
-  /**
-   * Get context snippet around a match
-   */
-  private getContextSnippet(text: string, offset: number, length: number): string {
-    const contextRadius = 30
-    const start = Math.max(0, offset - contextRadius)
-    const end = Math.min(text.length, offset + length + contextRadius)
+  
+  private calculateImpactScore(impact?: {
+    correctness: 'fixes' | 'improves' | 'neutral'
+    clarity: 'improves' | 'neutral' | 'degrades'
+    readability: 'improves' | 'neutral' | 'degrades'
+    engagement: 'improves' | 'neutral' | 'degrades'
+    formality: 'increases' | 'neutral' | 'decreases'
+  }): number {
+    if (!impact) return 0
+    let score = 0
     
-    let snippet = text.substring(start, end)
-    
-    // Add ellipsis if truncated
-    if (start > 0) snippet = '...' + snippet
-    if (end < text.length) snippet = snippet + '...'
-    
-    return snippet
-  }
-
-  /**
-   * Get applicable rules based on configuration
-   */
-  private getApplicableRules(config: RuleEngineConfig): GrammarRule[] {
-    let rules = getActiveRules()
-
-    // Filter by enabled categories
-    if (config.enabledCategories.length > 0) {
-      rules = rules.filter(rule => config.enabledCategories.includes(rule.category))
+    // Define weights for each impact category
+    const weights = {
+      correctness: { fixes: 5, improves: 3, neutral: 0 },
+      clarity: { improves: 2, neutral: 0, degrades: -2 },
+      readability: { improves: 2, neutral: 0, degrades: -2 },
+      engagement: { improves: 1, neutral: 0, degrades: -1 },
+      formality: { increases: 1, neutral: 0, decreases: -1 }
     }
-
-    // Sort by priority
-    return rules.sort((a, b) => b.priority - a.priority)
+    
+    score += weights.correctness[impact.correctness] || 0
+    score += weights.clarity[impact.clarity] || 0
+    score += weights.readability[impact.readability] || 0
+    score += weights.engagement[impact.engagement] || 0
+    score += weights.formality[impact.formality] || 0
+    
+    return score
   }
 
-  /**
-   * Generate cache key for a text/config combination
-   */
+  private calculateQualityStats(suggestions: GrammarSuggestion[]) {
+    if (suggestions.length === 0) {
+      return {
+        averageConfidence: 0,
+        confidenceDistribution: {},
+        topProblematicRules: []
+      }
+    }
+    
+    const avgConfidence = suggestions.reduce((acc, s) => acc + s.confidence, 0) / suggestions.length
+    
+    const confidenceDist = suggestions.reduce((acc, s) => {
+      const bucket = Math.floor(s.confidence / 10) * 10
+      acc[bucket] = (acc[bucket] || 0) + 1
+      return acc
+    }, {} as Record<number, number>)
+    
+    const ruleCounts = suggestions.reduce((acc, s) => {
+      acc[s.ruleId] = (acc[s.ruleId] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+    
+    const topRules = Object.entries(ruleCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([ruleId, count]) => ({ ruleId, count }))
+      
+    return {
+      averageConfidence: Math.round(avgConfidence),
+      confidenceDistribution: confidenceDist,
+      topProblematicRules: topRules
+    }
+  }
+
+  private getRelevantRules(config: RuleEngineConfig): GrammarRule[] {
+    const activeRules = getActiveRules(config.enabledCategories || [])
+    
+    if (config.enableAdvancedRules) {
+      // Logic to potentially add more complex or experimental rules
+      // For now, this just returns all active rules
+    }
+    
+    if (config.prioritizeByImpact) {
+      return getRulesByPriority(activeRules)
+    }
+    
+    return activeRules
+  }
+
   private generateCacheKey(text: string, config: RuleEngineConfig): string {
-    const textHash = this.simpleHash(text)
-    const configHash = this.simpleHash(JSON.stringify(config))
-    return `${textHash}-${configHash}`
+    const configString = JSON.stringify(Object.entries(config).sort())
+    // Basic hash function (not for crypto, just for cache keys)
+    const hash = text.split('').reduce((acc, char) => {
+      acc = ((acc << 5) - acc) + char.charCodeAt(0)
+      return acc & acc
+    }, 0)
+    
+    return `${hash}-${text.length}-${configString}`
   }
 
-  /**
-   * Simple hash function for cache keys
-   */
-  private simpleHash(str: string): string {
-    let hash = 0
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i)
-      hash = ((hash << 5) - hash) + char
-      hash = hash & hash // Convert to 32-bit integer
-    }
-    return Math.abs(hash).toString(36)
-  }
-
-  /**
-   * Get performance statistics
-   */
-  public getPerformanceStats() {
+  getPerformanceStats() {
     return {
       ...this.performanceStats,
       averageExecutionTime: this.performanceStats.totalChecks > 0 
-        ? this.performanceStats.totalExecutionTime / this.performanceStats.totalChecks 
+        ? this.performanceStats.totalExecutionTime / this.performanceStats.totalChecks
         : 0,
-      cacheHitRate: this.performanceStats.totalChecks > 0
-        ? this.performanceStats.cacheHits / this.performanceStats.totalChecks
-        : 0
+      rulePerformance: Array.from(this.performanceStats.rulePerfStats.entries()).map(([id, stats]) => ({
+        id,
+        ...stats,
+        averageTime: stats.calls > 0 ? stats.totalTime / stats.calls : 0
+      })).sort((a, b) => b.totalTime - a.totalTime)
     }
   }
 
-  /**
-   * Clear cache
-   */
-  public clearCache(): void {
+  clearCache() {
     this.cache.clear()
+    console.log('🧹 Grammar Engine: Cache cleared')
   }
 
-  /**
-   * Get rule by ID
-   */
-  public getRuleById(id: string): GrammarRule | undefined {
-    return GRAMMAR_RULES.find(rule => rule.id === id)
-  }
-
-  /**
-   * Enable/disable a rule
-   */
-  public setRuleEnabled(ruleId: string, enabled: boolean): boolean {
-    const rule = this.getRuleById(ruleId)
-    if (rule) {
-      rule.enabled = enabled
-      this.clearCache() // Clear cache when rules change
-      return true
+  getEngineInfo() {
+    return {
+      version: this.version,
+      config: this.config,
+      totalRulesAvailable: GRAMMAR_RULES.length,
+      activeCategories: this.config.enabledCategories
     }
-    return false
-  }
-
-  /**
-   * Get rules by category
-   */
-  public getRulesByCategory(category: string): GrammarRule[] {
-    return getRulesByCategory(category)
-  }
-
-  /**
-   * Update configuration
-   */
-  public updateConfig(config: Partial<RuleEngineConfig>): void {
-    this.config = { ...this.config, ...config }
-    this.clearCache() // Clear cache when config changes
   }
 }
 
-// Export singleton instance for easy use
-export const grammarEngine = new GrammarRuleEngine()
-
-// Export factory function for custom configurations
+/**
+ * Factory function to create a new instance of the grammar engine.
+ * @param config - Initial configuration for the engine.
+ * @returns A new GrammarRuleEngine instance.
+ */
 export function createGrammarEngine(config?: Partial<RuleEngineConfig>): GrammarRuleEngine {
   return new GrammarRuleEngine(config)
-} 
+}

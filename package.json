@@ -28,6 +28,7 @@
   },
   "workspaces": [
     "frontend",
-    "api"
+    "backend",
+    "shared/grammar"
   ]
 }
