@@ -246,19 +246,7 @@ const grammarCache = new IntelligentCache<{ suggestions: Suggestion[], apiStatus
 const readabilityCache = new IntelligentCache<ReadabilityScore>(30, 30 * 60 * 1000) // 30 minutes
 const sentenceCache = new IntelligentCache<any>(25, 20 * 60 * 1000) // 20 minutes
 
-// Standardized API response format
-interface APIResponse<T> {
-  success: boolean
-  data?: T
-  error?: string
-  timestamp: number
-  source: 'api' | 'cache' | 'fallback'
-  performance?: {
-    duration: number
-    cacheHit: boolean
-    fuzzyMatch?: boolean
-  }
-}
+// Note: APIResponse interface removed as it's not currently used
 
 // Enhanced rate limiter with exponential backoff
 class AdvancedRateLimiter {
@@ -943,7 +931,7 @@ export const analyzeSentences = async (text: string) => {
     await sentenceRateLimiter.throttle()
 
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    const { data: { session } } = await supabase.auth.getSession()
     const token = session?.access_token
 
     if (!token) {
@@ -1310,33 +1298,8 @@ export const clearCacheByType = (type: 'grammar' | 'readability' | 'sentence') =
   }
 }
 
-// Standardized API response wrapper
-function createStandardResponse<T>(
-  data: T, 
-  source: 'api' | 'cache' | 'fallback', 
-  performance?: { duration: number, cacheHit: boolean, fuzzyMatch?: boolean }
-): APIResponse<T> {
-  return {
-    success: true,
-    data,
-    timestamp: Date.now(),
-    source,
-    performance
-  }
-}
-
-function createErrorResponse(
-  error: APIError | Error | string,
-  source: 'api' | 'cache' | 'fallback' = 'api'
-): APIResponse<never> {
-  const errorMessage = error instanceof Error ? error.message : String(error)
-  return {
-    success: false,
-    error: errorMessage,
-    timestamp: Date.now(),
-    source
-  }
-}
+// Note: Standardized API response functions and interface removed to fix TypeScript build errors
+// They can be re-added when needed for future API consistency improvements
 
 // Enhanced validation utilities
 export const validateTextInput = (text: string, maxLength: number = 50000): void => {
@@ -1461,7 +1424,7 @@ export const performHealthCheck = async (): Promise<{
   try {
     // Test LanguageTool API
     const testStart = Date.now()
-    const testResponse = await axios.post('https://api.languagetool.org/v2/check', 
+    await axios.post('https://api.languagetool.org/v2/check', 
       new URLSearchParams({ text: 'Test sentence.', language: 'en-US' }), 
       { timeout: 5000, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
     )
