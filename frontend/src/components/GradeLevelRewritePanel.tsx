@@ -22,8 +22,7 @@ import {
   selectRewriteHistoryStats,
   selectPerformanceMetrics,
   selectCacheStats,
-  selectIsRateLimited,
-  type GradeLevelRewriteResult
+  selectIsRateLimited
 } from '../store/slices/editorSlice'
 import type { AppDispatch, RootState } from '../store'
 import type { ReadabilityScore } from '../store/slices/suggestionSlice'
@@ -38,7 +37,6 @@ const GradeLevelRewritePanel: React.FC<GradeLevelRewritePanelProps> = ({ text, o
   const dispatch = useDispatch<AppDispatch>()
   
   // Redux state
-  const gradeLevelState = useSelector(selectGradeLevelRewriteState)
   const isRewriting = useSelector(selectIsRewriting)
   const lastRewriteResult = useSelector(selectLastRewriteResult)
   const rewriteError = useSelector(selectRewriteError)
@@ -61,7 +59,6 @@ const GradeLevelRewritePanel: React.FC<GradeLevelRewritePanelProps> = ({ text, o
   // Sync local state with Redux state
   const selectedGradeLevel = targetGradeLevel || 'elementary'
   const rewrittenText = lastRewriteResult?.rewrittenText || ''
-  const showComparison = !!lastRewriteResult
   const loading = isRewriting
   const error = rewriteError
   

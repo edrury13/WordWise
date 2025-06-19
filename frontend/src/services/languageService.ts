@@ -1033,7 +1033,7 @@ interface PendingRequest {
 
 class GradeLevelRewriteOptimizer {
   private pendingRequests: Map<string, PendingRequest[]> = new Map()
-  private requestDedupeWindow = 1000 // 1 second window for deduplication
+  // private requestDedupeWindow = 1000 // 1 second window for deduplication
   
   private generateRequestKey(text: string, gradeLevel: string): string {
     // Create a shorter hash for deduplication

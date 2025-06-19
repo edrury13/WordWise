@@ -233,12 +233,11 @@ export const performGradeLevelRewriteOptimized = createAsyncThunk(
   async ({ 
     text, 
     gradeLevel, 
-    currentContent,
     priority = 'normal' as 'high' | 'normal' | 'low'
   }: { 
     text: string
     gradeLevel: string
-    currentContent: any[]
+    currentContent?: any[]
     priority?: 'high' | 'normal' | 'low'
   }, { getState, dispatch, rejectWithValue }) => {
     const state = getState() as { editor: EditorState }
@@ -381,7 +380,8 @@ export const performGradeLevelRewriteDebounced = createAsyncThunk(
     // Set new debounce timer
     const timerId = window.setTimeout(() => {
       dispatch(performGradeLevelRewriteOptimized({
-        ...params,
+        text: params.text,
+        gradeLevel: params.gradeLevel,
         priority: 'low' // Preview requests have low priority
       }))
     }, debounceMs)
@@ -414,7 +414,6 @@ export const processRetryQueue = createAsyncThunk(
         await dispatch(performGradeLevelRewriteOptimized({
           text: retryItem.text,
           gradeLevel: retryItem.gradeLevel,
-          currentContent: [], // We don't have current content in retry
           priority: 'high' // Retry requests get high priority
         })).unwrap()
         
@@ -873,19 +872,19 @@ const editorSlice = createSlice({
       })
       
       // Debounced Grade Level Rewrite
-      .addCase(performGradeLevelRewriteDebounced.pending, (state) => {
+      .addCase(performGradeLevelRewriteDebounced.pending, () => {
         // Don't set loading state for debounced requests to avoid UI flicker
         console.log('⏳ Redux: Debounced grade level rewrite scheduled')
       })
-      .addCase(performGradeLevelRewriteDebounced.fulfilled, (state) => {
+      .addCase(performGradeLevelRewriteDebounced.fulfilled, () => {
         console.log('✅ Redux: Debounced grade level rewrite scheduled successfully')
       })
-      .addCase(performGradeLevelRewriteDebounced.rejected, (state, action) => {
+      .addCase(performGradeLevelRewriteDebounced.rejected, (_, action) => {
         console.error('❌ Redux: Debounced grade level rewrite failed:', action.error.message)
       })
       
       // Retry Queue Processing
-      .addCase(processRetryQueue.fulfilled, (state, action) => {
+      .addCase(processRetryQueue.fulfilled, (_, action) => {
         console.log(`✅ Redux: Processed ${action.payload.processed} retry requests`)
       })
   },
