@@ -7,6 +7,7 @@ import { fetchDocuments, deleteDocument, createDocument } from '../store/slices/
 import { logoutUser } from '../store/slices/authSlice'
 import { toggleDarkMode } from '../store/slices/editorSlice'
 import LoadingSpinner from '../components/LoadingSpinner'
+import Navigation from '../components/Navigation'
 import toast from 'react-hot-toast'
 
 const Dashboard: React.FC = () => {
@@ -68,7 +69,7 @@ const Dashboard: React.FC = () => {
   const handleLogout = async () => {
     try {
       await dispatch(logoutUser())
-      navigate('/login')
+      navigate('/')
       toast.success('Logged out successfully!')
     } catch (error) {
       toast.error('Failed to logout')
@@ -176,48 +177,8 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-cream dark:bg-gray-900">
-      {/* Academic Header */}
-      <header className="bg-white dark:bg-gray-800 border-b-4 border-navy dark:border-blue-600 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-navy rounded-full flex items-center justify-center">
-                <span className="text-white font-bold text-xl academic-serif">W</span>
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold academic-serif text-navy dark:text-blue-400">
-                  Research Dashboard
-                </h1>
-                <p className="text-academic-gray dark:text-gray-300 academic-sans">
-                  {user?.email} • Academic Writing Environment
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-6">
-              <button
-                onClick={() => dispatch(toggleDarkMode())}
-                className="p-2 text-navy dark:text-blue-400 hover:text-burgundy dark:hover:text-blue-300 transition-colors"
-              >
-                {isDarkMode ? (
-                  <Sun className="h-5 w-5" />
-                ) : (
-                  <Moon className="h-5 w-5" />
-                )}
-              </button>
-              
-              <button
-                onClick={handleLogout}
-                className="flex items-center space-x-2 px-4 py-2 text-navy dark:text-blue-400 hover:text-burgundy dark:hover:text-blue-300 transition-colors academic-sans font-medium"
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Sign Out</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
+      <Navigation />
+      
       {/* Main Content - Academic Layout */}
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Research Overview */}

@@ -7,6 +7,7 @@ import { initializeDarkMode } from './store/slices/editorSlice'
 import { RootState, AppDispatch } from './store'
 
 // Components
+import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import EmailConfirmationPage from './pages/EmailConfirmationPage'
@@ -16,6 +17,7 @@ import LoadingSpinner from './components/LoadingSpinner'
 import ProtectedRoute from './components/ProtectedRoute'
 import GrammarTestPanel from './components/GrammarTestPanel'
 import AuthDebug from './components/AuthDebug'
+import Navigation from './components/Navigation'
 
 function App() {
   const dispatch = useDispatch<AppDispatch>()
@@ -125,11 +127,11 @@ function App() {
           element={<AuthDebug />} 
         />
 
-        {/* Redirect root to appropriate page */}
+        {/* Landing page for unauthenticated users, dashboard for authenticated */}
         <Route 
           path="/" 
           element={
-            <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+            isAuthenticated ? <Navigate to="/dashboard" replace /> : <LandingPage />
           } 
         />
 

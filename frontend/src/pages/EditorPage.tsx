@@ -6,6 +6,8 @@ import { fetchDocument, createDocument, updateDocument } from '../store/slices/d
 import { setLastSaved } from '../store/slices/editorSlice'
 import GrammarTextEditor from '../components/GrammarTextEditor'
 import LoadingSpinner from '../components/LoadingSpinner'
+import Breadcrumb from '../components/Breadcrumb'
+import Navigation from '../components/Navigation'
 
 const EditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -132,30 +134,26 @@ const EditorPage: React.FC = () => {
 
   return (
     <div className="h-screen flex flex-col bg-cream dark:bg-gray-900">
+      {/* Navigation with save functionality */}
+      <Navigation 
+        onSave={handleSaveDocument}
+        isSaving={saving}
+        showSaveButton={true}
+      />
       {/* Academic Header */}
       <div className="bg-white dark:bg-gray-800 border-b-4 border-navy dark:border-blue-600 shadow-sm flex-shrink-0">
         <div className="w-full px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
-            {/* Left side - Back button and branding */}
+            {/* Left side - Breadcrumb navigation */}
             <div className="flex items-center space-x-4">
-              <button
-                onClick={() => navigateRef.current('/dashboard')}
-                className="text-navy dark:text-blue-400 hover:text-burgundy dark:hover:text-blue-300 transition-colors"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-navy dark:bg-blue-600 rounded-full flex items-center justify-center">
-                  <span className="text-white font-bold text-lg academic-serif">W</span>
-                </div>
-                <div>
-                  <h1 className="text-lg font-bold academic-serif text-navy dark:text-blue-400">Academic Editor</h1>
-                  <p className="text-xs text-academic-gray dark:text-gray-300 academic-sans">Research Writing Environment</p>
-                </div>
-              </div>
+              <Breadcrumb 
+                items={[
+                  {
+                    label: currentDocument?.title || documentTitle || 'Untitled Document',
+                    current: true
+                  }
+                ]}
+              />
             </div>
             
             {/* Center - Document Title */}

@@ -4,9 +4,9 @@ import GrammarDemo from '../components/GrammarDemo'
 
 const LandingPage: React.FC = () => {
   return (
-    <div className="min-h-screen bg-cream dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-900 dark:to-gray-800">
       {/* Academic Header */}
-      <header className="bg-white border-b-4 border-navy shadow-sm">
+      <header className="bg-white dark:bg-gray-800 border-b-4 border-navy dark:border-blue-600 shadow-sm">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -14,12 +14,12 @@ const LandingPage: React.FC = () => {
                 <span className="text-white font-bold text-xl academic-serif">W</span>
               </div>
               <div>
-                <h1 className="text-2xl font-bold academic-serif text-navy">WordWise</h1>
-                <p className="text-sm text-academic-gray academic-sans">Advanced Academic Writing Assistant</p>
+                <h1 className="text-2xl font-bold academic-serif text-navy dark:text-blue-400">WordWise</h1>
+                <p className="text-sm text-gray-700 dark:text-gray-300 academic-sans">Advanced Academic Writing Assistant</p>
               </div>
             </div>
             <nav className="hidden md:flex space-x-6">
-              <Link to="/login" className="text-navy hover:text-burgundy transition-colors academic-sans font-medium">Sign In</Link>
+              <Link to="/login" className="text-navy dark:text-blue-400 hover:text-burgundy dark:hover:text-blue-300 transition-colors academic-sans font-medium">Sign In</Link>
               <Link to="/register" className="btn btn-primary px-6 py-2">Get Started</Link>
             </nav>
           </div>
@@ -29,13 +29,13 @@ const LandingPage: React.FC = () => {
       <div className="container mx-auto px-6 py-16">
         {/* Hero Section - Academic Style */}
         <div className="text-center mb-20">
-          <h1 className="text-6xl font-bold academic-serif text-navy mb-6 leading-tight">
+          <h1 className="text-6xl font-bold academic-serif text-navy dark:text-white mb-6 leading-tight">
             WordWise
           </h1>
-          <h2 className="text-2xl academic-serif text-burgundy mb-8 font-semibold">
+          <h2 className="text-2xl academic-serif text-burgundy dark:text-red-400 mb-8 font-semibold">
             Advanced Academic Writing Assistant
           </h2>
-          <p className="text-xl text-academic-gray mb-12 max-w-4xl mx-auto academic-sans leading-relaxed">
+          <p className="text-xl text-gray-700 dark:text-gray-300 mb-12 max-w-4xl mx-auto academic-sans leading-relaxed">
             Enhance scholarly communication with AI-powered grammar analysis, style refinement, 
             and readability assessment. Designed for researchers, academics, and professional writers 
             who demand precision in their written work.
@@ -59,10 +59,10 @@ const LandingPage: React.FC = () => {
         {/* Interactive Demo Section - Academic Style */}
         <div className="mb-20">
           <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold academic-serif text-navy mb-6">
+            <h2 className="text-4xl font-bold academic-serif text-navy dark:text-white mb-6">
               Try Our Academic Writing Analysis Tool
             </h2>
-            <p className="text-lg text-academic-gray academic-sans max-w-3xl mx-auto">
+            <p className="text-lg text-gray-700 dark:text-gray-300 academic-sans max-w-3xl mx-auto">
               Experience WordWise's research-grade grammar analysis and scholarly writing enhancement 
               without creating an account. Test with your own academic text.
             </p>
@@ -75,10 +75,10 @@ const LandingPage: React.FC = () => {
         {/* Research-Backed Benefits Section */}
         <div className="mb-20">
           <div className="text-center mb-12">
-            <h2 className="text-4xl font-bold academic-serif text-navy mb-4">
+            <h2 className="text-4xl font-bold academic-serif text-navy dark:text-white mb-4">
               Research-Backed Writing Enhancement
             </h2>
-            <p className="text-lg text-academic-gray academic-sans max-w-3xl mx-auto">
+            <p className="text-lg text-gray-700 dark:text-gray-300 academic-sans max-w-3xl mx-auto">
               Our tools are grounded in linguistic research and academic writing best practices
             </p>
           </div>
@@ -91,7 +91,7 @@ const LandingPage: React.FC = () => {
               <h3 className="text-xl font-semibold mb-3 academic-serif text-navy">
                 Advanced Grammar Analysis
               </h3>
-              <p className="text-academic-gray academic-sans leading-relaxed">
+              <p className="text-gray-700 academic-sans leading-relaxed">
                 Sophisticated linguistic analysis powered by computational linguistics research, 
                 identifying complex grammatical structures and academic writing conventions.
               </p>
@@ -104,7 +104,7 @@ const LandingPage: React.FC = () => {
               <h3 className="text-xl font-semibold mb-3 academic-serif text-navy">
                 Scholarly Readability Metrics
               </h3>
-              <p className="text-academic-gray academic-sans leading-relaxed">
+              <p className="text-gray-700 academic-sans leading-relaxed">
                 Comprehensive readability assessment using Flesch-Kincaid analysis, 
                 sentence complexity evaluation, and academic discourse patterns.
               </p>
@@ -117,7 +117,7 @@ const LandingPage: React.FC = () => {
               <h3 className="text-xl font-semibold mb-3 academic-serif text-navy">
                 Academic Tone Detection
               </h3>
-              <p className="text-academic-gray academic-sans leading-relaxed">
+              <p className="text-gray-700 academic-sans leading-relaxed">
                 Intelligent analysis of academic register, formality levels, 
                 and disciplinary writing conventions for scholarly communication.
               </p>
@@ -130,7 +130,7 @@ const LandingPage: React.FC = () => {
               <h3 className="text-xl font-semibold mb-3 academic-serif text-navy">
                 Research Document Library
               </h3>
-              <p className="text-academic-gray academic-sans leading-relaxed">
+              <p className="text-gray-700 academic-sans leading-relaxed">
                 Secure cloud storage with version control, collaborative features, 
                 and institutional-grade data protection for your research documents.
               </p>
@@ -143,7 +143,7 @@ const LandingPage: React.FC = () => {
               <h3 className="text-xl font-semibold mb-3 academic-serif text-navy">
                 Style Guide Compliance
               </h3>
-              <p className="text-academic-gray academic-sans leading-relaxed">
+              <p className="text-gray-700 academic-sans leading-relaxed">
                 Automated checking for major academic style guides including APA, MLA, 
                 Chicago, and institutional formatting requirements.
               </p>
@@ -156,7 +156,7 @@ const LandingPage: React.FC = () => {
               <h3 className="text-xl font-semibold mb-3 academic-serif text-navy">
                 Research Data Security
               </h3>
-              <p className="text-academic-gray academic-sans leading-relaxed">
+              <p className="text-gray-700 academic-sans leading-relaxed">
                 Enterprise-level encryption and privacy protection designed for 
                 sensitive academic research and institutional compliance requirements.
               </p>
@@ -169,7 +169,7 @@ const LandingPage: React.FC = () => {
           <h2 className="text-4xl font-bold academic-serif text-navy mb-6">
             Advance Your Academic Writing
           </h2>
-          <p className="text-xl text-academic-gray academic-sans mb-8 max-w-3xl mx-auto leading-relaxed">
+          <p className="text-xl text-gray-700 academic-sans mb-8 max-w-3xl mx-auto leading-relaxed">
             Join researchers, faculty, and graduate students from leading institutions 
             who trust WordWise for precision in their scholarly communication and research documentation.
           </p>
@@ -190,7 +190,7 @@ const LandingPage: React.FC = () => {
           
           {/* Academic Footer */}
           <div className="mt-12 pt-8 border-t border-gray-200">
-            <p className="text-sm text-academic-gray academic-sans">
+            <p className="text-sm text-gray-600 academic-sans">
               Trusted by academic institutions • Research-grade security • Scholarly writing standards
             </p>
           </div>

@@ -15,6 +15,8 @@ frontend/.env
 frontend/.env.local
 backend/.env
 backend/.env.local
+frontend\.env
+backend\.env
 
 # Logs
 npm-debug.log*
@@ -107,4 +109,3 @@ Thumbs.db
 !vercel.json
 !api/
 !DEPLOYMENT.md 
-backend/.env
