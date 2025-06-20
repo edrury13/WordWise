@@ -69,10 +69,7 @@ const EditorPage: React.FC = () => {
     }
   }, [currentDocument])
 
-  const handleTitleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setDocumentTitle(event.target.value)
-    // TODO: Debounced title update
-  }
+
 
     const handleSaveDocument = useCallback(() => {
     if (currentDocument && user) {
