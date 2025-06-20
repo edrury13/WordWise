@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
-import { checkText, ignoreSuggestion } from '../store/slices/suggestionSlice'
+import { checkText, ignoreSuggestion, clearSuggestions } from '../store/slices/suggestionSlice'
 import { setContent, setLastSaved } from '../store/slices/editorSlice'
 import { updateDocument } from '../store/slices/documentSlice'
 import { Suggestion } from '../store/slices/suggestionSlice'
@@ -190,7 +190,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
   }, [])
 
   // Apply suggestion
-  const applySuggestion = useCallback((suggestion: Suggestion, replacement: string) => {
+  const handleApplySuggestion = useCallback((suggestion: Suggestion, replacement: string) => {
     const newContent = 
       content.substring(0, suggestion.offset) + 
       replacement + 
@@ -203,11 +203,16 @@ const TextEditor: React.FC<TextEditorProps> = ({
       editorRef.current.textContent = newContent
     }
     
-    // Update Redux and trigger new check
-    dispatch(setContent([{
-      type: 'paragraph',
-      children: [{ text: newContent }]
-    }]))
+    // Clear all existing suggestions to ensure no stale highlights remain, then trigger fresh grammar check immediately
+    dispatch(clearSuggestions())
+    dispatch(checkText({ text: newContent }))
+    
+    dispatch(setContent([
+      {
+        type: 'paragraph',
+        children: [{ text: newContent }],
+      },
+    ]))
     
     onContentChange?.(newContent)
     checkGrammar(newContent)
@@ -325,7 +330,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
                 {activeSuggestion.replacements.slice(0, 3).map((replacement, index) => (
                   <button
                     key={index}
-                    onClick={() => applySuggestion(activeSuggestion, replacement)}
+                    onClick={() => handleApplySuggestion(activeSuggestion, replacement)}
                     className="block w-full text-left px-2 py-1 text-sm bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded"
                   >
                     {replacement}

@@ -35,6 +35,7 @@ interface SuggestionState {
   lastCheckTime: number | null
   ignoredSuggestions: string[]
   apiStatus: 'api' | 'client-fallback' | 'mixed' | null
+  latestRequestId: string | null
 }
 
 const initialState: SuggestionState = {
@@ -47,6 +48,7 @@ const initialState: SuggestionState = {
   lastCheckTime: null,
   ignoredSuggestions: [],
   apiStatus: null,
+  latestRequestId: null,
 }
 
 // Async thunks
@@ -124,9 +126,26 @@ const suggestionSlice = createSlice({
     setActiveSuggestion: (state, action: PayloadAction<Suggestion | null>) => {
       state.activeSuggestion = action.payload
     },
-    applySuggestion: (state, action: PayloadAction<{ suggestionId: string; replacement: string }>) => {
-      const { suggestionId } = action.payload
-      state.suggestions = state.suggestions.filter(s => s.id !== suggestionId)
+    applySuggestion: (state, action: PayloadAction<{ suggestionId: string; replacement: string; offset: number; length: number }>) => {
+      const { suggestionId, replacement, offset, length } = action.payload
+      // Remove the applied suggestion and any that overlap the replaced range
+      state.suggestions = state.suggestions.filter(s => {
+        const overlap = !(s.offset + s.length <= offset || s.offset >= offset + length)
+        return s.id !== suggestionId && !overlap
+      })
+
+      // Calculate the change in text length so we can shift remaining offsets
+      const delta = replacement.length - length
+
+      // Adjust offsets for suggestions that come after the replaced range
+      if (delta !== 0) {
+        state.suggestions.forEach(s => {
+          if (s.offset > offset) {
+            s.offset += delta
+          }
+        })
+      }
+
       state.activeSuggestion = null
     },
     ignoreSuggestion: (state, action: PayloadAction<string>) => {
@@ -186,11 +205,17 @@ const suggestionSlice = createSlice({
   extraReducers: (builder) => {
     builder
       // Check text
-      .addCase(checkText.pending, (state) => {
+      .addCase(checkText.pending, (state, action) => {
         state.loading = true
         state.error = null
+        state.latestRequestId = action.meta.requestId
       })
       .addCase(checkText.fulfilled, (state, action) => {
+        // Ignore results from outdated requests
+        if (action.meta.requestId !== state.latestRequestId) {
+          console.warn('⏭️ Ignoring out-of-date grammar check result')
+          return
+        }
         state.loading = false
         state.suggestions = action.payload.suggestions.filter(
           (s: Suggestion) => !state.ignoredSuggestions.includes(s.id)
@@ -208,6 +233,9 @@ const suggestionSlice = createSlice({
         state.lastCheckTime = Date.now()
       })
       .addCase(checkText.rejected, (state, action) => {
+        if (action.meta.requestId !== state.latestRequestId) {
+          return
+        }
         state.loading = false
         // Handle rate limiting more gracefully
         if (action.payload === 'Rate limited. Please wait a moment before trying again.') {
