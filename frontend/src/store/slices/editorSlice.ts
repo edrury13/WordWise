@@ -202,7 +202,11 @@ const initialState: EditorState = {
 const generateCacheKey = (text: string, gradeLevel: string): string => {
   // Create a hash-like key from text and grade level
   const textHash = text.slice(0, 100) + text.slice(-50) + text.length
-  return `${gradeLevel}:${btoa(textHash).slice(0, 20)}`
+  // Use Unicode-safe base64 encoding to handle special characters
+  const encodedHash = btoa(encodeURIComponent(textHash).replace(/%([0-9A-F]{2})/g, (match, p1) => {
+    return String.fromCharCode(parseInt(p1, 16))
+  }))
+  return `${gradeLevel}:${encodedHash.slice(0, 20)}`
 }
 
 const isRateLimited = (rateLimitWindow: number[], maxRequests: number): boolean => {

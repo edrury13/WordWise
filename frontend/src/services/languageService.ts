@@ -1256,7 +1256,11 @@ class GradeLevelRewriteOptimizer {
   private generateRequestKey(text: string, gradeLevel: string): string {
     // Create a shorter hash for deduplication
     const textSample = text.slice(0, 200) + text.slice(-100)
-    return `${gradeLevel}:${btoa(textSample).slice(0, 15)}`
+    // Use Unicode-safe base64 encoding to handle special characters
+    const encodedSample = btoa(encodeURIComponent(textSample).replace(/%([0-9A-F]{2})/g, (match, p1) => {
+      return String.fromCharCode(parseInt(p1, 16))
+    }))
+    return `${gradeLevel}:${encodedSample.slice(0, 15)}`
   }
   
   async optimizedRewrite(text: string, gradeLevel: string): Promise<any> {
