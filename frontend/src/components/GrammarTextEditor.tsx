@@ -93,26 +93,7 @@ const GrammarTextEditor: React.FC = () => {
     return recentCalls.length < maxCallsPerMinute
   }, [])
 
-  // Debounced grammar checking - more responsive with shorter delay
-  const checkGrammar = useCallback((text: string) => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current)
-    }
-    
-    debounceRef.current = setTimeout(() => {
-      if (text.trim() && text.length > 3) { // Reduced minimum length to catch short first sentences
-        // Check rate limiting before making call
-        if (canMakeApiCall(grammarCallTimesRef.current, 12)) { // Limit to 12 grammar calls per minute
-          grammarCallTimesRef.current.push(Date.now())
-        dispatch(checkText({ text }))
-          console.log('📝 Grammar check called. Recent calls:', grammarCallTimesRef.current.length)
-        } else {
-          console.log('⏳ Grammar check skipped due to rate limiting')
-          toast.error('⏳ Too many requests - please type more slowly to avoid rate limits')
-      }
-      }
-    }, 500) // Reduced to 500ms for more responsive grammar checking
-  }, [dispatch, canMakeApiCall])
+
 
   // Debounced sentence analysis - much longer delay since it's less critical than grammar
   const checkSentenceStructure = useCallback((text: string) => {
