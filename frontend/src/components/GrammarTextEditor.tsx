@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
-import { checkText, ignoreSuggestion, clearSuggestions, acceptAllSuggestions, ignoreAllCurrentSuggestions, clearError } from '../store/slices/suggestionSlice'
+import { checkText, ignoreSuggestion, clearSuggestions, ignoreAllCurrentSuggestions, clearError, recheckText } from '../store/slices/suggestionSlice'
 import { setContent, setLastSaved, setAutoSave } from '../store/slices/editorSlice'
 import { updateDocument, updateCurrentDocumentContent } from '../store/slices/documentSlice'
 import { Suggestion } from '../store/slices/suggestionSlice'
-import { analyzeSentences } from '../services/languageService'
+import { analyzeSentences, clearCacheByType } from '../services/languageService'
 import SentenceAnalysisPanel from './SentenceAnalysisPanel'
 import ToneRewritePanel from './ToneRewritePanel'
 import GradeLevelRewritePanel from './GradeLevelRewritePanel'
@@ -77,7 +77,6 @@ const GrammarTextEditor: React.FC = () => {
   const retryQueueTimerRef = useRef<NodeJS.Timeout>()
 
   // Rate limiting tracking
-  const grammarCallTimesRef = useRef<number[]>([])
   const sentenceCallTimesRef = useRef<number[]>([])
 
   // Helper function to check if we can make an API call based on recent activity
@@ -93,7 +92,38 @@ const GrammarTextEditor: React.FC = () => {
     return recentCalls.length < maxCallsPerMinute
   }, [])
 
+  // Immediate grammar check for after applying suggestions - bypasses debouncing
+  const checkGrammarImmediate = useCallback((text: string) => {
+    // Cancel any pending debounced checks to avoid conflicts
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+    }
+    
+    // Clear the grammar cache to ensure fresh results
+    try {
+      clearCacheByType('grammar')
+      console.log('🧹 Cleared grammar cache for fresh check')
+    } catch (error) {
+      console.warn('⚠️ Failed to clear grammar cache:', error)
+      // Continue with the check anyway
+    }
+    
+    // Use recheckText which clears suggestions first and waits a bit
+    dispatch(recheckText({ text }))
+    console.log('🚀 Triggered immediate grammar recheck after suggestion applied')
+  }, [dispatch])
 
+  // Debounced grammar check for typing
+  const checkGrammarDebounced = useCallback((text: string) => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+    }
+    
+    debounceRef.current = setTimeout(() => {
+      dispatch(checkText({ text }))
+      console.log('⏱️ Triggered debounced grammar check')
+    }, 300)
+  }, [dispatch])
 
   // Debounced sentence analysis - much longer delay since it's less critical than grammar
   const checkSentenceStructure = useCallback((text: string) => {
@@ -228,11 +258,11 @@ const GrammarTextEditor: React.FC = () => {
     // Update current document content
     dispatch(updateCurrentDocumentContent(rewrittenText))
     
-    // Trigger grammar check immediately to avoid stale suggestions and update latestRequestId
-    dispatch(checkText({ text: rewrittenText }))
+    // Trigger immediate grammar check after tone rewrite
+    checkGrammarImmediate(rewrittenText)
     checkSentenceStructure(rewrittenText)
     autoSave(rewrittenText)
-  }, [dispatch, checkSentenceStructure, autoSave])
+  }, [dispatch, checkSentenceStructure, autoSave, checkGrammarImmediate])
 
   // Handle grade level rewrite
   const handleGradeLevelRewrite = useCallback((rewrittenText: string) => {
@@ -252,11 +282,11 @@ const GrammarTextEditor: React.FC = () => {
     // Update current document content
     dispatch(updateCurrentDocumentContent(rewrittenText))
     
-    // Trigger grammar check immediately for the new content
-    dispatch(checkText({ text: rewrittenText }))
+    // Trigger immediate grammar check after grade level rewrite
+    checkGrammarImmediate(rewrittenText)
     checkSentenceStructure(rewrittenText)
     autoSave(rewrittenText)
-  }, [dispatch, checkSentenceStructure, autoSave])
+  }, [dispatch, checkSentenceStructure, autoSave, checkGrammarImmediate])
 
   // Keyboard shortcuts are handled by handleKeyDownEnhanced below
 
@@ -280,11 +310,11 @@ const GrammarTextEditor: React.FC = () => {
     // Update current document content in Redux
     dispatch(updateCurrentDocumentContent(newContent))
     
-    // Trigger grammar check immediately
-    dispatch(checkText({ text: newContent }))
+    // Trigger debounced grammar check for normal typing
+    checkGrammarDebounced(newContent)
     checkSentenceStructure(newContent)
     autoSave(newContent)
-  }, [dispatch, checkSentenceStructure, autoSave, lastAppliedSuggestion])
+  }, [dispatch, checkSentenceStructure, autoSave, lastAppliedSuggestion, checkGrammarDebounced])
 
   // Create highlighted text overlay
   const createHighlightedText = useCallback(() => {
@@ -668,8 +698,8 @@ const GrammarTextEditor: React.FC = () => {
     // Update current document content
     dispatch(updateCurrentDocumentContent(newContent))
     
-    // Trigger grammar check immediately
-    dispatch(checkText({ text: newContent }))
+    // Trigger immediate grammar check after applying suggestion
+    checkGrammarImmediate(newContent)
     checkSentenceStructure(newContent)
     autoSave(newContent)
     setShowTooltip(null)
@@ -679,7 +709,7 @@ const GrammarTextEditor: React.FC = () => {
       replacement,
       offset: suggestion.offset
     })
-  }, [content, dispatch, createHighlightedText, checkSentenceStructure, autoSave])
+  }, [content, dispatch, checkSentenceStructure, autoSave, checkGrammarImmediate])
 
   // Ignore suggestion
   const handleIgnoreSuggestion = useCallback((suggestionId: string) => {
@@ -723,12 +753,12 @@ const GrammarTextEditor: React.FC = () => {
     // Clear the undo state since we've used it
     setLastAppliedSuggestion(null)
     
-    // Trigger grammar check immediately
-    dispatch(checkText({ text: restoredContent }))
+    // Trigger immediate grammar check for restored content
+    checkGrammarImmediate(restoredContent)
     autoSave(restoredContent)
     
     toast.success('✅ Suggestion undone')
-  }, [lastAppliedSuggestion, dispatch, autoSave])
+  }, [lastAppliedSuggestion, dispatch, autoSave, checkGrammarImmediate])
 
   // Enhanced keyboard shortcuts with undo support
   const handleKeyDownEnhanced = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -804,14 +834,14 @@ const GrammarTextEditor: React.FC = () => {
     setSentenceAnalysis(null)
     // Don't manually refresh overlay - it will be updated automatically by useEffect when suggestions change
     
-    // Trigger grammar check immediately for the new content
-    dispatch(checkText({ text: newContent }))
+    // Trigger immediate grammar check after accepting all suggestions
+    checkGrammarImmediate(newContent)
     checkSentenceStructure(newContent)
     autoSave(newContent)
     setShowTooltip(null)
     
     console.log('📝 Applied all suggestions - undo available for bulk action')
-  }, [suggestions, content, dispatch, createHighlightedText, checkSentenceStructure, autoSave])
+  }, [suggestions, content, dispatch, checkSentenceStructure, autoSave, checkGrammarImmediate])
 
   // Ignore all suggestions
   const handleIgnoreAllSuggestions = useCallback(() => {
@@ -1539,7 +1569,7 @@ const GrammarTextEditor: React.FC = () => {
                     dispatch(updateCurrentDocumentContent(newContent))
                     
                     // Trigger grammar check immediately
-                    dispatch(checkText({ text: newContent }))
+                    checkGrammarImmediate(newContent)
                     checkSentenceStructure(newContent)
                     autoSave(newContent)
                     
