@@ -315,7 +315,7 @@ export class GrammarRuleEngine {
   ): GrammarSuggestion[] {
     return suggestions.sort((a, b) => {
       // Primary sort: priority
-      const priorityDiff = b.rulePriority - a.rulePriority
+      const priorityDiff = (b.rulePriority || 0) - (a.rulePriority || 0)
       if (priorityDiff !== 0) return priorityDiff
       
       // Secondary sort: quality/confidence
@@ -398,7 +398,12 @@ export class GrammarRuleEngine {
   }
 
   private getRelevantRules(config: RuleEngineConfig): GrammarRule[] {
-    const activeRules = getActiveRules(config.enabledCategories || [])
+    let rules = getActiveRules()
+
+    if (config.enabledCategories && config.enabledCategories.length > 0) {
+      const categorySet = new Set(config.enabledCategories)
+      rules = rules.filter(rule => categorySet.has(rule.category))
+    }
     
     if (config.enableAdvancedRules) {
       // Logic to potentially add more complex or experimental rules
@@ -406,10 +411,10 @@ export class GrammarRuleEngine {
     }
     
     if (config.prioritizeByImpact) {
-      return getRulesByPriority(activeRules)
+      return getRulesByPriority().filter(rule => rules.includes(rule))
     }
     
-    return activeRules
+    return rules
   }
 
   private generateCacheKey(text: string, config: RuleEngineConfig): string {

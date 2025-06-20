@@ -10,8 +10,9 @@
     "build": "cd frontend && npm run build",
     "build:frontend": "cd frontend && npm run build",
     "build:backend": "cd backend && npm run build",
+    "build:grammar": "cd shared/grammar && npm run build",
     "install:all": "npm install && cd frontend && npm install && cd ../backend && npm install",
-    "vercel-build": "cd frontend && npm run build"
+    "vercel-build": "npm run build:grammar && npm run build:backend && npm run build:frontend"
   },
   "keywords": [
     "text-editor",

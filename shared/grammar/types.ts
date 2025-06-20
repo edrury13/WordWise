@@ -98,6 +98,10 @@ export type GrammarCategory =
   | 'parallel-structure'
   | 'conditional-sentences'
   | 'passive-voice-overuse'
+  | 'contractions'
+  | 'verb-form'
+  | 'adjective-adverb'
+  | 'double-negative'
   
   // Punctuation & Mechanics
   | 'comma-usage'
