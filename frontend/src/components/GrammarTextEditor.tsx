@@ -93,7 +93,7 @@ const GrammarTextEditor: React.FC = () => {
     return recentCalls.length < maxCallsPerMinute
   }, [])
 
-  // Debounced grammar checking - balanced for responsiveness and rate limiting
+  // Debounced grammar checking - more responsive with shorter delay
   const checkGrammar = useCallback((text: string) => {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current)
@@ -111,7 +111,7 @@ const GrammarTextEditor: React.FC = () => {
           toast.error('⏳ Too many requests - please type more slowly to avoid rate limits')
       }
       }
-    }, 2000) // Keep at 2 seconds for responsiveness as requested
+    }, 500) // Reduced to 500ms for more responsive grammar checking
   }, [dispatch, canMakeApiCall])
 
   // Debounced sentence analysis - much longer delay since it's less critical than grammar

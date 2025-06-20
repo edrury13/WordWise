@@ -36,7 +36,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const lastCheckRef = useRef<string>('')
   const autoSaveRef = useRef<NodeJS.Timeout>()
 
-  // Debounced grammar checking
+  // Debounced grammar checking - more responsive with shorter delay
   const checkGrammar = useCallback(
     (text: string) => {
       if (debounceRef.current) {
@@ -48,7 +48,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
           lastCheckRef.current = text
           dispatch(checkText({ text }))
         }
-      }, 1000) // Check grammar after 1 second of no typing
+      }, 300) // Reduced to 300ms for more responsive grammar checking
     },
     [dispatch]
   )
