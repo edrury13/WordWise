@@ -25,7 +25,7 @@ const EditorPage: React.FC = () => {
   
   const { currentDocument, loading, error, saving } = useSelector((state: RootState) => state.documents)
   const { user } = useSelector((state: RootState) => state.auth)
-  const { suggestions, apiStatus } = useSelector((state: RootState) => state.suggestions)
+  const { suggestions } = useSelector((state: RootState) => state.suggestions)
   
   const [documentTitle, setDocumentTitle] = useState('Untitled Document')
   const [isNewDocument, setIsNewDocument] = useState(!id)
@@ -69,9 +69,7 @@ const EditorPage: React.FC = () => {
     }
   }, [currentDocument])
 
-
-
-    const handleSaveDocument = useCallback(() => {
+  const handleSaveDocument = useCallback(() => {
     if (currentDocument && user) {
       dispatchRef.current(updateDocument({
         id: currentDocument.id,
@@ -86,8 +84,6 @@ const EditorPage: React.FC = () => {
        })
     }
   }, [currentDocument, user, documentTitle])
-
-
 
   if (loading || isCreatingDocument) {
     return (
@@ -140,7 +136,7 @@ const EditorPage: React.FC = () => {
         wordCount={currentDocument?.word_count || 0}
         isNewDocument={isNewDocument}
         suggestions={suggestions}
-        apiStatus={apiStatus}
+        documentId={currentDocument?.id}
       />
 
       {/* Academic Editor Layout - Full Width */}

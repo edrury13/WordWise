@@ -1,11 +1,12 @@
-import React from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import React, { useState, useEffect, useRef } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
 import { logoutUser } from '../store/slices/authSlice'
 import { toggleDarkMode } from '../store/slices/editorSlice'
-import { Moon, Sun, LogOut, Save, FileText } from 'lucide-react'
+import { Moon, Sun, LogOut, Save, FileText, Home, ChevronDown, Download, User } from 'lucide-react'
 import toast from 'react-hot-toast'
+import DownloadMenu from './DownloadMenu'
 
 interface NavigationProps {
   onSave?: () => void
@@ -17,24 +18,41 @@ interface NavigationProps {
   wordCount?: number
   isNewDocument?: boolean
   suggestions?: any[]
-  apiStatus?: 'api' | 'mixed' | 'local' | 'client-fallback' | null
+  apiStatus?: {
+    grammarChecking: boolean
+    readabilityChecking: boolean
+    sentenceAnalyzing: boolean
+    gradeLevelChecking: boolean
+    toneChecking: boolean
+  }
+  documentId?: string
 }
 
 const Navigation: React.FC<NavigationProps> = ({ 
   onSave, 
-  isSaving, 
+  isSaving = false, 
   showSaveButton = false,
   documentTitle,
   onTitleChange,
-  wordCount,
-  isNewDocument,
+  wordCount = 0,
+  isNewDocument = false,
   suggestions = [],
-  apiStatus
+  apiStatus = {
+    grammarChecking: false,
+    readabilityChecking: false,
+    sentenceAnalyzing: false,
+    gradeLevelChecking: false,
+    toneChecking: false
+  },
+  documentId
 }) => {
   const dispatch = useDispatch<AppDispatch>()
   const location = useLocation()
+  const navigate = useNavigate()
   const { user } = useSelector((state: RootState) => state.auth)
-  const { isDarkMode } = useSelector((state: RootState) => state.editor)
+  const { isDarkMode, lastSaved } = useSelector((state: RootState) => state.editor)
+  const [showUserMenu, setShowUserMenu] = useState(false)
+  const userMenuRef = useRef<HTMLDivElement>(null)
 
   const handleLogout = async () => {
     try {
@@ -135,31 +153,16 @@ const Navigation: React.FC<NavigationProps> = ({
                 )}
                 
                 {/* API Status Indicator */}
-                {apiStatus && (
-                  <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-medium ${
-                    apiStatus === 'api' 
-                      ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
-                      : apiStatus === 'mixed'
-                      ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'
-                      : 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400'
-                  }`}>
-                    <div className={`w-1.5 h-1.5 rounded-full ${
-                      apiStatus === 'api' 
-                        ? 'bg-green-500 dark:bg-green-400'
-                        : apiStatus === 'mixed'
-                        ? 'bg-blue-500 dark:bg-blue-400'
-                        : 'bg-orange-500 dark:bg-orange-400'
-                    }`}></div>
-                    <span>
-                      {apiStatus === 'api' 
-                        ? 'Advanced AI'
-                        : apiStatus === 'mixed'
-                        ? 'AI + Local'
-                        : apiStatus === 'client-fallback'
-                        ? 'Fallback Mode'
-                        : 'Local Analysis'
-                      }
-                    </span>
+                {Object.values(apiStatus).some(status => status) && (
+                  <div className="flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-medium">
+                    <div className="flex items-center space-x-1">
+                      {Object.entries(apiStatus).map(([key, isActive]) => 
+                        isActive && (
+                          <div key={key} className="w-2 h-2 bg-gold dark:bg-yellow-600 rounded-full animate-pulse" />
+                        )
+                      )}
+                    </div>
+                    <span className="text-academic-gray dark:text-gray-400">Analyzing...</span>
                   </div>
                 )}
               </div>
@@ -179,6 +182,15 @@ const Navigation: React.FC<NavigationProps> = ({
                 <Save className="h-4 w-4" />
                 <span>{isSaving ? 'Saving...' : 'Save'}</span>
               </button>
+            )}
+
+            {/* Download button (only on editor pages with saved documents) */}
+            {isEditorPage && documentId && !isNewDocument && (
+              <DownloadMenu
+                documentId={documentId}
+                documentTitle={documentTitle || 'Untitled Document'}
+                buttonClassName="flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              />
             )}
 
             {/* Documents link (only on non-editor pages) */}
@@ -202,17 +214,31 @@ const Navigation: React.FC<NavigationProps> = ({
             </button>
 
             {/* User menu */}
-            <div className="flex items-center space-x-3">
-              <span className="text-sm text-gray-600 dark:text-gray-300 hidden sm:inline">
-                {user?.email}
-              </span>
+            <div className="relative" ref={userMenuRef}>
               <button
-                onClick={handleLogout}
-                className="p-2 text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                title="Logout"
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="flex items-center space-x-2 text-academic-gray dark:text-gray-300 hover:text-navy dark:hover:text-blue-400 transition-colors"
               >
-                <LogOut className="h-4 w-4" />
+                <div className="w-8 h-8 bg-navy dark:bg-blue-600 rounded-full flex items-center justify-center">
+                  <User className="h-4 w-4 text-white" />
+                </div>
+                <ChevronDown className="h-4 w-4" />
               </button>
+              
+              {showUserMenu && (
+                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50">
+                  <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                    <p className="text-sm font-semibold text-navy dark:text-blue-400">{user?.email}</p>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full px-4 py-2 text-left text-sm text-academic-gray dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center space-x-2"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>Log Out</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

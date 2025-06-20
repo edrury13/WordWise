@@ -11,19 +11,20 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@reduxjs/toolkit": "^1.9.7",
+    "@supabase/supabase-js": "^2.38.4",
+    "axios": "^1.6.2",
+    "clsx": "^2.0.0",
+    "lucide-react": "^0.294.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.20.1",
-    "@reduxjs/toolkit": "^1.9.7",
-    "react-redux": "^8.1.3",
-    "@supabase/supabase-js": "^2.38.4",
-    "slate": "^0.101.5",
-    "slate-react": "^0.101.0",
-    "slate-history": "^0.100.0",
-    "axios": "^1.6.2",
-    "lucide-react": "^0.294.0",
-    "clsx": "^2.0.0",
+    "react-dropzone": "^14.3.8",
     "react-hot-toast": "^2.4.1",
+    "react-redux": "^8.1.3",
+    "react-router-dom": "^6.20.1",
+    "slate": "^0.101.5",
+    "slate-history": "^0.100.0",
+    "slate-react": "^0.101.0",
     "zustand": "^4.4.7"
   },
   "devDependencies": {
@@ -41,4 +42,4 @@
     "typescript": "^5.2.2",
     "vite": "^4.5.0"
   }
-} 
+}

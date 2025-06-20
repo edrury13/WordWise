@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Edit, Trash2, Calendar, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Command } from 'lucide-react'
+import { Plus, FileText, Edit, Trash2, Calendar, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Command, Download, Upload } from 'lucide-react'
 import { AppDispatch } from '../store'
 import { fetchDocuments, deleteDocument, createDocument } from '../store/slices/documentSlice'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Navigation from '../components/Navigation'
+import DownloadMenu from '../components/DownloadMenu'
+import UploadModal from '../components/UploadModal'
+import { documentService } from '../services/documentService'
 import toast from 'react-hot-toast'
 
 const Dashboard: React.FC = () => {
@@ -15,6 +18,7 @@ const Dashboard: React.FC = () => {
   const { documents, loading, error } = useSelector((state: any) => state.documents)
   
   const [showNewDocModal, setShowNewDocModal] = useState(false)
+  const [showUploadModal, setShowUploadModal] = useState(false)
   const [newDocTitle, setNewDocTitle] = useState('')
   const [sortBy, setSortBy] = useState<'name' | 'created' | 'updated'>('updated')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
@@ -62,8 +66,6 @@ const Dashboard: React.FC = () => {
       }
     }
   }
-
-
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -242,6 +244,33 @@ const Dashboard: React.FC = () => {
               </div>
               
               <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+                {/* Upload Button */}
+                <button
+                  onClick={() => setShowUploadModal(true)}
+                  className="btn btn-secondary flex items-center justify-center space-x-2 academic-sans font-semibold"
+                >
+                  <Upload className="h-4 w-4" />
+                  <span>Upload</span>
+                </button>
+                
+                {/* Export All Button */}
+                {documents.length > 0 && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await documentService.exportAllDocuments()
+                        toast.success('All documents exported successfully!')
+                      } catch (error) {
+                        toast.error('Failed to export documents')
+                      }
+                    }}
+                    className="btn btn-secondary flex items-center justify-center space-x-2 academic-sans font-semibold"
+                  >
+                    <Download className="h-4 w-4" />
+                    <span>Export All</span>
+                  </button>
+                )}
+                
                 {/* Sort Controls */}
                 {documents.length > 0 && (
                   <div className="flex items-center space-x-2">
@@ -364,6 +393,11 @@ const Dashboard: React.FC = () => {
                         >
                           <Edit className="h-4 w-4" />
                         </button>
+                        <DownloadMenu
+                          documentId={document.id}
+                          documentTitle={document.title}
+                          iconOnly={true}
+                        />
                         <button
                           onClick={() => handleDeleteDocument(document.id)}
                           className="p-2 text-academic-gray dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
@@ -526,40 +560,34 @@ const Dashboard: React.FC = () => {
 
       {/* New Document Modal */}
       {showNewDocModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-xl font-bold academic-serif text-navy dark:text-blue-400 mb-4">
               Create New Document
             </h3>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Document Title
-              </label>
-              <input
-                type="text"
-                value={newDocTitle}
-                onChange={(e) => setNewDocTitle(e.target.value)}
-                placeholder="Enter document title..."
-                className="input w-full"
-                autoFocus
-              />
-            </div>
-            
-            <div className="flex justify-end space-x-3">
+            <input
+              type="text"
+              value={newDocTitle}
+              onChange={(e) => setNewDocTitle(e.target.value)}
+              placeholder="Document Title"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy dark:focus:ring-blue-600 dark:bg-gray-700 dark:text-gray-100"
+              onKeyPress={(e) => e.key === 'Enter' && handleCreateDocument()}
+              autoFocus
+            />
+            <div className="flex justify-end space-x-3 mt-4">
               <button
                 onClick={() => {
                   setShowNewDocModal(false)
                   setNewDocTitle('')
                 }}
-                className="btn btn-secondary"
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateDocument}
                 disabled={!newDocTitle.trim()}
-                className="btn btn-primary"
+                className="px-4 py-2 bg-navy text-white hover:bg-burgundy dark:bg-blue-600 dark:hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Create
               </button>
@@ -567,6 +595,13 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Upload Modal */}
+      <UploadModal
+        isOpen={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        userId={user?.id || ''}
+      />
     </div>
   )
 }
