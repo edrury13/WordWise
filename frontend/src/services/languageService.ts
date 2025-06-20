@@ -1,9 +1,7 @@
 import axios from 'axios'
 import { supabase } from '../config/supabase'
 import { Suggestion, ReadabilityScore } from '../store/slices/suggestionSlice'
-import { createGrammarEngine, GrammarSuggestion, SuggestionType, SuggestionSeverity } from '@wordwise/grammar-engine'
-
-const grammarEngine = createGrammarEngine()
+import { grammarEngine, GrammarSuggestion, SuggestionType, SuggestionSeverity } from '../grammar'
 
 // const LANGUAGETOOL_API_URL = import.meta.env.VITE_LANGUAGETOOL_API_URL || 'https://api.languagetool.org/v2'
 
@@ -628,7 +626,10 @@ export const checkGrammarAndSpelling = async (
       console.log('🔄 Using centralized grammar engine as fallback')
       const fallbackResult = await grammarEngine.checkText(text, {
         language: language,
-        enabledCategories: ['subject-verb-agreement', 'incomplete-sentence']
+        minConfidence: 50, // Lower threshold for fallback
+        maxSuggestions: 50,
+        qualityThreshold: 45,
+        enableAdvancedRules: false // Disable advanced rules for speed
       })
       
       const fallbackSuggestions = fallbackResult.suggestions.map((gs: GrammarSuggestion): Suggestion => ({
@@ -674,7 +675,10 @@ export const checkGrammarAndSpelling = async (
     try {
       const fallbackResult = await grammarEngine.checkText(text, {
         language: language,
-        enabledCategories: ['subject-verb-agreement', 'incomplete-sentence']
+        minConfidence: 40, // Very low threshold for emergency fallback
+        maxSuggestions: 30,
+        qualityThreshold: 35,
+        enableAdvancedRules: false // Disable advanced rules for speed
       })
       
       const fallbackSuggestions = fallbackResult.suggestions.map((gs: GrammarSuggestion): Suggestion => ({
