@@ -2,6 +2,13 @@ import { supabase } from '../config/supabase'
 
 export type DownloadFormat = 'txt' | 'markdown' | 'docx' | 'pdf'
 
+interface ParsedDocument {
+  title: string
+  content: string
+  wordCount: number
+  characterCount: number
+}
+
 export const documentService = {
   async downloadDocument(documentId: string, format: DownloadFormat = 'txt') {
     try {
@@ -97,37 +104,83 @@ export const documentService = {
     }
   },
 
+  async parseFile(file: File): Promise<ParsedDocument> {
+    const extension = file.name.split('.').pop()?.toLowerCase()
+    
+    switch (extension) {
+      case 'txt':
+      case 'md':
+      case 'markdown':
+        return this.parseTextFile(file)
+      case 'docx':
+        throw new Error('DOCX files are not supported yet. Please convert to TXT or Markdown.')
+      case 'pdf':
+        throw new Error('PDF files are not supported yet. Please convert to TXT or Markdown.')
+      default:
+        throw new Error(`Unsupported file type: .${extension}`)
+    }
+  },
+
+  async parseTextFile(file: File): Promise<ParsedDocument> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      
+      reader.onload = (e) => {
+        const content = e.target?.result as string
+        const title = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ')
+        const wordCount = content.split(/\s+/).filter(word => word.length > 0).length
+        
+        resolve({
+          title,
+          content: content.trim(),
+          wordCount,
+          characterCount: content.length
+        })
+      }
+      
+      reader.onerror = () => reject(new Error('Failed to read file'))
+      reader.readAsText(file)
+    })
+  },
+
   async uploadDocument(file: File, customTitle?: string) {
     try {
-      // Get the current user's session
-      const { data: { session } } = await supabase.auth.getSession()
+      // Get the current user
+      const { data: { user } } = await supabase.auth.getUser()
       
-      if (!session) {
+      if (!user) {
         throw new Error('User not authenticated')
       }
 
-      const formData = new FormData()
-      formData.append('file', file)
-      if (customTitle) {
-        formData.append('title', customTitle)
+      // Parse the file client-side
+      const parsedDoc = await this.parseFile(file)
+      const title = customTitle || parsedDoc.title
+
+      // Create document directly in Supabase
+      const now = new Date().toISOString()
+      const documentData = {
+        title,
+        content: parsedDoc.content,
+        user_id: user.id,
+        created_at: now,
+        updated_at: now,
+        word_count: parsedDoc.wordCount,
+        character_count: parsedDoc.characterCount
       }
 
-      const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
-      const response = await fetch(`${apiUrl}/documents/upload`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: formData
-      })
+      const { data, error } = await supabase
+        .from('documents')
+        .insert([documentData])
+        .select()
+        .single()
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to upload document')
+      if (error) throw error
+
+      return {
+        success: true,
+        document: data,
+        message: 'Document uploaded successfully'
       }
-
-      const result = await response.json()
-      return result
     } catch (error) {
       console.error('Error uploading document:', error)
       throw error
@@ -136,34 +189,39 @@ export const documentService = {
 
   async uploadMultipleDocuments(files: File[]) {
     try {
-      // Get the current user's session
-      const { data: { session } } = await supabase.auth.getSession()
+      // Get the current user
+      const { data: { user } } = await supabase.auth.getUser()
       
-      if (!session) {
+      if (!user) {
         throw new Error('User not authenticated')
       }
 
-      const formData = new FormData()
-      files.forEach(file => {
-        formData.append('files', file)
-      })
+      const results: any[] = []
+      const errors: any[] = []
 
-      const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
-      const response = await fetch(`${apiUrl}/documents/upload-bulk`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: formData
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to upload documents')
+      // Process each file
+      for (const file of files) {
+        try {
+          const result = await this.uploadDocument(file)
+          results.push({
+            filename: file.name,
+            documentId: result.document.id,
+            title: result.document.title
+          })
+        } catch (err) {
+          errors.push({
+            filename: file.name,
+            error: err instanceof Error ? err.message : 'Unknown error'
+          })
+        }
       }
 
-      const result = await response.json()
-      return result
+      return {
+        success: true,
+        message: `Uploaded ${results.length} documents successfully`,
+        results,
+        errors: errors.length > 0 ? errors : undefined
+      }
     } catch (error) {
       console.error('Error uploading multiple documents:', error)
       throw error

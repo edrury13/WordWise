@@ -26,11 +26,29 @@ app.use(helmet())
 app.use(compression())
 
 // CORS configuration
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+const corsOptions = {
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'https://word-wise-pi.vercel.app',
+      process.env.FRONTEND_URL
+    ].filter(Boolean)
+    
+    // Allow requests with no origin (like mobile apps or Postman)
+    if (!origin) return callback(null, true)
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true)
+    } else {
+      callback(new Error('Not allowed by CORS'))
+    }
+  },
   credentials: true,
   optionsSuccessStatus: 200
-}))
+}
+
+app.use(cors(corsOptions))
 
 // Rate limiting
 const limiter = rateLimit({
