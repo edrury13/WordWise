@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Download, FileText, FileDown, FileType, ChevronDown } from 'lucide-react'
+import { Download, FileText, FileDown, ChevronDown } from 'lucide-react'
 import { documentService, DownloadFormat } from '../services/documentService'
 import toast from 'react-hot-toast'
 
@@ -31,20 +31,8 @@ const DownloadMenu: React.FC<DownloadMenuProps> = ({
       value: 'markdown', 
       label: 'Markdown', 
       icon: <FileDown className="h-4 w-4" />,
-      description: 'Formatted markdown file'
-    },
-    { 
-      value: 'docx', 
-      label: 'Word Document', 
-      icon: <FileType className="h-4 w-4" />,
-      description: 'Microsoft Word format'
-    },
-    { 
-      value: 'pdf', 
-      label: 'PDF', 
-      icon: <FileDown className="h-4 w-4" />,
-      description: 'Portable Document Format'
-    },
+      description: 'Formatted markdown with metadata'
+    }
   ]
 
   useEffect(() => {

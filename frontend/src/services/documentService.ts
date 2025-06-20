@@ -1,6 +1,6 @@
 import { supabase } from '../config/supabase'
 
-export type DownloadFormat = 'txt' | 'markdown' | 'docx' | 'pdf'
+export type DownloadFormat = 'txt' | 'markdown'
 
 interface ParsedDocument {
   title: string
@@ -12,35 +12,37 @@ interface ParsedDocument {
 export const documentService = {
   async downloadDocument(documentId: string, format: DownloadFormat = 'txt') {
     try {
-      // Get the current user's session
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (!session) {
-        throw new Error('User not authenticated')
+      // Get the document from Supabase
+      const { data: document, error } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('id', documentId)
+        .single()
+
+      if (error || !document) {
+        throw new Error('Document not found')
       }
 
-      // Use the backend API URL
-      const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
-      const response = await fetch(`${apiUrl}/documents/${documentId}/download/${format}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      })
+      let content: string
+      let filename: string
+      let mimeType: string
 
-      if (!response.ok) {
-        throw new Error('Failed to download document')
+      switch (format) {
+        case 'markdown':
+          content = `# ${document.title}\n\n${document.content}\n\n---\n*Document created: ${new Date(document.created_at).toLocaleDateString()}*\n*Last updated: ${new Date(document.updated_at).toLocaleDateString()}*\n*Word count: ${document.word_count}*`
+          filename = `${document.title.replace(/[^a-z0-9]/gi, '_')}.md`
+          mimeType = 'text/markdown'
+          break
+        case 'txt':
+        default:
+          content = document.content
+          filename = `${document.title.replace(/[^a-z0-9]/gi, '_')}.txt`
+          mimeType = 'text/plain'
+          break
       }
 
-      // Get filename from content-disposition header
-      const contentDisposition = response.headers.get('content-disposition')
-      const filenameMatch = contentDisposition?.match(/filename="(.+)"/)
-      const filename = filenameMatch ? filenameMatch[1] : `document.${format}`
-
-      // Convert response to blob
-      const blob = await response.blob()
-
-      // Create download link
+      // Create blob and download
+      const blob = new Blob([content], { type: mimeType })
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -59,39 +61,47 @@ export const documentService = {
 
   async exportAllDocuments() {
     try {
-      // Get the current user's session
-      const { data: { session } } = await supabase.auth.getSession()
+      // Get the current user
+      const { data: { user } } = await supabase.auth.getUser()
       
-      if (!session) {
+      if (!user) {
         throw new Error('User not authenticated')
       }
 
-      // Use the backend API URL
-      const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
-      const response = await fetch(`${apiUrl}/documents/export-all`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      })
+      // Get all documents from Supabase
+      const { data: documents, error } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
 
-      if (!response.ok) {
-        throw new Error('Failed to export documents')
+      if (error || !documents || documents.length === 0) {
+        throw new Error('No documents found to export')
       }
 
-      // Get filename from content-disposition header
-      const contentDisposition = response.headers.get('content-disposition')
-      const filenameMatch = contentDisposition?.match(/filename="(.+)"/)
-      const filename = filenameMatch ? filenameMatch[1] : 'wordwise-documents.zip'
+      // Create a single text file with all documents
+      let allContent = `WordWise Documents Export\n${'='.repeat(25)}\n\n`
+      allContent += `Export Date: ${new Date().toLocaleDateString()}\n`
+      allContent += `Total Documents: ${documents.length}\n`
+      allContent += `Total Words: ${documents.reduce((sum, doc) => sum + doc.word_count, 0)}\n\n`
+      allContent += `${'='.repeat(50)}\n\n`
 
-      // Convert response to blob
-      const blob = await response.blob()
+      documents.forEach((doc, index) => {
+        allContent += `Document ${index + 1}: ${doc.title}\n`
+        allContent += `${'-'.repeat(doc.title.length + 13)}\n\n`
+        allContent += `${doc.content}\n\n`
+        allContent += `Created: ${new Date(doc.created_at).toLocaleDateString()}\n`
+        allContent += `Updated: ${new Date(doc.updated_at).toLocaleDateString()}\n`
+        allContent += `Words: ${doc.word_count}\n\n`
+        allContent += `${'='.repeat(50)}\n\n`
+      })
 
-      // Create download link
+      // Download as a single text file
+      const blob = new Blob([allContent], { type: 'text/plain' })
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = filename
+      a.download = `wordwise-export-${new Date().toISOString().split('T')[0]}.txt`
       document.body.appendChild(a)
       a.click()
       
@@ -112,12 +122,8 @@ export const documentService = {
       case 'md':
       case 'markdown':
         return this.parseTextFile(file)
-      case 'docx':
-        throw new Error('DOCX files are not supported yet. Please convert to TXT or Markdown.')
-      case 'pdf':
-        throw new Error('PDF files are not supported yet. Please convert to TXT or Markdown.')
       default:
-        throw new Error(`Unsupported file type: .${extension}`)
+        throw new Error(`Unsupported file type: .${extension}. Only TXT and Markdown files are supported.`)
     }
   },
 
