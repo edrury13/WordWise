@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import React, { useState, useRef } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
 import { logoutUser } from '../store/slices/authSlice'
 import { toggleDarkMode } from '../store/slices/editorSlice'
-import { Moon, Sun, LogOut, Save, FileText, Home, ChevronDown, Download, User } from 'lucide-react'
+import { Moon, Sun, LogOut, Save, FileText, ChevronDown, User } from 'lucide-react'
 import toast from 'react-hot-toast'
 import DownloadMenu from './DownloadMenu'
 
@@ -48,9 +48,8 @@ const Navigation: React.FC<NavigationProps> = ({
 }) => {
   const dispatch = useDispatch<AppDispatch>()
   const location = useLocation()
-  const navigate = useNavigate()
   const { user } = useSelector((state: RootState) => state.auth)
-  const { isDarkMode, lastSaved } = useSelector((state: RootState) => state.editor)
+  const { isDarkMode } = useSelector((state: RootState) => state.editor)
   const [showUserMenu, setShowUserMenu] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
 
