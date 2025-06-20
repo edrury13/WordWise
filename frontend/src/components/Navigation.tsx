@@ -4,7 +4,7 @@ import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
 import { logoutUser } from '../store/slices/authSlice'
 import { toggleDarkMode } from '../store/slices/editorSlice'
-import { Moon, Sun, LogOut, Save, Settings, FileText } from 'lucide-react'
+import { Moon, Sun, LogOut, Save, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface NavigationProps {

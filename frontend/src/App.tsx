@@ -17,7 +17,6 @@ import LoadingSpinner from './components/LoadingSpinner'
 import ProtectedRoute from './components/ProtectedRoute'
 import GrammarTestPanel from './components/GrammarTestPanel'
 import AuthDebug from './components/AuthDebug'
-import Navigation from './components/Navigation'
 
 function App() {
   const dispatch = useDispatch<AppDispatch>()

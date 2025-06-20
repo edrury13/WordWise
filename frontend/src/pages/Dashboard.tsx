@@ -1,11 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Edit, Trash2, Calendar, LogOut, Moon, Sun, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Command } from 'lucide-react'
+import { Plus, FileText, Edit, Trash2, Calendar, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Command } from 'lucide-react'
 import { AppDispatch } from '../store'
 import { fetchDocuments, deleteDocument, createDocument } from '../store/slices/documentSlice'
-import { logoutUser } from '../store/slices/authSlice'
-import { toggleDarkMode } from '../store/slices/editorSlice'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Navigation from '../components/Navigation'
 import toast from 'react-hot-toast'
@@ -15,7 +13,6 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate()
   const { user } = useSelector((state: any) => state.auth)
   const { documents, loading, error } = useSelector((state: any) => state.documents)
-  const { isDarkMode } = useSelector((state: any) => state.editor)
   
   const [showNewDocModal, setShowNewDocModal] = useState(false)
   const [newDocTitle, setNewDocTitle] = useState('')
@@ -66,15 +63,7 @@ const Dashboard: React.FC = () => {
     }
   }
 
-  const handleLogout = async () => {
-    try {
-      await dispatch(logoutUser())
-      navigate('/')
-      toast.success('Logged out successfully!')
-    } catch (error) {
-      toast.error('Failed to logout')
-    }
-  }
+
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
