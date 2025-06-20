@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { supabase } from '../config/supabase'
 import { Suggestion, ReadabilityScore } from '../store/slices/suggestionSlice'
-import { grammarEngine, GrammarSuggestion, SuggestionType, SuggestionSeverity } from '../grammar'
+import { grammarEngine, GrammarSuggestion, SuggestionType, SuggestionSeverity } from '../../../shared/grammar'
 
 // const LANGUAGETOOL_API_URL = import.meta.env.VITE_LANGUAGETOOL_API_URL || 'https://api.languagetool.org/v2'
 
@@ -551,10 +551,7 @@ export const checkGrammarAndSpelling = async (
       const grammarEngineResult = await grammarEngine.checkText(text, {
         language: language,
         minConfidence: priority >= REQUEST_PRIORITY.HIGH ? 60 : 70, // Lower threshold for high priority
-        maxSuggestions: priority >= REQUEST_PRIORITY.HIGH ? 35 : 25,
-        qualityThreshold: priority >= REQUEST_PRIORITY.HIGH ? 55 : 65,
-        prioritizeByImpact: true,
-        enableAdvancedRules: priority >= REQUEST_PRIORITY.HIGH
+        maxSuggestions: priority >= REQUEST_PRIORITY.HIGH ? 35 : 25
       })
       
       const clientSideSuggestions = grammarEngineResult.suggestions.map((gs: GrammarSuggestion): Suggestion => ({
@@ -627,9 +624,7 @@ export const checkGrammarAndSpelling = async (
       const fallbackResult = await grammarEngine.checkText(text, {
         language: language,
         minConfidence: 50, // Lower threshold for fallback
-        maxSuggestions: 50,
-        qualityThreshold: 45,
-        enableAdvancedRules: false // Disable advanced rules for speed
+        maxSuggestions: 50
       })
       
       const fallbackSuggestions = fallbackResult.suggestions.map((gs: GrammarSuggestion): Suggestion => ({
@@ -676,9 +671,7 @@ export const checkGrammarAndSpelling = async (
       const fallbackResult = await grammarEngine.checkText(text, {
         language: language,
         minConfidence: 40, // Very low threshold for emergency fallback
-        maxSuggestions: 30,
-        qualityThreshold: 35,
-        enableAdvancedRules: false // Disable advanced rules for speed
+        maxSuggestions: 30
       })
       
       const fallbackSuggestions = fallbackResult.suggestions.map((gs: GrammarSuggestion): Suggestion => ({
@@ -737,13 +730,11 @@ function getSeverity(issueType: string): Suggestion['severity'] {
 
 function mapGrammarSeverityToSuggestionSeverity(grammarSeverity: SuggestionSeverity): 'low' | 'medium' | 'high' {
   switch (grammarSeverity) {
-    case 'critical':
     case 'high':
       return 'high'
     case 'medium':
       return 'medium'
     case 'low':
-    case 'suggestion':
       return 'low'
     default:
       return 'medium'
@@ -752,16 +743,18 @@ function mapGrammarSeverityToSuggestionSeverity(grammarSeverity: SuggestionSever
 
 function mapGrammarTypeToSuggestionType(grammarType: SuggestionType): 'grammar' | 'spelling' | 'style' | 'clarity' | 'engagement' | 'delivery' {
   switch (grammarType) {
-    case 'consistency':
-    case 'conciseness':
-      return 'style' // Map new types to existing ones
     case 'grammar':
+      return 'grammar'
     case 'spelling':
+      return 'spelling'
     case 'style':
+      return 'style'
     case 'clarity':
+      return 'clarity'
     case 'engagement':
+      return 'engagement'
     case 'delivery':
-      return grammarType
+      return 'delivery'
     default:
       return 'style' // Default fallback
   }

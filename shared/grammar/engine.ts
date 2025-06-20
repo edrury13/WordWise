@@ -3,11 +3,9 @@ import {
   GrammarSuggestion, 
   RuleEngineConfig, 
   RuleEngineResult, 
-  RuleContext,
-  SuggestionType,
-  SuggestionSeverity 
+  RuleContext
 } from './types'
-import { GRAMMAR_RULES, getActiveRules, getRulesByPriority, getRulesByCategory } from './rules'
+import { GRAMMAR_RULES, getActiveRules, getRulesByCategory } from './rules'
 
 export class GrammarRuleEngine {
   private version = '1.0.0'
@@ -154,7 +152,7 @@ export class GrammarRuleEngine {
         }
 
         const matchText = match[0]
-        const matchOffset = match.index
+        const matchOffset = match.index ?? 0
 
         // Generate replacements
         let replacements: string[]
