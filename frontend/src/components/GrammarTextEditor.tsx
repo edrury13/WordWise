@@ -868,10 +868,46 @@ const GrammarTextEditor: React.FC = () => {
 
   // Set up global hover handlers for suggestion spans
   useEffect(() => {
+    // Smart tooltip positioning function
+    const calculateTooltipPosition = (targetElement: HTMLElement) => {
+      const rect = targetElement.getBoundingClientRect()
+      const tooltipHeight = 200 // Approximate tooltip height
+      const tooltipWidth = 384 // max-w-sm is approximately 384px
+      const viewportHeight = window.innerHeight
+      const viewportWidth = window.innerWidth
+      const buffer = 10 // Buffer from viewport edges
+      
+      let x = rect.left
+      let y = rect.bottom + 5
+      
+      // Check if tooltip would go off the bottom of the screen
+      if (y + tooltipHeight > viewportHeight - buffer) {
+        // Position above the element instead
+        y = rect.top - tooltipHeight - 5
+        
+        // If it would still go off the top, position at the top of the viewport
+        if (y < buffer) {
+          y = buffer
+        }
+      }
+      
+      // Check if tooltip would go off the right edge
+      if (x + tooltipWidth > viewportWidth - buffer) {
+        x = viewportWidth - tooltipWidth - buffer
+      }
+      
+      // Check if tooltip would go off the left edge
+      if (x < buffer) {
+        x = buffer
+      }
+      
+      return { x, y }
+    }
+
     const hoverHandler = (suggestionId: string, event: MouseEvent) => {
       const target = event.target as HTMLElement
-      const rect = target.getBoundingClientRect()
-      setTooltipPosition({ x: rect.left, y: rect.bottom + 5 })
+      const position = calculateTooltipPosition(target)
+      setTooltipPosition(position)
       setShowTooltip(suggestionId)
     }
     

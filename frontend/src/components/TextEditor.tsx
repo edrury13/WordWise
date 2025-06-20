@@ -176,11 +176,44 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const handleSuggestionHover = useCallback((suggestionId: string, event: MouseEvent) => {
     const suggestion = suggestions.find(s => s.id === suggestionId)
     if (suggestion) {
+      // Smart tooltip positioning function
+      const calculateTooltipPosition = (mouseEvent: MouseEvent) => {
+        const tooltipHeight = 200 // Approximate tooltip height
+        const tooltipWidth = 384 // max-w-sm is approximately 384px
+        const viewportHeight = window.innerHeight
+        const viewportWidth = window.innerWidth
+        const buffer = 10 // Buffer from viewport edges
+        
+        let left = mouseEvent.clientX + 10
+        let top = mouseEvent.clientY - 10
+        
+        // Check if tooltip would go off the bottom of the screen
+        if (top + tooltipHeight > viewportHeight - buffer) {
+          // Position above the cursor instead
+          top = mouseEvent.clientY - tooltipHeight - 10
+          
+          // If it would still go off the top, position at the top of the viewport
+          if (top < buffer) {
+            top = buffer
+          }
+        }
+        
+        // Check if tooltip would go off the right edge
+        if (left + tooltipWidth > viewportWidth - buffer) {
+          left = viewportWidth - tooltipWidth - buffer
+        }
+        
+        // Check if tooltip would go off the left edge
+        if (left < buffer) {
+          left = buffer
+        }
+        
+        return { top, left }
+      }
+
       setShowSuggestionTooltip(suggestionId)
-      setTooltipPosition({
-        top: event.clientY - 10,
-        left: event.clientX + 10
-      })
+      const position = calculateTooltipPosition(event)
+      setTooltipPosition(position)
     }
   }, [suggestions])
 
