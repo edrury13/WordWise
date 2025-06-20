@@ -9,6 +9,7 @@ import { analyzeSentences, clearCacheByType } from '../services/languageService'
 import SentenceAnalysisPanel from './SentenceAnalysisPanel'
 import ToneRewritePanel from './ToneRewritePanel'
 import GradeLevelRewritePanel from './GradeLevelRewritePanel'
+import ReadabilityPanel from './ReadabilityPanel'
 import { 
   selectShowGradeLevelPanel, 
   setShowGradeLevelPanel,
@@ -25,7 +26,7 @@ import toast from 'react-hot-toast'
 
 const GrammarTextEditor: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
-  const { suggestions, loading, error } = useSelector((state: RootState) => state.suggestions)
+  const { suggestions, loading, error, readabilityScore } = useSelector((state: RootState) => state.suggestions)
   const { currentDocument, saving } = useSelector((state: RootState) => state.documents)
   const { user } = useSelector((state: RootState) => state.auth)
   const { autoSaveEnabled } = useSelector((state: RootState) => state.editor)
@@ -65,8 +66,18 @@ const GrammarTextEditor: React.FC = () => {
   const [isResizing, setIsResizing] = useState(false)
   const resizerRef = useRef<HTMLDivElement>(null)
   
-  // Sidebar tab state
-  const [activeSidebarTab, setActiveSidebarTab] = useState<'analysis' | 'suggestions'>('analysis')
+  // Sidebar collapsed state - load from localStorage
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    const saved = localStorage.getItem('wordwise-sidebar-collapsed')
+    return saved === 'true'
+  })
+  
+  // Save sidebar collapsed state to localStorage
+  useEffect(() => {
+    localStorage.setItem('wordwise-sidebar-collapsed', isSidebarCollapsed.toString())
+  }, [isSidebarCollapsed])
+  
+  // Removed sidebar tab state - using unified panel instead
   
   const editorRef = useRef<HTMLTextAreaElement>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
@@ -799,8 +810,13 @@ const GrammarTextEditor: React.FC = () => {
         dispatch(redoRewrite())
         console.log('↷ Keyboard shortcut: Redo rewrite applied')
       }
+    } else if (event.ctrlKey && event.key === 'b') {
+      event.preventDefault()
+      // Toggle sidebar
+      setIsSidebarCollapsed(!isSidebarCollapsed)
+      console.log(`📋 Keyboard shortcut: Sidebar ${isSidebarCollapsed ? 'shown' : 'hidden'}`)
     }
-  }, [manualSave, undoLastSuggestion, canUndo, canRedo, dispatch])
+  }, [manualSave, undoLastSuggestion, canUndo, canRedo, dispatch, isSidebarCollapsed])
 
   // Accept all suggestions
   const handleAcceptAllSuggestions = useCallback(() => {
@@ -1096,17 +1112,7 @@ const GrammarTextEditor: React.FC = () => {
     }
   }, [highlightedContent])
 
-  // Auto-switch to suggestions tab when new suggestions are found (only once)
-  const previousSuggestionsCountRef = useRef(0)
-  useEffect(() => {
-    // Only auto-switch if we went from 0 suggestions to having suggestions
-    // This prevents constant switching when user manually selects analysis tab
-    if (suggestions.length > 0 && previousSuggestionsCountRef.current === 0 && activeSidebarTab === 'analysis') {
-      setActiveSidebarTab('suggestions')
-      console.log('🔄 Auto-switched to suggestions tab - found new suggestions')
-    }
-    previousSuggestionsCountRef.current = suggestions.length
-  }, [suggestions.length, activeSidebarTab])
+  // Removed auto-switch logic - using unified panel with all sections visible
 
   // Performance monitoring: Process retry queue periodically
   useEffect(() => {
@@ -1307,6 +1313,50 @@ const GrammarTextEditor: React.FC = () => {
   const wordCount = content.split(/\s+/).filter(w => w.length > 0).length
   const charCount = content.length
 
+  // Collapsible sections state - everything collapsed by default except critical issues
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
+    criticalSuggestions: false,  // Keep critical issues expanded by default
+    styleSuggestions: true,      // Collapsed by default
+    readability: true,           // Collapsed by default
+    sentenceAnalysis: true,      // Collapsed by default
+    writingGoals: true           // Collapsed by default
+  })
+  
+  const toggleSection = (section: string) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }))
+  }
+
+  // Calculate priority score for suggestions
+  const getPrioritySuggestions = useCallback(() => {
+    return [...suggestions].sort((a, b) => {
+      // Priority: spelling > grammar > style
+      const priorityMap: Record<string, number> = {
+        'spelling': 3,
+        'grammar': 2,
+        'style': 1
+      }
+      return (priorityMap[b.type] || 0) - (priorityMap[a.type] || 0)
+    })
+  }, [suggestions])
+
+  // Calculate summary metrics
+  const getSummaryMetrics = useCallback(() => {
+    const metrics = {
+      totalIssues: suggestions.length,
+      criticalIssues: suggestions.filter(s => s.type === 'spelling' || s.type === 'grammar').length,
+      readabilityScore: currentDocument ? 
+        (readabilityScore?.fleschKincaid ? `Grade ${readabilityScore.fleschKincaid.toFixed(1)}` : 'Analyzing...') : 
+        'N/A',
+      sentenceQuality: sentenceAnalysis ? 
+        `${sentenceAnalysis.qualityDistribution.good}/${sentenceAnalysis.totalSentences} good` : 
+        'N/A'
+    }
+    return metrics
+  }, [suggestions, readabilityScore, sentenceAnalysis, currentDocument])
+
   return (
     <div className="relative w-full h-full flex flex-col">
       {/* Statistics Bar */}
@@ -1463,6 +1513,33 @@ const GrammarTextEditor: React.FC = () => {
             </button>
           )}
 
+          {/* Accept All and Ignore All Suggestions Buttons */}
+          {suggestions.length > 0 && (
+            <>
+              <button
+                onClick={handleAcceptAllSuggestions}
+                className="px-3 py-1 bg-green-100 hover:bg-green-200 dark:bg-green-900 dark:hover:bg-green-800 text-green-800 dark:text-green-200 text-xs rounded transition-colors flex items-center space-x-1"
+                title="Accept all suggestions"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Accept All ({suggestions.length})</span>
+              </button>
+              
+              <button
+                onClick={handleIgnoreAllSuggestions}
+                className="px-3 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs rounded transition-colors flex items-center space-x-1"
+                title="Ignore all suggestions"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                <span>Ignore All</span>
+              </button>
+            </>
+          )}
+
           {/* Performance Management */}
           {(performanceMetrics.requestCount > 0 || retryQueue.length > 0) && (
             <div className="flex items-center space-x-1">
@@ -1530,215 +1607,352 @@ const GrammarTextEditor: React.FC = () => {
           </div>
         </div>
 
-        {/* Resize Handle */}
-        <div
-          ref={resizerRef}
-          className={`w-1 bg-gray-200 dark:bg-gray-600 hover:bg-blue-400 dark:hover:bg-blue-500 cursor-col-resize flex-shrink-0 transition-colors duration-150 ${
-            isResizing ? 'bg-blue-400 dark:bg-blue-500' : ''
-          }`}
-          onMouseDown={handleResizeStart}
-          title="Drag to resize sidebar"
-        />
+        {/* Resize Handle - only show when sidebar is not collapsed */}
+        {!isSidebarCollapsed && (
+          <div
+            ref={resizerRef}
+            className={`w-1 bg-gray-200 dark:bg-gray-600 hover:bg-blue-400 dark:hover:bg-blue-500 cursor-col-resize flex-shrink-0 transition-colors duration-150 ${
+              isResizing ? 'bg-blue-400 dark:bg-blue-500' : ''
+            }`}
+            onMouseDown={handleResizeStart}
+            title="Drag to resize sidebar"
+          />
+        )}
 
         {/* Right Sidebar - Analysis & Suggestions */}
-        <div 
-          className="flex-shrink-0 flex flex-col bg-gray-50 dark:bg-gray-800 rounded-lg"
-          style={{ width: `${sidebarWidth}px` }}
-        >
-          {/* Sidebar Tabs */}
-          <div className="flex border-b border-gray-200 dark:border-gray-600">
+        {!isSidebarCollapsed && (
+          <div 
+            className="flex-shrink-0 flex flex-col bg-gray-50 dark:bg-gray-800 rounded-lg relative"
+            style={{ width: `${sidebarWidth}px` }}
+          >
+          {/* Persistent Summary Bar */}
+          <div className="px-4 py-3 bg-white dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 relative">
+            {/* Collapse button */}
             <button
-              onClick={() => setActiveSidebarTab('analysis')}
-              className={`flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                activeSidebarTab === 'analysis'
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-700'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
+              onClick={() => setIsSidebarCollapsed(true)}
+              className="absolute right-2 top-2 p-1 hover:bg-gray-100 dark:hover:bg-gray-600 rounded transition-colors"
+              title="Hide analysis panel (Ctrl+B)"
             >
-              <div className="flex items-center justify-center space-x-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-                <span>Analysis</span>
-              </div>
+              <svg className="w-4 h-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
             </button>
-            <button
-              onClick={() => setActiveSidebarTab('suggestions')}
-              className={`flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors relative ${
-                activeSidebarTab === 'suggestions'
-                  ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-700'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-              }`}
-            >
-              <div className="flex items-center justify-center space-x-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-                <span>Suggestions</span>
-                {suggestions.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    {suggestions.length}
+            <div className="grid grid-cols-2 gap-2 text-xs pr-8">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Issues:</span>
+                <div className="flex items-center space-x-1">
+                  {getSummaryMetrics().criticalIssues > 0 && (
+                    <span className="px-2 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-full font-medium">
+                      {getSummaryMetrics().criticalIssues} critical
+                    </span>
+                  )}
+                  <span className="px-2 py-0.5 bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 rounded-full">
+                    {getSummaryMetrics().totalIssues} total
                   </span>
-                )}
+                </div>
               </div>
-            </button>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600 dark:text-gray-400">Grade:</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">
+                  {getSummaryMetrics().readabilityScore}
+                </span>
+              </div>
+            </div>
           </div>
 
-          {/* Tab Content */}
-          <div className="flex-1 overflow-hidden">
-            {activeSidebarTab === 'analysis' ? (
-              <div className="h-full overflow-y-auto p-4">
-                <SentenceAnalysisPanel 
-                  text={content}
-                  onSentenceClick={(offset, length) => {
-                    if (editorRef.current) {
-                      editorRef.current.focus()
-                      editorRef.current.setSelectionRange(offset, offset + length)
-                    }
-                  }}
-                  onApplySuggestion={(offset, length, replacement) => {
-                    // Store undo state for sentence suggestion
-                    const originalText = content.substring(offset, offset + length)
-                    setLastAppliedSuggestion({
-                      originalText,
-                      replacement,
-                      offset,
-                      length: replacement.length,
-                      fullContentBefore: content
-                    })
-                    
-                    // Apply the suggestion to the text
-                    const newContent = 
-                      content.substring(0, offset) + 
-                      replacement + 
-                      content.substring(offset + length)
-                    
-                    setContentState(newContent)
-                    
-                    if (editorRef.current) {
-                      editorRef.current.value = newContent
-                      // Position cursor after the replacement
-                      const newCursorPosition = offset + replacement.length
-                      editorRef.current.focus()
-                      editorRef.current.setSelectionRange(newCursorPosition, newCursorPosition)
-                    }
-                    
-                    // Update Redux state
-                    dispatch(setContent([{
-                      type: 'paragraph',
-                      children: [{ text: newContent }]
-                    }]))
-                    
-                    // Update current document content
-                    dispatch(updateCurrentDocumentContent(newContent))
-                    
-                    // Trigger grammar check immediately
-                    checkGrammarImmediate(newContent)
-                    checkSentenceStructure(newContent)
-                    autoSave(newContent)
-                    
-                    console.log('📝 Applied sentence suggestion - undo data stored')
-                  }}
-                />
-              </div>
-            ) : (
-              <div className="h-full overflow-y-auto p-4">
-                {/* Writing Suggestions Panel */}
-                {suggestions.length > 0 ? (
-                  <div className="space-y-4">
-                                         {/* Header */}
-                     <div className="mb-3">
-                       <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                         Writing Suggestions ({suggestions.length})
-                       </h3>
-                     </div>
-
-                    {/* Action Buttons */}
+          {/* Scrollable Content Area */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-4 space-y-4">
+              {/* Critical Suggestions Section (Priority) */}
+              {suggestions.filter(s => s.type === 'spelling' || s.type === 'grammar').length > 0 && (
+                <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                  <button
+                    onClick={() => toggleSection('criticalSuggestions')}
+                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                  >
                     <div className="flex items-center space-x-2">
-                      <button
-                        onClick={handleAcceptAllSuggestions}
-                        className="px-3 py-1 bg-green-100 hover:bg-green-200 dark:bg-green-900 dark:hover:bg-green-800 text-green-800 dark:text-green-200 text-xs rounded transition-colors flex items-center space-x-1"
-                        title="Accept all suggestions"
-                      >
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        <span>Accept All</span>
-                      </button>
-                      
-                      <button
-                        onClick={handleIgnoreAllSuggestions}
-                        className="px-3 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs rounded transition-colors flex items-center space-x-1"
-                        title="Ignore all suggestions"
-                      >
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                        <span>Ignore All</span>
-                      </button>
+                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        Critical Issues ({suggestions.filter(s => s.type === 'spelling' || s.type === 'grammar').length})
+                      </h3>
                     </div>
-
-                    {/* Suggestions List */}
-                    <div className="space-y-3">
-                      {suggestions.map((suggestion) => (
-                        <div 
-                          key={suggestion.id}
-                          className="p-3 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm"
-                        >
-                          <div className="flex items-start space-x-3">
-                            <span className={`text-xs px-2 py-1 rounded flex-shrink-0 font-medium ${
-                              suggestion.type === 'grammar' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-                              suggestion.type === 'spelling' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' :
-                              'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                            }`}>
-                              {suggestion.type}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-2">
-                                {suggestion.message}
-                              </p>
-                              {suggestion.replacements && suggestion.replacements.length > 0 && (
-                                <div className="space-y-1">
-                                  {suggestion.replacements.slice(0, 3).map((replacement, index) => (
-                                    <button
-                                      key={index}
-                                      onClick={() => handleApplySuggestion(suggestion, replacement)}
-                                      className="block w-full text-left px-3 py-2 text-sm bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
-                                    >
-                                      "{replacement}"
-                                    </button>
-                                  ))}
+                    <svg 
+                      className={`w-4 h-4 text-gray-400 transition-transform ${
+                        collapsedSections.criticalSuggestions ? '' : 'rotate-180'
+                      }`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  
+                  {!collapsedSections.criticalSuggestions && (
+                    <div className="px-4 pb-4 space-y-3">
+                      {getPrioritySuggestions()
+                        .filter(s => s.type === 'spelling' || s.type === 'grammar')
+                        .map((suggestion) => (
+                          <div 
+                            key={suggestion.id}
+                            className="p-3 bg-gray-50 dark:bg-gray-600 rounded-lg"
+                          >
+                            <div className="flex items-start space-x-3">
+                              <span className={`text-xs px-2 py-1 rounded flex-shrink-0 font-medium ${
+                                suggestion.type === 'grammar' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
+                                suggestion.type === 'spelling' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' :
+                                'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                              }`}>
+                                {suggestion.type}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-2">
+                                  {suggestion.message}
+                                </p>
+                                {suggestion.replacements && suggestion.replacements.length > 0 && (
+                                  <div className="flex flex-wrap gap-1">
+                                    {suggestion.replacements.slice(0, 3).map((replacement, index) => (
+                                      <button
+                                        key={index}
+                                        onClick={() => handleApplySuggestion(suggestion, replacement)}
+                                        className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                                      >
+                                        "{replacement}"
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="mt-2">
+                                  <button
+                                    onClick={() => handleIgnoreSuggestion(suggestion.id)}
+                                    className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                                  >
+                                    Ignore
+                                  </button>
                                 </div>
-                              )}
-                              <div className="mt-2 flex items-center space-x-2">
-                                <button
-                                  onClick={() => handleIgnoreSuggestion(suggestion.id)}
-                                  className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                                >
-                                  Ignore
-                                </button>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* Style Suggestions Section */}
+              {suggestions.filter(s => s.type === 'style').length > 0 && (
+                <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                  <button
+                    onClick={() => toggleSection('styleSuggestions')}
+                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        Style Improvements ({suggestions.filter(s => s.type === 'style').length})
+                      </h3>
+                    </div>
+                    <svg 
+                      className={`w-4 h-4 text-gray-400 transition-transform ${
+                        collapsedSections.styleSuggestions ? '' : 'rotate-180'
+                      }`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  
+                  {!collapsedSections.styleSuggestions && (
+                    <div className="px-4 pb-4 space-y-3">
+                      {suggestions
+                        .filter(s => s.type === 'style')
+                        .map((suggestion) => (
+                          <div 
+                            key={suggestion.id}
+                            className="p-3 bg-gray-50 dark:bg-gray-600 rounded-lg"
+                          >
+                            <div className="flex items-start space-x-3">
+                              <span className="text-xs px-2 py-1 rounded flex-shrink-0 font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                {suggestion.type}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-2">
+                                  {suggestion.message}
+                                </p>
+                                {suggestion.replacements && suggestion.replacements.length > 0 && (
+                                  <div className="flex flex-wrap gap-1">
+                                    {suggestion.replacements.slice(0, 3).map((replacement, index) => (
+                                      <button
+                                        key={index}
+                                        onClick={() => handleApplySuggestion(suggestion, replacement)}
+                                        className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                                      >
+                                        "{replacement}"
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="mt-2">
+                                  <button
+                                    onClick={() => handleIgnoreSuggestion(suggestion.id)}
+                                    className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                                  >
+                                    Ignore
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Readability Analysis Section */}
+              <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                <button
+                  onClick={() => toggleSection('readability')}
+                  className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <div className="flex items-center space-x-2">
+                    <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      Readability Analysis
+                    </h3>
                   </div>
-                ) : (
-                  <div className="flex items-center justify-center h-32">
-                    <div className="text-center">
-                      <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">No suggestions found</p>
-                    </div>
+                  <svg 
+                    className={`w-4 h-4 text-gray-400 transition-transform ${
+                      collapsedSections.readability ? '' : 'rotate-180'
+                    }`} 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {!collapsedSections.readability && (
+                  <div className="px-4 pb-4">
+                    <ReadabilityPanel />
                   </div>
                 )}
               </div>
-            )}
+
+              {/* Sentence Analysis Section */}
+              <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                <button
+                  onClick={() => toggleSection('sentenceAnalysis')}
+                  className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <div className="flex items-center space-x-2">
+                    <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      Sentence Structure
+                    </h3>
+                  </div>
+                  <svg 
+                    className={`w-4 h-4 text-gray-400 transition-transform ${
+                      collapsedSections.sentenceAnalysis ? '' : 'rotate-180'
+                    }`} 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {!collapsedSections.sentenceAnalysis && (
+                  <div className="px-4 pb-4">
+                    <SentenceAnalysisPanel 
+                      text={content}
+                      onSentenceClick={(offset, length) => {
+                        if (editorRef.current) {
+                          editorRef.current.focus()
+                          editorRef.current.setSelectionRange(offset, offset + length)
+                        }
+                      }}
+                      onApplySuggestion={(offset, length, replacement) => {
+                        // Store undo state for sentence suggestion
+                        const originalText = content.substring(offset, offset + length)
+                        setLastAppliedSuggestion({
+                          originalText,
+                          replacement,
+                          offset,
+                          length: replacement.length,
+                          fullContentBefore: content
+                        })
+                        
+                        // Apply the suggestion to the text
+                        const newContent = 
+                          content.substring(0, offset) + 
+                          replacement + 
+                          content.substring(offset + length)
+                        
+                        setContentState(newContent)
+                        
+                        if (editorRef.current) {
+                          editorRef.current.value = newContent
+                          // Position cursor after the replacement
+                          const newCursorPosition = offset + replacement.length
+                          editorRef.current.focus()
+                          editorRef.current.setSelectionRange(newCursorPosition, newCursorPosition)
+                        }
+                        
+                        // Update Redux state
+                        dispatch(setContent([{
+                          type: 'paragraph',
+                          children: [{ text: newContent }]
+                        }]))
+                        
+                        // Update current document content
+                        dispatch(updateCurrentDocumentContent(newContent))
+                        
+                        // Trigger grammar check immediately
+                        checkGrammarImmediate(newContent)
+                        checkSentenceStructure(newContent)
+                        autoSave(newContent)
+                        
+                        console.log('📝 Applied sentence suggestion - undo data stored')
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
+
+            </div>
           </div>
         </div>
+        )}
       </div>
+
+      {/* Floating sidebar toggle button when collapsed */}
+      {isSidebarCollapsed && (
+        <button
+          onClick={() => setIsSidebarCollapsed(false)}
+          className="fixed right-4 top-20 z-30 p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg shadow-lg transition-all duration-200 flex items-center space-x-1"
+          title="Show analysis panel (Ctrl+B)"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l-7 7 7 7" />
+          </svg>
+          <span className="text-sm font-medium">Analysis</span>
+          {suggestions.length > 0 && (
+            <span className="bg-red-500 text-white text-xs rounded-full px-2 py-0.5 ml-1">
+              {suggestions.length}
+            </span>
+          )}
+        </button>
+      )}
 
       {/* Suggestion Tooltip */}
       {activeSuggestion && showTooltip && (
