@@ -41,18 +41,29 @@ export const documentService = {
           break
       }
 
-      // Create blob and download
+      // Create blob and download using a more compatible approach
       const blob = new Blob([content], { type: mimeType })
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
       
-      // Cleanup
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      // Check if we're in a browser environment
+      if (typeof window !== 'undefined' && window.document) {
+        const url = window.URL.createObjectURL(blob)
+        const link = window.document.createElement('a')
+        link.style.display = 'none'
+        link.href = url
+        link.download = filename
+        
+        // Append to body, click, and remove
+        window.document.body.appendChild(link)
+        link.click()
+        
+        // Cleanup
+        setTimeout(() => {
+          window.document.body.removeChild(link)
+          window.URL.revokeObjectURL(url)
+        }, 100)
+      } else {
+        throw new Error('Download not supported in this environment')
+      }
     } catch (error) {
       console.error('Error downloading document:', error)
       throw error
@@ -98,16 +109,27 @@ export const documentService = {
 
       // Download as a single text file
       const blob = new Blob([allContent], { type: 'text/plain' })
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `wordwise-export-${new Date().toISOString().split('T')[0]}.txt`
-      document.body.appendChild(a)
-      a.click()
       
-      // Cleanup
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
+      // Check if we're in a browser environment
+      if (typeof window !== 'undefined' && window.document) {
+        const url = window.URL.createObjectURL(blob)
+        const link = window.document.createElement('a')
+        link.style.display = 'none'
+        link.href = url
+        link.download = `wordwise-export-${new Date().toISOString().split('T')[0]}.txt`
+        
+        // Append to body, click, and remove
+        window.document.body.appendChild(link)
+        link.click()
+        
+        // Cleanup
+        setTimeout(() => {
+          window.document.body.removeChild(link)
+          window.URL.revokeObjectURL(url)
+        }, 100)
+      } else {
+        throw new Error('Export not supported in this environment')
+      }
     } catch (error) {
       console.error('Error exporting documents:', error)
       throw error
