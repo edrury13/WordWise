@@ -120,6 +120,11 @@
   pointer-events: none;
 }
 
+/* Hide scrollbar for grammar overlay in webkit browsers */
+.grammar-overlay::-webkit-scrollbar {
+  display: none;
+}
+
 .grammar-overlay span[data-suggestion-id] {
   pointer-events: auto;
   position: relative;

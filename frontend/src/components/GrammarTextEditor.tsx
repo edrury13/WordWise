@@ -79,6 +79,15 @@ const GrammarTextEditor: React.FC = () => {
   // Rate limiting tracking
   const sentenceCallTimesRef = useRef<number[]>([])
 
+  // Scroll synchronization handler
+  const handleScroll = useCallback(() => {
+    if (editorRef.current && overlayRef.current) {
+      // Sync the scroll position from textarea to overlay
+      overlayRef.current.scrollTop = editorRef.current.scrollTop
+      overlayRef.current.scrollLeft = editorRef.current.scrollLeft
+    }
+  }, [])
+
   // Helper function to check if we can make an API call based on recent activity
   const canMakeApiCall = useCallback((callTimes: number[], maxCallsPerMinute: number = 15) => {
     const now = Date.now()
@@ -322,6 +331,14 @@ const GrammarTextEditor: React.FC = () => {
       setHighlightedContent(content)
       return
     }
+    
+    // Ensure scroll sync after content update
+    setTimeout(() => {
+      if (editorRef.current && overlayRef.current) {
+        overlayRef.current.scrollTop = editorRef.current.scrollTop
+        overlayRef.current.scrollLeft = editorRef.current.scrollLeft
+      }
+    }, 0)
 
     console.log('🎨 === STARTING HIGHLIGHT CREATION ===')
     console.log('📄 Content length:', content.length)
@@ -1035,6 +1052,14 @@ const GrammarTextEditor: React.FC = () => {
     createHighlightedText()
   }, [createHighlightedText, suggestions, sentenceAnalysis])
 
+  // Ensure scroll synchronization on mount and when highlighted content changes
+  useEffect(() => {
+    if (editorRef.current && overlayRef.current) {
+      overlayRef.current.scrollTop = editorRef.current.scrollTop
+      overlayRef.current.scrollLeft = editorRef.current.scrollLeft
+    }
+  }, [highlightedContent])
+
   // Auto-switch to suggestions tab when new suggestions are found (only once)
   const previousSuggestionsCountRef = useRef(0)
   useEffect(() => {
@@ -1450,16 +1475,19 @@ const GrammarTextEditor: React.FC = () => {
               className="w-full flex-1 p-4 bg-transparent text-gray-900 dark:text-gray-100 resize-none focus:outline-none font-serif text-lg leading-relaxed min-h-0"
           placeholder={`Start writing your document... Grammar checking will begin automatically. ${autoSaveEnabled ? 'Auto-save is enabled.' : 'Auto-save is disabled - press Ctrl+S to save manually.'}`}
           style={{ fontFamily: 'ui-serif, Georgia, serif' }}
+          onScroll={handleScroll}
         />
         
         {/* Overlay for highlights */}
         <div
           ref={overlayRef}
-          className="grammar-overlay absolute inset-0 p-4 font-serif text-lg leading-relaxed text-transparent z-10"
+          className="grammar-overlay absolute inset-0 p-4 font-serif text-lg leading-relaxed text-transparent z-10 overflow-auto"
           style={{ 
             fontFamily: 'ui-serif, Georgia, serif',
             whiteSpace: 'pre-wrap',
-            wordWrap: 'break-word'
+            wordWrap: 'break-word',
+            scrollbarWidth: 'none', // Hide scrollbar for Firefox
+            msOverflowStyle: 'none' // Hide scrollbar for IE and Edge
           }}
           dangerouslySetInnerHTML={{ __html: highlightedContent }}
         />
