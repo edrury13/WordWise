@@ -1,15 +1,29 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
-import { checkText, ignoreSuggestion, clearSuggestions, ignoreAllCurrentSuggestions, clearError, recheckText } from '../store/slices/suggestionSlice'
+import { 
+  checkText, 
+  checkTextWithAI,
+  ignoreSuggestion, 
+  clearSuggestions, 
+  ignoreAllCurrentSuggestions, 
+  clearError, 
+  recheckText,
+  selectAICheckEnabled,
+  selectAIStats,
+  toggleAICheck
+} from '../store/slices/suggestionSlice'
 import { setContent, setLastSaved, setAutoSave } from '../store/slices/editorSlice'
 import { updateDocument, updateCurrentDocumentContent } from '../store/slices/documentSlice'
 import { Suggestion } from '../store/slices/suggestionSlice'
 import { analyzeSentences, clearCacheByType } from '../services/languageService'
+import { smartCorrectionService, SmartCorrection } from '../services/smartCorrectionService'
 import SentenceAnalysisPanel from './SentenceAnalysisPanel'
 import ToneRewritePanel from './ToneRewritePanel'
 import GradeLevelRewritePanel from './GradeLevelRewritePanel'
 import ReadabilityPanel from './ReadabilityPanel'
+import AISuggestionPanel from './AISuggestionPanel'
+import SmartCorrectionPanel from './SmartCorrectionPanel'
 import { 
   selectShowGradeLevelPanel, 
   setShowGradeLevelPanel,
@@ -30,6 +44,8 @@ const GrammarTextEditor: React.FC = () => {
   const { currentDocument, saving } = useSelector((state: RootState) => state.documents)
   const { user } = useSelector((state: RootState) => state.auth)
   const { autoSaveEnabled } = useSelector((state: RootState) => state.editor)
+  const aiCheckEnabled = useSelector(selectAICheckEnabled)
+  const aiStats = useSelector(selectAIStats)
   
   const [content, setContentState] = useState('')
   const [highlightedContent, setHighlightedContent] = useState('')
@@ -44,6 +60,10 @@ const GrammarTextEditor: React.FC = () => {
   const showGradeLevelRewritePanel = useSelector(selectShowGradeLevelPanel)
   const canUndo = useSelector(selectCanUndo)
   const canRedo = useSelector(selectCanRedo)
+  
+  // Smart corrections state
+  const [smartCorrections, setSmartCorrections] = useState<SmartCorrection[]>([])
+  const [loadingSmartCorrections, setLoadingSmartCorrections] = useState(false)
   
   // Performance monitoring state
   const retryQueue = useSelector(selectRetryQueue)
@@ -128,10 +148,19 @@ const GrammarTextEditor: React.FC = () => {
       // Continue with the check anyway
     }
     
-    // Use recheckText which clears suggestions first and waits a bit
-    dispatch(recheckText({ text }))
-    console.log('🚀 Triggered immediate grammar recheck after suggestion applied')
-  }, [dispatch])
+    // Use AI-enhanced checking if enabled
+    if (aiCheckEnabled) {
+      dispatch(checkTextWithAI({ 
+        text,
+        documentType: 'general', // Could be made dynamic based on document type
+        checkType: 'comprehensive'
+      }))
+      console.log('🚀 Triggered immediate AI-enhanced grammar recheck')
+    } else {
+      dispatch(recheckText({ text }))
+      console.log('🚀 Triggered immediate grammar recheck')
+    }
+  }, [dispatch, aiCheckEnabled])
 
   // Debounced grammar check for typing
   const checkGrammarDebounced = useCallback((text: string) => {
@@ -140,10 +169,19 @@ const GrammarTextEditor: React.FC = () => {
     }
     
     debounceRef.current = setTimeout(() => {
-      dispatch(checkText({ text }))
-      console.log('⏱️ Triggered debounced grammar check')
+      if (aiCheckEnabled) {
+        dispatch(checkTextWithAI({ 
+          text,
+          documentType: 'general',
+          checkType: 'comprehensive'
+        }))
+        console.log('⏱️ Triggered debounced AI-enhanced grammar check')
+      } else {
+        dispatch(checkText({ text }))
+        console.log('⏱️ Triggered debounced grammar check')
+      }
     }, 300)
-  }, [dispatch])
+  }, [dispatch, aiCheckEnabled])
 
   // Debounced sentence analysis - much longer delay since it's less critical than grammar
   const checkSentenceStructure = useCallback((text: string) => {
@@ -712,6 +750,15 @@ const GrammarTextEditor: React.FC = () => {
       editorRef.current.value = newContent
     }
     
+    // Record this correction for smart learning
+    smartCorrectionService.recordUserChoice(
+      suggestion,
+      true, // accepted
+      originalText,
+      replacement,
+      content
+    ).catch(console.error)
+    
     // Clear all existing suggestions to prevent stale highlights
     dispatch(clearSuggestions())
     setSentenceAnalysis(null)
@@ -741,9 +788,22 @@ const GrammarTextEditor: React.FC = () => {
 
   // Ignore suggestion
   const handleIgnoreSuggestion = useCallback((suggestionId: string) => {
+    // Find the suggestion to record the rejection
+    const suggestion = suggestions.find(s => s.id === suggestionId)
+    if (suggestion) {
+      const originalText = content.substring(suggestion.offset, suggestion.offset + suggestion.length)
+      smartCorrectionService.recordUserChoice(
+        suggestion,
+        false, // rejected
+        originalText,
+        originalText, // no change
+        content
+      ).catch(console.error)
+    }
+    
     dispatch(ignoreSuggestion(suggestionId))
     setShowTooltip(null)
-  }, [dispatch])
+  }, [dispatch, suggestions, content])
 
   // Undo last applied suggestion
   const undoLastSuggestion = useCallback(() => {
@@ -788,6 +848,16 @@ const GrammarTextEditor: React.FC = () => {
     toast.success('✅ Suggestion undone')
   }, [lastAppliedSuggestion, dispatch, autoSave, checkGrammarImmediate])
 
+  // Get active suggestion and text metrics
+  const activeSuggestion = combinedSuggestions.find(s => s.id === showTooltip) || suggestions.find(s => s.id === showTooltip)
+  const wordCount = content.split(/\s+/).filter(w => w.length > 0).length
+  const charCount = content.length
+  
+  // Get smart correction data for the active suggestion
+  const getSmartCorrectionForSuggestion = (suggestionId: string): SmartCorrection | undefined => {
+    return smartCorrections.find(sc => sc.suggestion.id === suggestionId)
+  }
+
   // Enhanced keyboard shortcuts with undo support
   const handleKeyDownEnhanced = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.ctrlKey && event.key === 's') {
@@ -815,8 +885,25 @@ const GrammarTextEditor: React.FC = () => {
       // Toggle sidebar
       setIsSidebarCollapsed(!isSidebarCollapsed)
       console.log(`📋 Keyboard shortcut: Sidebar ${isSidebarCollapsed ? 'shown' : 'hidden'}`)
+    } else if (event.ctrlKey && event.shiftKey && event.key === 'A') {
+      event.preventDefault()
+      // Toggle AI checking
+      dispatch(toggleAICheck())
+      const newState = !aiCheckEnabled
+      console.log(`🤖 Keyboard shortcut: AI checking ${newState ? 'enabled' : 'disabled'}`)
+      toast(newState ? '🤖 AI checking enabled' : '🤖 AI checking disabled', {
+        duration: 2000,
+      })
+    } else if (event.key === 'Tab' && showTooltip && activeSuggestion) {
+      // Quick accept with Tab key if it's a quick-accept suggestion
+      event.preventDefault()
+      const smartCorrection = getSmartCorrectionForSuggestion(activeSuggestion.id)
+      if (smartCorrection?.quickAccept && activeSuggestion.replacements && activeSuggestion.replacements.length > 0) {
+        handleApplySuggestion(activeSuggestion, activeSuggestion.replacements[0])
+        toast('⚡ Quick correction applied!', { duration: 1500 })
+      }
     }
-  }, [manualSave, undoLastSuggestion, canUndo, canRedo, dispatch, isSidebarCollapsed])
+  }, [manualSave, undoLastSuggestion, canUndo, canRedo, dispatch, isSidebarCollapsed, aiCheckEnabled, showTooltip, activeSuggestion, getSmartCorrectionForSuggestion, handleApplySuggestion])
 
   // Accept all suggestions
   const handleAcceptAllSuggestions = useCallback(() => {
@@ -1050,7 +1137,16 @@ const GrammarTextEditor: React.FC = () => {
       // Trigger grammar check and sentence analysis for new content if it has text
       if (currentDocument.content.trim() && currentDocument.content.length > 10) {
         console.log('🔍 Document loaded - triggering grammar check and sentence analysis')
-        dispatch(checkText({ text: currentDocument.content }))
+        if (aiCheckEnabled) {
+          console.log('🤖 Using AI-enhanced checking for document load')
+          dispatch(checkTextWithAI({ 
+            text: currentDocument.content,
+            documentType: 'general',
+            checkType: 'comprehensive'
+          }))
+        } else {
+          dispatch(checkText({ text: currentDocument.content }))
+        }
         checkSentenceStructure(currentDocument.content)
       }
     } else if (currentDocument && currentDocId === previousDocId && !content) {
@@ -1067,11 +1163,20 @@ const GrammarTextEditor: React.FC = () => {
       // Also trigger grammar check for initial load case
       if (currentDocument.content.trim() && currentDocument.content.length > 10) {
         console.log('🔍 Initial document load - triggering grammar check and sentence analysis')
-        dispatch(checkText({ text: currentDocument.content }))
+        if (aiCheckEnabled) {
+          console.log('🤖 Using AI-enhanced checking for initial load')
+          dispatch(checkTextWithAI({ 
+            text: currentDocument.content,
+            documentType: 'general',
+            checkType: 'comprehensive'
+          }))
+        } else {
+          dispatch(checkText({ text: currentDocument.content }))
+        }
         checkSentenceStructure(currentDocument.content)
       }
     }
-  }, [currentDocument, dispatch, checkSentenceStructure, content])
+  }, [currentDocument, dispatch, checkSentenceStructure, content, aiCheckEnabled])
 
   // Track document ID changes to ensure suggestions are cleared when switching documents
   useEffect(() => {
@@ -1103,6 +1208,32 @@ const GrammarTextEditor: React.FC = () => {
   useEffect(() => {
     createHighlightedText()
   }, [createHighlightedText, suggestions, sentenceAnalysis])
+
+  // Get smart corrections when suggestions change
+  useEffect(() => {
+    const getSmartCorrections = async () => {
+      if (suggestions.length > 0 && content) {
+        setLoadingSmartCorrections(true)
+        try {
+          const corrections = await smartCorrectionService.getSmartCorrections(
+            suggestions,
+            content
+          )
+          setSmartCorrections(corrections)
+          console.log('🧠 Smart corrections loaded:', corrections.length)
+        } catch (error) {
+          console.error('Error getting smart corrections:', error)
+          setSmartCorrections([])
+        } finally {
+          setLoadingSmartCorrections(false)
+        }
+      } else {
+        setSmartCorrections([])
+      }
+    }
+    
+    getSmartCorrections()
+  }, [suggestions, content])
 
   // Ensure scroll synchronization on mount and when highlighted content changes
   useEffect(() => {
@@ -1309,12 +1440,10 @@ const GrammarTextEditor: React.FC = () => {
     setIsResizing(true)
   }
 
-  const activeSuggestion = combinedSuggestions.find(s => s.id === showTooltip) || suggestions.find(s => s.id === showTooltip)
-  const wordCount = content.split(/\s+/).filter(w => w.length > 0).length
-  const charCount = content.length
-
   // Collapsible sections state - everything collapsed by default except critical issues
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
+    smartCorrections: false,     // Keep smart corrections expanded by default
+    aiAssistant: false,          // Keep AI assistant expanded by default
     criticalSuggestions: false,  // Keep critical issues expanded by default
     styleSuggestions: true,      // Collapsed by default
     readability: true,           // Collapsed by default
@@ -1663,6 +1792,75 @@ const GrammarTextEditor: React.FC = () => {
           {/* Scrollable Content Area */}
           <div className="flex-1 overflow-y-auto">
             <div className="p-4 space-y-4">
+              {/* Smart Corrections Section */}
+              <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                <button
+                  onClick={() => toggleSection('smartCorrections')}
+                  className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xl">🧠</span>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      Smart Auto-Correction
+                    </h3>
+                  </div>
+                  <svg 
+                    className={`w-4 h-4 text-gray-400 transition-transform ${
+                      collapsedSections.smartCorrections ? '' : 'rotate-180'
+                    }`} 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {!collapsedSections.smartCorrections && (
+                  <div className="px-4 pb-4">
+                    <SmartCorrectionPanel />
+                  </div>
+                )}
+              </div>
+
+              {/* AI Assistant Section */}
+              <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                <button
+                  onClick={() => toggleSection('aiAssistant')}
+                  className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xl">🤖</span>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      AI Grammar Assistant
+                    </h3>
+                  </div>
+                  <svg 
+                    className={`w-4 h-4 text-gray-400 transition-transform ${
+                      collapsedSections.aiAssistant ? '' : 'rotate-180'
+                    }`} 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {!collapsedSections.aiAssistant && (
+                  <div className="px-4 pb-4">
+                    <AISuggestionPanel 
+                      suggestion={activeSuggestion}
+                      onApply={(replacement) => {
+                        if (activeSuggestion) {
+                          handleApplySuggestion(activeSuggestion, replacement)
+                        }
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
               {/* Critical Suggestions Section (Priority) */}
               {suggestions.filter(s => s.type === 'spelling' || s.type === 'grammar').length > 0 && (
                 <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
@@ -1975,6 +2173,32 @@ const GrammarTextEditor: React.FC = () => {
             }}
           >
             <div className="space-y-3">
+              {/* Smart Correction Badge */}
+              {(() => {
+                const smartCorrection = getSmartCorrectionForSuggestion(activeSuggestion.id)
+                return smartCorrection && (
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center space-x-2">
+                      {smartCorrection.learningBased && (
+                        <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 px-2 py-1 rounded-full font-medium flex items-center space-x-1">
+                          <span>🧠</span>
+                          <span>Learned</span>
+                        </span>
+                      )}
+                      {smartCorrection.quickAccept && (
+                        <span className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 px-2 py-1 rounded-full font-medium flex items-center space-x-1">
+                          <span>⚡</span>
+                          <span>Quick Accept</span>
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {smartCorrection.confidence}% confidence
+                    </span>
+                  </div>
+                )
+              })()}
+              
               {/* Header */}
               <div className="flex items-center justify-between">
                 <span className={`text-xs px-2 py-1 rounded font-medium ${
@@ -1997,6 +2221,16 @@ const GrammarTextEditor: React.FC = () => {
                 {activeSuggestion.message}
               </p>
               
+              {/* Smart Correction Reason */}
+              {(() => {
+                const smartCorrection = getSmartCorrectionForSuggestion(activeSuggestion.id)
+                return smartCorrection && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 italic">
+                    💡 {smartCorrection.reason}
+                  </p>
+                )
+              })()}
+              
               {/* Suggestions */}
               {activeSuggestion.replacements && activeSuggestion.replacements.length > 0 && (
                 <div className="space-y-2">
@@ -2004,15 +2238,29 @@ const GrammarTextEditor: React.FC = () => {
                     Suggestions:
                   </p>
                   <div className="space-y-1">
-                    {activeSuggestion.replacements.slice(0, 3).map((replacement, index) => (
-                      <button
-                        key={index}
-                        onClick={() => handleApplySuggestion(activeSuggestion, replacement)}
-                        className="block w-full text-left px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded transition-colors"
-                      >
-                        "{replacement}"
-                      </button>
-                    ))}
+                    {activeSuggestion.replacements.slice(0, 3).map((replacement, index) => {
+                      const smartCorrection = getSmartCorrectionForSuggestion(activeSuggestion.id)
+                      const isQuickAccept = smartCorrection?.quickAccept && index === 0
+                      
+                      return (
+                        <button
+                          key={index}
+                          onClick={() => handleApplySuggestion(activeSuggestion, replacement)}
+                          className={`block w-full text-left px-3 py-2 text-sm rounded transition-colors ${
+                            isQuickAccept 
+                              ? 'bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50 border border-green-300 dark:border-green-700' 
+                              : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span>"{replacement}"</span>
+                            {isQuickAccept && (
+                              <span className="text-xs text-green-700 dark:text-green-300">⚡ Quick</span>
+                            )}
+                          </div>
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               )}

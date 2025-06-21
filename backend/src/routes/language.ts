@@ -480,6 +480,201 @@ router.post('/readability', async (req: AuthenticatedRequest, res) => {
   }
 })
 
+// AI-powered grammar check
+router.post('/ai-grammar-check', async (req: AuthenticatedRequest, res) => {
+  const startTime = Date.now()
+  
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated'
+      })
+    }
+
+    const { 
+      text, 
+      context = '', 
+      documentType = 'general',
+      checkType = 'comprehensive'
+    } = req.body
+
+    // Validate input
+    validateTextInput(text, 10000) // 10k limit for AI
+
+    console.log('🤖 AI Grammar check request:', {
+      textLength: text.length,
+      documentType,
+      checkType,
+      userId: req.user.id
+    })
+
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('🔑 OpenAI API key not configured')
+      return res.status(500).json({
+        success: false,
+        error: 'AI service configuration error'
+      })
+    }
+
+    // Prepare the system prompt based on check type
+    let systemPrompt = `You are an expert writing assistant specializing in grammar, spelling, and style checking. 
+    Analyze the provided text and return a JSON object with a "suggestions" array.
+    
+    Each suggestion should have:
+    - type: "grammar", "spelling", "style", "clarity", "conciseness", or "tone"
+    - severity: "high" (errors), "medium" (likely issues), or "low" (style suggestions)
+    - message: Brief description of the issue
+    - explanation: Detailed explanation of why this is an issue
+    - originalText: The exact text that has the issue
+    - suggestions: Array of 1-3 suggested replacements
+    - confidence: 0-100 score indicating confidence in the suggestion
+    
+    Important guidelines:
+    - Only flag actual errors or improvements, not stylistic preferences unless they impact clarity
+    - Consider the document type: ${documentType}
+    - Preserve the author's voice while improving clarity and correctness
+    - For grammar/spelling errors, confidence should be 90-100
+    - For style suggestions, confidence should be 60-85
+    - Be especially careful with technical terms, proper nouns, and domain-specific language
+    - If the text seems intentionally informal or creative, adjust expectations accordingly
+    
+    Return ONLY valid JSON with a "suggestions" array, nothing else.`
+
+    if (checkType === 'grammar-only') {
+      systemPrompt += '\n\nFocus ONLY on grammar and spelling errors. Ignore style and tone.'
+    } else if (checkType === 'style-only') {
+      systemPrompt += '\n\nFocus ONLY on style, clarity, and tone. Ignore minor grammar issues.'
+    }
+
+    const userPrompt = context 
+      ? `Context about this document: ${context}\n\nText to analyze:\n${text}`
+      : `Text to analyze:\n${text}`
+
+    console.log('🚀 Calling OpenAI API...')
+    
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4-turbo-preview",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.3,
+      max_tokens: 2000
+    })
+
+    const aiResponse = JSON.parse(completion.choices[0].message.content || '{"suggestions":[]}')
+    
+    // Process and format suggestions
+    const suggestions = (aiResponse.suggestions || []).map((suggestion: any, index: number) => {
+      // Find the position of the original text in the content
+      const offset = text.indexOf(suggestion.originalText)
+      const length = suggestion.originalText ? suggestion.originalText.length : 0
+      
+      return {
+        id: `ai-${Date.now()}-${index}`,
+        type: suggestion.type || 'grammar',
+        message: suggestion.message,
+        explanation: suggestion.explanation || suggestion.message,
+        replacements: suggestion.suggestions || [],
+        offset: offset >= 0 ? offset : 0,
+        length: length,
+        context: getContextSnippet(text, offset, length),
+        category: mapTypeToCategory(suggestion.type),
+        severity: suggestion.severity || 'medium',
+        confidence: suggestion.confidence || 80,
+        source: 'ai'
+      }
+    }).filter((s: any) => s.offset >= 0) // Only include suggestions we could locate
+
+    // Calculate statistics
+    const stats = {
+      totalIssues: suggestions.length,
+      grammarIssues: suggestions.filter((s: any) => s.type === 'grammar').length,
+      spellingIssues: suggestions.filter((s: any) => s.type === 'spelling').length,
+      styleIssues: suggestions.filter((s: any) => ['style', 'clarity', 'conciseness', 'tone'].includes(s.type)).length,
+      highSeverity: suggestions.filter((s: any) => s.severity === 'high').length,
+      mediumSeverity: suggestions.filter((s: any) => s.severity === 'medium').length,
+      lowSeverity: suggestions.filter((s: any) => s.severity === 'low').length,
+      averageConfidence: suggestions.length > 0 
+        ? Math.round(suggestions.reduce((sum: number, s: any) => sum + s.confidence, 0) / suggestions.length)
+        : 0
+    }
+
+    const duration = Date.now() - startTime
+    
+    console.log('✅ AI Grammar check complete:', {
+      suggestions: suggestions.length,
+      duration,
+      userId: req.user.id,
+      stats
+    })
+
+    res.status(200).json({
+      success: true,
+      suggestions,
+      stats,
+      metadata: {
+        model: 'gpt-4-turbo',
+        checkType,
+        documentType,
+        textLength: text.length,
+        duration
+      }
+    })
+
+  } catch (error: any) {
+    const duration = Date.now() - startTime
+    console.error('💥 AI Grammar check error:', error)
+    
+    if (error.status === 429) {
+      return res.status(429).json({
+        success: false,
+        error: 'AI service rate limit exceeded. Please try again later.'
+      })
+    }
+    
+    if (error.code === 'invalid_api_key') {
+      return res.status(500).json({
+        success: false,
+        error: 'AI service configuration error'
+      })
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check text with AI',
+      details: error.message
+    })
+  }
+})
+
+function getContextSnippet(text: string, offset: number, length: number): string {
+  const contextRadius = 40
+  const start = Math.max(0, offset - contextRadius)
+  const end = Math.min(text.length, offset + length + contextRadius)
+  
+  let snippet = text.substring(start, end)
+  
+  if (start > 0) snippet = '...' + snippet
+  if (end < text.length) snippet = snippet + '...'
+  
+  return snippet
+}
+
+function mapTypeToCategory(type: string): string {
+  const categoryMap: { [key: string]: string } = {
+    'grammar': 'Grammar',
+    'spelling': 'Spelling',
+    'style': 'Style',
+    'clarity': 'Clarity',
+    'conciseness': 'Conciseness',
+    'tone': 'Tone & Voice'
+  }
+  return categoryMap[type] || 'Other'
+}
+
 // Helper functions
 function getSuggestionType(categoryId: string, issueType: string): string {
   console.log('Categorizing suggestion:', { categoryId, issueType })

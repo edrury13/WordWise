@@ -1,9 +1,10 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import { checkGrammarAndSpelling, analyzeReadability } from '../../services/languageService'
+import { checkGrammarWithAI, mergeAISuggestions, AIGrammarCheckOptions } from '../../services/aiGrammarService'
 
 export interface Suggestion {
   id: string
-  type: 'grammar' | 'spelling' | 'style' | 'clarity' | 'engagement' | 'delivery'
+  type: 'grammar' | 'spelling' | 'style' | 'clarity' | 'engagement' | 'delivery' | 'conciseness' | 'tone'
   message: string
   replacements?: string[]
   offset: number
@@ -12,6 +13,8 @@ export interface Suggestion {
   explanation?: string
   category: string
   severity: 'low' | 'medium' | 'high'
+  source?: 'rule-based' | 'languagetool' | 'ai'
+  confidence?: number
 }
 
 export interface ReadabilityScore {
@@ -34,8 +37,17 @@ interface SuggestionState {
   debounceTimer: number | null
   lastCheckTime: number | null
   ignoredSuggestions: string[]
-  apiStatus: 'api' | 'client-fallback' | 'mixed' | null
+  apiStatus: 'api' | 'client-fallback' | 'mixed' | 'ai-enhanced' | null
   latestRequestId: string | null
+  aiCheckEnabled: boolean
+  aiCheckLoading: boolean
+  aiStats: {
+    totalIssues: number
+    grammarIssues: number
+    spellingIssues: number
+    styleIssues: number
+    averageConfidence: number
+  } | null
 }
 
 const initialState: SuggestionState = {
@@ -49,6 +61,9 @@ const initialState: SuggestionState = {
   ignoredSuggestions: [],
   apiStatus: null,
   latestRequestId: null,
+  aiCheckEnabled: true,
+  aiCheckLoading: false,
+  aiStats: null,
 }
 
 // Async thunks
@@ -116,6 +131,117 @@ export const recheckText = createAsyncThunk(
     await new Promise(resolve => setTimeout(resolve, 300))
     
     return dispatch(checkText({ text, language }))
+  }
+)
+
+// AI-enhanced grammar check
+export const checkTextWithAI = createAsyncThunk(
+  'suggestions/checkTextWithAI',
+  async ({ 
+    text, 
+    language = 'en-US',
+    documentType = 'general',
+    checkType = 'comprehensive',
+    enableAI = true
+  }: { 
+    text: string
+    language?: string
+    documentType?: AIGrammarCheckOptions['documentType']
+    checkType?: AIGrammarCheckOptions['checkType']
+    enableAI?: boolean
+  }) => {
+    let grammarResults: { suggestions: Suggestion[], apiStatus: 'api' | 'client-fallback' | 'mixed' | 'ai-enhanced' } = { 
+      suggestions: [], 
+      apiStatus: 'client-fallback' as const 
+    }
+    let readabilityResults = null
+    let aiResults = null
+
+    // Try traditional grammar checking first
+    try {
+      grammarResults = await checkGrammarAndSpelling(text, language)
+      console.log('✅ Grammar check completed:', grammarResults.suggestions.length, 'suggestions')
+    } catch (grammarError) {
+      console.warn('⚠️ Grammar check failed:', grammarError)
+    }
+
+    // Try AI-enhanced checking if enabled and text is substantial
+    if (enableAI && text.trim().length > 50) {
+      try {
+        console.log('🤖 Starting AI grammar check...')
+        aiResults = await checkGrammarWithAI({
+          text,
+          documentType,
+          checkType
+        })
+        
+        console.log('🤖 AI Results received:', {
+          success: aiResults.success,
+          error: aiResults.error,
+          suggestionsCount: aiResults.suggestions?.length || 0,
+          stats: aiResults.stats
+        })
+        
+        if (aiResults.success && aiResults.suggestions.length > 0) {
+          console.log('✅ AI grammar check completed:', aiResults.suggestions.length, 'AI suggestions')
+          console.log('📝 Traditional suggestions before merge:', grammarResults.suggestions.length)
+          
+          // Merge AI suggestions with traditional ones
+          const mergedSuggestions = mergeAISuggestions(grammarResults.suggestions, aiResults.suggestions)
+          
+          console.log('🔀 Merged suggestions:', mergedSuggestions.length)
+          console.log('🔀 Merge details:', {
+            traditional: grammarResults.suggestions.length,
+            ai: aiResults.suggestions.length,
+            merged: mergedSuggestions.length
+          })
+          
+          grammarResults = {
+            suggestions: mergedSuggestions,
+            apiStatus: 'ai-enhanced'
+          }
+        } else if (!aiResults.success) {
+          console.warn('⚠️ AI check was not successful:', aiResults.error)
+        } else {
+          console.log('ℹ️ AI check successful but no suggestions found')
+        }
+      } catch (aiError) {
+        console.warn('⚠️ AI grammar check failed:', aiError)
+        // Continue with traditional results
+      }
+    } else {
+      console.log('⏭️ Skipping AI check:', {
+        enableAI,
+        textLength: text.trim().length,
+        reason: !enableAI ? 'AI disabled' : 'Text too short'
+      })
+    }
+
+    // Try readability analysis
+    try {
+      readabilityResults = await analyzeReadability(text)
+      console.log('✅ Readability analysis completed:', readabilityResults)
+    } catch (readabilityError) {
+      console.error('❌ Readability analysis failed:', readabilityError)
+      // Provide fallback readability score
+      readabilityResults = {
+        fleschKincaid: 10.0,
+        fleschReadingEase: 60.0,
+        readabilityLevel: 'High School',
+        averageWordsPerSentence: Math.max(text.split(/\s+/).length / Math.max(text.split(/[.!?]+/).length, 1), 1),
+        averageSyllablesPerWord: 1.5,
+        totalSentences: Math.max(text.split(/[.!?]+/).filter(s => s.trim().length > 0).length, 1),
+        passiveVoicePercentage: 0.0,
+        longSentences: 0,
+      }
+    }
+
+    return {
+      suggestions: grammarResults.suggestions,
+      readabilityScore: readabilityResults,
+      apiStatus: grammarResults.apiStatus,
+      aiStats: aiResults?.stats || null,
+    }
   }
 )
 
@@ -201,6 +327,12 @@ const suggestionSlice = createSlice({
     clearIgnoredSuggestions: (state) => {
       state.ignoredSuggestions = []
     },
+    toggleAICheck: (state) => {
+      state.aiCheckEnabled = !state.aiCheckEnabled
+    },
+    setAICheckEnabled: (state, action: PayloadAction<boolean>) => {
+      state.aiCheckEnabled = action.payload
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -255,11 +387,43 @@ const suggestionSlice = createSlice({
         state.loading = false
         state.error = action.error.message || 'Failed to recheck text'
       })
+      // AI-enhanced text checking
+      .addCase(checkTextWithAI.pending, (state, action) => {
+        state.loading = true
+        state.aiCheckLoading = true
+        state.error = null
+        state.latestRequestId = action.meta.requestId
+      })
+      .addCase(checkTextWithAI.fulfilled, (state, action) => {
+        if (action.meta.requestId !== state.latestRequestId) {
+          console.warn('⏭️ Ignoring out-of-date AI grammar check result')
+          return
+        }
+        state.loading = false
+        state.aiCheckLoading = false
+        state.suggestions = action.payload.suggestions.filter(
+          (s: Suggestion) => !state.ignoredSuggestions.includes(s.id)
+        )
+        state.readabilityScore = action.payload.readabilityScore
+        state.apiStatus = action.payload.apiStatus
+        state.aiStats = action.payload.aiStats
+        state.lastCheckTime = Date.now()
+      })
+      .addCase(checkTextWithAI.rejected, (state, action) => {
+        if (action.meta.requestId !== state.latestRequestId) {
+          return
+        }
+        state.loading = false
+        state.aiCheckLoading = false
+        state.error = action.error.message || 'Failed to check text with AI'
+      })
   },
 })
 
 // Selectors
 export const selectApiStatus = (state: { suggestions: SuggestionState }) => state.suggestions.apiStatus
+export const selectAICheckEnabled = (state: { suggestions: SuggestionState }) => state.suggestions.aiCheckEnabled
+export const selectAIStats = (state: { suggestions: SuggestionState }) => state.suggestions.aiStats
 
 export const {
   setActiveSuggestion,
@@ -273,6 +437,8 @@ export const {
   clearError,
   setDebounceTimer,
   clearIgnoredSuggestions,
+  toggleAICheck,
+  setAICheckEnabled,
 } = suggestionSlice.actions
 
 export default suggestionSlice.reducer 
