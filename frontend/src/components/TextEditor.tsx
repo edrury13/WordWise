@@ -11,12 +11,15 @@ import {
   startStreaming,
   addStreamingSuggestion,
   completeStreaming,
-  streamingError
+  streamingError,
+  applySuggestion,
+  validateSuggestions
 } from '../store/slices/suggestionSlice'
 import { setContent, setLastSaved } from '../store/slices/editorSlice'
 import { updateDocument } from '../store/slices/documentSlice'
 import { Suggestion } from '../store/slices/suggestionSlice'
 import { checkGrammarWithAIStream } from '../services/aiGrammarService'
+import { smartCorrectionService } from '../services/smartCorrectionService'
 
 interface TextEditorProps {
   documentId?: string
@@ -50,6 +53,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const [streamingEnabled, setStreamingEnabled] = useState(true) // Default to streaming mode
   const [typingSpeed, setTypingSpeed] = useState<{ wpm: number; lastUpdate: number }>({ wpm: 0, lastUpdate: 0 })
   const [editHistory, setEditHistory] = useState<Array<{ type: 'add' | 'delete' | 'replace'; size: number; timestamp: number }>>([])
+  const [recentlyAppliedSuggestions, setRecentlyAppliedSuggestions] = useState<Set<string>>(new Set())
   const [smartDebounceConfig, setSmartDebounceConfig] = useState({
     baseDelay: 2000,
     minDelay: 300,
@@ -281,6 +285,10 @@ const TextEditor: React.FC<TextEditorProps> = ({
         return
       }
       
+      // Validate existing suggestions against the current text
+      // This removes any suggestions that are no longer valid due to text changes
+      dispatch(validateSuggestions({ currentText: normalizedText }))
+      
       // Calculate smart delay
       const pattern = editPattern || { isHeavyEditing: false, isContinuousTyping: false, isMinorCorrection: false }
       const delay = calculateSmartDelay(trigger, pattern)
@@ -345,6 +353,9 @@ const TextEditor: React.FC<TextEditorProps> = ({
               streamAbortRef.current = null
             }
             
+            // Always validate existing suggestions first to fix any offset issues
+            dispatch(validateSuggestions({ currentText: normalizedText }))
+            
             // Determine if incremental or full check
             const isIncremental = changedParagraphs.length < allParagraphs.length
             const changedRanges = isIncremental ? changedParagraphs.map(p => ({ start: p.start, end: p.end })) : undefined
@@ -365,11 +376,22 @@ const TextEditor: React.FC<TextEditorProps> = ({
                   console.log('Streaming started')
                 },
                 onSuggestion: (suggestion, count) => {
-                  dispatch(addStreamingSuggestion({ suggestion, count }))
+                  // Validate the suggestion before adding it
+                  if (suggestion.offset >= 0 && suggestion.offset + suggestion.length <= normalizedText.length) {
+                    dispatch(addStreamingSuggestion({ suggestion, count, currentText: normalizedText }))
+                  } else {
+                    console.warn('Skipping invalid streaming suggestion:', {
+                      offset: suggestion.offset,
+                      length: suggestion.length,
+                      textLength: normalizedText.length
+                    })
+                  }
                 },
                 onComplete: (stats, metadata) => {
                   dispatch(completeStreaming({ stats, metadata }))
                   console.log('Streaming complete:', stats)
+                  // Validate all suggestions after streaming completes
+                  dispatch(validateSuggestions({ currentText: normalizedText }))
                 },
                 onError: (error) => {
                   dispatch(streamingError(error))
@@ -477,6 +499,15 @@ const TextEditor: React.FC<TextEditorProps> = ({
         
         setContentState(newContent)
         
+        // Clear suggestions if text has changed significantly to avoid offset issues
+        // This helps prevent stale highlights when user manually edits text
+        if (Math.abs(newContent.length - content.length) > 1 || editPattern.isHeavyEditing) {
+          dispatch(clearSuggestions())
+        } else {
+          // For minor changes, just validate existing suggestions
+          dispatch(validateSuggestions({ currentText: newContent }))
+        }
+        
         // Update Redux store
         dispatch(setContent([{
           type: 'paragraph',
@@ -561,15 +592,39 @@ const TextEditor: React.FC<TextEditorProps> = ({
     
     // Add all text segments and suggestions
     let lastEnd = 0
-    const sortedSuggestions = [...suggestions].sort((a, b) => a.offset - b.offset)
+    const sortedSuggestions = [...suggestions]
+      .filter(s => !recentlyAppliedSuggestions.has(s.id)) // Filter out recently applied suggestions
+      .sort((a, b) => a.offset - b.offset)
     
-    // Filter out suggestions that are out of bounds
+    // Filter out suggestions that are out of bounds or don't match the current text
     const validSuggestions = sortedSuggestions.filter(suggestion => {
       // Check if suggestion is within content bounds
       if (suggestion.offset < 0 || suggestion.offset + suggestion.length > content.length) {
+        console.warn('Invalid suggestion bounds:', {
+          id: suggestion.id,
+          type: suggestion.type,
+          offset: suggestion.offset,
+          length: suggestion.length,
+          contentLength: content.length,
+          message: suggestion.message
+        })
         return false
       }
       
+      // Additional validation: check if the text at the suggestion location matches
+      // This helps catch stale suggestions that weren't properly cleared
+      // const suggestionText = content.substring(suggestion.offset, suggestion.offset + suggestion.length)
+      
+      // For style suggestions, we might want to be more lenient since the exact text
+      // might have changed slightly but the style issue persists
+      if (suggestion.type === 'style' || suggestion.type === 'clarity' || 
+          suggestion.type === 'engagement' || suggestion.type === 'delivery') {
+        // For style suggestions, just ensure the offset is valid
+        return true
+      }
+      
+      // For grammar/spelling, we can be more strict about text matching
+      // But for now, just ensure the bounds are valid
       return true
     })
     
@@ -672,7 +727,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
       }
       return escapedText
     }).join('')
-  }, [content, suggestions])
+  }, [content, suggestions, recentlyAppliedSuggestions])
 
   // Get CSS class for different error types
   const getHighlightClass = (type: Suggestion['type']): string => {
@@ -743,33 +798,60 @@ const TextEditor: React.FC<TextEditorProps> = ({
 
   // Apply suggestion
   const handleApplySuggestion = useCallback((suggestion: Suggestion, replacement: string) => {
+    // Get the current editor text to ensure we're working with the actual content
+    const currentEditorText = editorRef.current ? normalizeText(editorRef.current.innerText || editorRef.current.textContent || '') : content
+    
+    // Use the editor text if it's different from state (but similar length)
+    const textToUse = Math.abs(currentEditorText.length - content.length) < 5 ? currentEditorText : content
+    
     const newContent = 
-      content.substring(0, suggestion.offset) + 
+      textToUse.substring(0, suggestion.offset) + 
       replacement + 
-      content.substring(suggestion.offset + suggestion.length)
+      textToUse.substring(suggestion.offset + suggestion.length)
     
     setContentState(newContent)
     
-    // Update editor content
+    // Mark this suggestion as recently applied to hide it immediately
+    setRecentlyAppliedSuggestions(prev => new Set(prev).add(suggestion.id))
+    
+    // Update editor content with plain text first
     if (editorRef.current) {
+      // Set as plain text to avoid any lingering highlights
       editorRef.current.innerText = newContent
+      
+      // Position cursor after the replacement
+      const selection = window.getSelection()
+      if (selection && editorRef.current.firstChild) {
+        const cursorPos = suggestion.offset + replacement.length
+        const textNode = editorRef.current.firstChild
+        
+        if (textNode.nodeType === Node.TEXT_NODE && cursorPos <= textNode.textContent!.length) {
+          const range = document.createRange()
+          range.setStart(textNode, cursorPos)
+          range.collapse(true)
+          selection.removeAllRanges()
+          selection.addRange(range)
+        }
+      }
     }
     
-    // Clear all existing suggestions to ensure no stale highlights remain, then trigger fresh grammar check immediately
-    dispatch(clearSuggestions())
+    // Use the applySuggestion action which properly handles offset adjustments
+    // and adds ignored patterns for style suggestions
+    dispatch(applySuggestion({
+      suggestionId: suggestion.id,
+      replacement,
+      offset: suggestion.offset,
+      length: suggestion.length
+    }))
     
-    // Use AI check if enabled, otherwise use regular check
-    if (aiCheckEnabled) {
-      lastAICheckTextRef.current = newContent
-      dispatch(checkTextWithAI({ 
-        text: newContent,
-        enableAI: true,
-        documentType: 'general',
-        checkType: 'comprehensive'
-      }))
-    } else {
-      dispatch(checkText({ text: newContent }))
-    }
+    // Record the user choice for smart correction learning
+    smartCorrectionService.recordUserChoice(
+      suggestion,
+      true, // accepted
+      textToUse.substring(suggestion.offset, suggestion.offset + suggestion.length),
+      replacement,
+      textToUse
+    ).catch(console.error)
     
     dispatch(setContent([
       {
@@ -779,15 +861,51 @@ const TextEditor: React.FC<TextEditorProps> = ({
     ]))
     
     onContentChange?.(newContent)
-    checkGrammar(newContent, 'blur', { isHeavyEditing: false, isContinuousTyping: false, isMinorCorrection: true })
+    
+    // For style suggestions, don't trigger any grammar check
+    // The suggestion has been applied and added to ignored patterns
+    if (['style', 'clarity', 'engagement', 'delivery'].includes(suggestion.type)) {
+      // Clear any pending debounce timers
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+      }
+      // Don't schedule a new check - let the user continue editing
+      console.log('Style suggestion applied - skipping grammar check to prevent re-detection')
+    } else {
+      // For grammar/spelling fixes, validate remaining suggestions after Redux updates
+      // Give Redux time to update before validating
+      setTimeout(() => {
+        dispatch(validateSuggestions({ currentText: newContent }))
+      }, 50)
+    }
+    
     setShowSuggestionTooltip(null)
-  }, [content, dispatch, onContentChange, checkGrammar])
+  }, [content, dispatch, onContentChange, normalizeText])
 
   // Ignore suggestion
   const handleIgnoreSuggestion = useCallback((suggestionId: string) => {
-    dispatch(ignoreSuggestion(suggestionId))
+    // Find the suggestion to record the rejection
+    const suggestion = suggestions.find(s => s.id === suggestionId)
+    if (suggestion) {
+      const originalText = content.substring(suggestion.offset, suggestion.offset + suggestion.length)
+      
+      smartCorrectionService.recordUserChoice(
+        suggestion,
+        false, // rejected
+        originalText,
+        originalText, // no change
+        content
+      ).catch(console.error)
+      
+      // Pass the original text when ignoring so it can be stored as a pattern
+      dispatch(ignoreSuggestion({ suggestionId, originalText }))
+    } else {
+      // Fallback for when suggestion is not found
+      dispatch(ignoreSuggestion({ suggestionId, originalText: undefined }))
+    }
+    
     setShowSuggestionTooltip(null)
-  }, [dispatch])
+  }, [dispatch, suggestions, content])
 
   // Handle editor blur (when user clicks away)
   const handleEditorBlur = useCallback(() => {
@@ -911,6 +1029,21 @@ const TextEditor: React.FC<TextEditorProps> = ({
       }
     }
   }, [suggestions, renderHighlightedText, content, normalizeText])
+
+  // Clear recently applied suggestions once Redux has updated
+  useEffect(() => {
+    // If we have recently applied suggestions but Redux has caught up, clear them
+    if (recentlyAppliedSuggestions.size > 0) {
+      const allAppliedSuggestionsRemoved = Array.from(recentlyAppliedSuggestions).every(
+        id => !suggestions.find(s => s.id === id)
+      )
+      
+      if (allAppliedSuggestionsRemoved) {
+        setRecentlyAppliedSuggestions(new Set())
+        console.log('Cleared recently applied suggestions - Redux has updated')
+      }
+    }
+  }, [suggestions, recentlyAppliedSuggestions])
 
   // Monitor for AI suggestions and validate them
   useEffect(() => {
@@ -1093,7 +1226,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
                 {typingSpeed.wpm > 0 && (
                   <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
                     <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 1.414L10.586 9.5H7a1 1 0 100 2h3.586l-1.293 1.293a1 1 0 101.414 1.414l3-3a1 1 0 000-1.414z" clipRule="evenodd" />
                     </svg>
                     {typingSpeed.wpm} WPM
                   </span>

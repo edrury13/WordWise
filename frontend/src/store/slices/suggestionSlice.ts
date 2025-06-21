@@ -39,6 +39,7 @@ interface SuggestionState {
   debounceTimer: number | null
   lastCheckTime: number | null
   ignoredSuggestions: string[]
+  ignoredSuggestionPatterns: Array<{ text: string; type: string; message: string }>
   apiStatus: 'api' | 'client-fallback' | 'mixed' | 'ai-enhanced' | null
   latestRequestId: string | null
   aiCheckEnabled: boolean
@@ -66,6 +67,7 @@ const initialState: SuggestionState = {
   debounceTimer: null,
   lastCheckTime: null,
   ignoredSuggestions: [],
+  ignoredSuggestionPatterns: [],
   apiStatus: null,
   latestRequestId: null,
   aiCheckEnabled: true,
@@ -300,6 +302,88 @@ export const checkTextWithAI = createAsyncThunk(
   }
 )
 
+// Helper function to check if a suggestion matches an ignored pattern
+const matchesIgnoredPattern = (
+  suggestion: Suggestion, 
+  patterns: Array<{ text: string; type: string; message: string }>,
+  fullText?: string
+): boolean => {
+  return patterns.some(pattern => {
+    // First check if the type matches
+    if (suggestion.type !== pattern.type) {
+      return false
+    }
+    
+    // For style suggestions, use fuzzy matching
+    if (['style', 'clarity', 'engagement', 'delivery'].includes(suggestion.type)) {
+      // Check if the message is similar (could be the same issue)
+      const messageSimilarity = calculateStringSimilarity(suggestion.message, pattern.message)
+      if (messageSimilarity > 0.8) {
+        return true
+      }
+      
+      // If we have the full text, check if the suggestion is for similar text
+      if (fullText && pattern.text) {
+        const suggestionText = fullText.substring(suggestion.offset, suggestion.offset + suggestion.length)
+        const textSimilarity = calculateStringSimilarity(suggestionText.toLowerCase(), pattern.text.toLowerCase())
+        
+        // If the text is very similar and the message is somewhat similar, it's probably the same issue
+        if (textSimilarity > 0.9 && messageSimilarity > 0.5) {
+          return true
+        }
+      }
+      
+      return false
+    }
+    
+    // For grammar/spelling, require exact message match
+    if (suggestion.message === pattern.message) {
+      // If we have text, also check that
+      if (fullText && pattern.text) {
+        const suggestionText = fullText.substring(suggestion.offset, suggestion.offset + suggestion.length)
+        return suggestionText === pattern.text
+      }
+      return true
+    }
+    
+    return false
+  })
+}
+
+// Helper function to calculate string similarity (simple version)
+const calculateStringSimilarity = (str1: string, str2: string): number => {
+  if (str1 === str2) return 1
+  if (!str1 || !str2) return 0
+  
+  const longer = str1.length > str2.length ? str1 : str2
+  const shorter = str1.length > str2.length ? str2 : str1
+  
+  const editDistance = getEditDistance(shorter, longer)
+  return (longer.length - editDistance) / longer.length
+}
+
+// Simple edit distance calculation
+const getEditDistance = (s1: string, s2: string): number => {
+  const costs: number[] = []
+  for (let i = 0; i <= s1.length; i++) {
+    let lastValue = i
+    for (let j = 0; j <= s2.length; j++) {
+      if (i === 0) {
+        costs[j] = j
+      } else if (j > 0) {
+        let newValue = costs[j - 1]
+        if (s1.charAt(i - 1) !== s2.charAt(j - 1)) {
+          newValue = Math.min(newValue, lastValue, costs[j]) + 1
+        }
+        costs[j - 1] = lastValue
+        lastValue = newValue
+      }
+    }
+    if (i > 0) costs[s2.length] = lastValue
+  }
+  return costs[s2.length]
+}
+
 const suggestionSlice = createSlice({
   name: 'suggestions',
   initialState,
@@ -309,28 +393,103 @@ const suggestionSlice = createSlice({
     },
     applySuggestion: (state, action: PayloadAction<{ suggestionId: string; replacement: string; offset: number; length: number }>) => {
       const { suggestionId, replacement, offset, length } = action.payload
+      
+      console.log('Applying suggestion:', {
+        suggestionId,
+        offset,
+        length,
+        replacementLength: replacement.length,
+        delta: replacement.length - length
+      })
+      
+      // Find the suggestion being applied
+      const appliedSuggestion = state.suggestions.find(s => s.id === suggestionId)
+      
+      // If it's a style suggestion, add it to ignored patterns to prevent re-detection
+      if (appliedSuggestion && ['style', 'clarity', 'engagement', 'delivery'].includes(appliedSuggestion.type)) {
+        const pattern = {
+          text: replacement, // Store the replacement text
+          type: appliedSuggestion.type,
+          message: appliedSuggestion.message
+        }
+        state.ignoredSuggestionPatterns.push(pattern)
+        
+        // Note: We can't reliably get the original text from context since it might be out of sync
+        // The component should pass the original text if needed
+      }
+      
       // Remove the applied suggestion and any that overlap the replaced range
       state.suggestions = state.suggestions.filter(s => {
-        const overlap = !(s.offset + s.length <= offset || s.offset >= offset + length)
-        return s.id !== suggestionId && !overlap
+        // Remove the applied suggestion
+        if (s.id === suggestionId) return false
+        
+        // Check for overlaps with the edited region
+        const suggestionEnd = s.offset + s.length
+        const editEnd = offset + length
+        
+        // If suggestion is completely before the edit, it's safe to keep
+        if (suggestionEnd <= offset) {
+          return true
+        }
+        
+        // If suggestion starts at or after the edit end + replacement length, it needs offset adjustment but is safe
+        if (s.offset >= editEnd) {
+          return true
+        }
+        
+        // Otherwise it overlaps in some way and should be removed
+        console.log(`Removing overlapping suggestion ${s.id} at offset ${s.offset}`)
+        return false
       })
 
-      // Calculate the change in text length so we can shift remaining offsets
+      // Calculate the change in text length
       const delta = replacement.length - length
+
+      console.log('Offset adjustment needed:', {
+        delta,
+        suggestionsBeforeAdjustment: state.suggestions.map(s => ({
+          id: s.id,
+          offset: s.offset,
+          length: s.length,
+          type: s.type
+        }))
+      })
 
       // Adjust offsets for suggestions that come after the replaced range
       if (delta !== 0) {
-        state.suggestions.forEach(s => {
-          if (s.offset > offset) {
-            s.offset += delta
+        state.suggestions = state.suggestions.map(s => {
+          // Only need to adjust suggestions that come after the edit
+          // (overlapping ones have already been removed)
+          if (s.offset >= offset + length) {
+            console.log(`Adjusting suggestion ${s.id} offset from ${s.offset} to ${s.offset + delta}`)
+            return {
+              ...s,
+              offset: s.offset + delta
+            }
           }
+          return s
         })
       }
 
       state.activeSuggestion = null
     },
-    ignoreSuggestion: (state, action: PayloadAction<string>) => {
-      const suggestionId = action.payload
+    ignoreSuggestion: (state, action: PayloadAction<{ suggestionId: string; originalText?: string }>) => {
+      const { suggestionId, originalText } = typeof action.payload === 'string' 
+        ? { suggestionId: action.payload, originalText: undefined }
+        : action.payload
+        
+      const suggestion = state.suggestions.find(s => s.id === suggestionId)
+      
+      if (suggestion && originalText) {
+        // Store the pattern for this ignored suggestion
+        const pattern = {
+          text: originalText,
+          type: suggestion.type,
+          message: suggestion.message
+        }
+        state.ignoredSuggestionPatterns.push(pattern)
+      }
+      
       state.suggestions = state.suggestions.filter(s => s.id !== suggestionId)
       state.ignoredSuggestions.push(suggestionId)
       state.activeSuggestion = null
@@ -381,6 +540,7 @@ const suggestionSlice = createSlice({
     },
     clearIgnoredSuggestions: (state) => {
       state.ignoredSuggestions = []
+      state.ignoredSuggestionPatterns = []
     },
     toggleAICheck: (state) => {
       state.aiCheckEnabled = !state.aiCheckEnabled
@@ -424,8 +584,20 @@ const suggestionSlice = createSlice({
       state.loading = true
       state.error = null
     },
-    addStreamingSuggestion: (state, action: PayloadAction<{ suggestion: Suggestion; count: number }>) => {
-      const { suggestion, count } = action.payload
+    addStreamingSuggestion: (state, action: PayloadAction<{ suggestion: Suggestion; count: number; currentText?: string }>) => {
+      const { suggestion, count, currentText } = action.payload
+      
+      // Check if this suggestion is in the ignored list
+      if (state.ignoredSuggestions.includes(suggestion.id)) {
+        console.log('Skipping ignored suggestion by ID:', suggestion.id)
+        return
+      }
+      
+      // Check if this suggestion matches an ignored pattern
+      if (matchesIgnoredPattern(suggestion, state.ignoredSuggestionPatterns, currentText)) {
+        console.log('Skipping ignored suggestion by pattern:', suggestion.type, suggestion.message)
+        return
+      }
       
       // Check if this suggestion already exists
       const existingIndex = state.suggestions.findIndex(s => 
@@ -552,7 +724,8 @@ const suggestionSlice = createSlice({
         })
         
         state.suggestions = action.payload.suggestions.filter(
-          (s: Suggestion) => !state.ignoredSuggestions.includes(s.id)
+          (s: Suggestion) => !state.ignoredSuggestions.includes(s.id) && 
+                            !matchesIgnoredPattern(s, state.ignoredSuggestionPatterns)
         )
         state.readabilityScore = action.payload.readabilityScore
         state.apiStatus = action.payload.apiStatus

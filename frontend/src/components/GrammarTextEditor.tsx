@@ -869,9 +869,14 @@ const GrammarTextEditor: React.FC = () => {
         originalText, // no change
         content
       ).catch(console.error)
+      
+      // Pass the original text when ignoring
+      dispatch(ignoreSuggestion({ suggestionId, originalText }))
+    } else {
+      // Fallback if suggestion not found
+      dispatch(ignoreSuggestion({ suggestionId, originalText: undefined }))
     }
     
-    dispatch(ignoreSuggestion(suggestionId))
     setShowTooltip(null)
   }, [dispatch, suggestions, content])
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Edit, Trash2, Calendar, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Command, Download, Upload, Search, Grid, List, Table, Clock } from 'lucide-react'
+import { Plus, FileText, Edit, Trash2, Calendar, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Command, Download, Upload, Search, Grid, List, Table, Clock, ChevronDown, ChevronUp, Filter, Star, TrendingUp, AlertCircle } from 'lucide-react'
 import { AppDispatch } from '../store'
 import { fetchDocuments, deleteDocument, createDocument } from '../store/slices/documentSlice'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -10,6 +10,7 @@ import DownloadMenu from '../components/DownloadMenu'
 import UploadModal from '../components/UploadModal'
 import { documentService } from '../services/documentService'
 import toast from 'react-hot-toast'
+import WritingInsights from '../components/WritingInsights'
 
 type ViewMode = 'list' | 'grid' | 'table'
 
@@ -71,8 +72,6 @@ const Dashboard: React.FC = () => {
       }
     }
   }
-
-
 
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString)
@@ -184,8 +183,6 @@ const Dashboard: React.FC = () => {
     return minutes < 1 ? '< 1 min read' : `${minutes} min read`
   }
 
-
-
   if (loading && documents.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -256,6 +253,11 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Writing Insights - Compact View */}
+        <div className="mb-8">
+          <WritingInsights compact />
         </div>
 
         {/* Document Library Section */}
