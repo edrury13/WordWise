@@ -9,8 +9,7 @@ import {
   ignoreSuggestion,
   ignoreAllCurrentSuggestions,
   selectAICheckEnabled,
-  toggleAICheck,
-  clearError
+  toggleAICheck
 } from '../store/slices/suggestionSlice'
 import { setContent, setLastSaved, setAutoSave } from '../store/slices/editorSlice'
 import { updateDocument, updateCurrentDocumentContent } from '../store/slices/documentSlice'
@@ -31,7 +30,6 @@ import {
   selectCanRedo,
   undoRewrite,
   redoRewrite,
-  processRetryQueue,
   selectRetryQueue,
   selectPerformanceMetrics,
   clearCache
@@ -44,7 +42,7 @@ import toast from 'react-hot-toast'
 
 const GrammarTextEditor: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
-  const { suggestions, loading, error, readabilityScore } = useSelector((state: RootState) => state.suggestions)
+  const { suggestions, loading, readabilityScore } = useSelector((state: RootState) => state.suggestions)
   const { currentDocument, saving } = useSelector((state: RootState) => state.documents)
   const { user } = useSelector((state: RootState) => state.auth)
   const { autoSaveEnabled } = useSelector((state: RootState) => state.editor)
@@ -53,23 +51,19 @@ const GrammarTextEditor: React.FC = () => {
   
   const [content, setContentState] = useState('')
   const [highlightedContent, setHighlightedContent] = useState('')
-  const [showTooltip, setShowTooltip] = useState<Suggestion | null>(null)
+  const [showTooltip, setShowTooltip] = useState<string | null>(null)
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 })
   const [lastSaveStatus, setLastSaveStatus] = useState<'saving' | 'saved' | 'error' | null>(null)
   const [sentenceAnalysis, setSentenceAnalysis] = useState<any>(null)
   const [sentenceAnalysisLoading, setSentenceAnalysisLoading] = useState(false)
   const [combinedSuggestions, setCombinedSuggestions] = useState<Suggestion[]>([])
   const [showToneRewritePanel, setShowToneRewritePanel] = useState(false)
-  const [loadingSmartCorrections, setLoadingSmartCorrections] = useState(false)
   const [smartCorrections, setSmartCorrections] = useState<SmartCorrection[]>([])
   
   // Grade level rewrite panel state managed by Redux
   const showGradeLevelRewritePanel = useSelector(selectShowGradeLevelPanel)
   const canUndo = useSelector(selectCanUndo)
   const canRedo = useSelector(selectCanRedo)
-  
-  // Add flag to prevent concurrent highlight updates
-  const isUpdatingHighlightsRef = useRef(false)
   
   // Performance monitoring state
   const retryQueue = useSelector(selectRetryQueue)
@@ -180,7 +174,6 @@ const GrammarTextEditor: React.FC = () => {
   const autoSaveRef = useRef<NodeJS.Timeout>()
   const currentDocumentIdRef = useRef<string | null>(null)
   const sentenceDebounceRef = useRef<NodeJS.Timeout>()
-  const retryQueueTimerRef = useRef<NodeJS.Timeout>()
 
   // Rate limiting tracking
   const sentenceCallTimesRef = useRef<number[]>([])
@@ -1418,7 +1411,6 @@ const GrammarTextEditor: React.FC = () => {
   useEffect(() => {
     const getSmartCorrections = async () => {
       if (suggestions.length > 0 && content) {
-        setLoadingSmartCorrections(true)
         try {
           const corrections = await smartCorrectionService.getSmartCorrections(
             suggestions,
@@ -1429,8 +1421,6 @@ const GrammarTextEditor: React.FC = () => {
         } catch (error) {
           console.error('Error getting smart corrections:', error)
           setSmartCorrections([])
-        } finally {
-          setLoadingSmartCorrections(false)
         }
       } else {
         setSmartCorrections([])
