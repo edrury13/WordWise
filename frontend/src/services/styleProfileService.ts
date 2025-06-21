@@ -257,7 +257,7 @@ class StyleProfileService {
       if (!user) throw new Error('User not authenticated');
 
       // First, try to update existing association
-      const { data: existing, error: fetchError } = await supabase
+      const { data: existing } = await supabase
         .from('document_profile_associations')
         .select('id')
         .eq('document_id', documentId)
