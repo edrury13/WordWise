@@ -480,6 +480,261 @@ router.post('/readability', async (req: AuthenticatedRequest, res) => {
   }
 })
 
+// AI-powered grammar check (streaming)
+router.post('/ai-grammar-check-stream', async (req: AuthenticatedRequest, res) => {
+  const startTime = Date.now()
+  
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated'
+      })
+    }
+
+    const { 
+      text, 
+      context = '', 
+      documentType = 'general',
+      checkType = 'comprehensive',
+      styleProfile,
+      changedRanges
+    } = req.body
+
+    // Validate input
+    validateTextInput(text, 10000) // 10k limit for AI
+
+    console.log('🤖 AI Grammar check (streaming) request:', {
+      textLength: text.length,
+      documentType,
+      checkType,
+      userId: req.user.id,
+      incremental: !!changedRanges,
+      changedRanges: changedRanges?.length || 0
+    })
+
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('🔑 OpenAI API key not configured')
+      return res.status(500).json({
+        success: false,
+        error: 'AI service configuration error'
+      })
+    }
+
+    // Set up SSE headers
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+    })
+
+    // Prepare the system prompt based on check type
+    let systemPrompt = `You are an expert writing assistant specializing in grammar, spelling, and style checking. 
+    Analyze the provided text and identify issues ONE BY ONE.
+    
+    For EACH issue you find, immediately output a JSON object on a single line with:
+    - type: "grammar", "spelling", "style", "clarity", "conciseness", or "tone"
+    - severity: "high" (errors), "medium" (likely issues), or "low" (style suggestions)
+    - message: Brief description of the issue
+    - explanation: Detailed explanation of why this is an issue
+    - originalText: The EXACT text that has the issue (including any surrounding punctuation)
+    - context: A unique phrase of 10-20 words that includes the error (to help locate it precisely)
+    - suggestions: Array of 1-3 suggested replacements
+    - confidence: 0-100 score indicating confidence in the suggestion
+    
+    Output each suggestion as a separate JSON object on its own line.
+    DO NOT output an array or wrap suggestions in any container.
+    
+    Important guidelines:
+    - Output each suggestion immediately as you find it
+    - Each line should be a complete, valid JSON object
+    - For originalText, include the exact error and immediate context
+    - For context, include enough surrounding text to make the location unambiguous
+    - Only flag actual errors or improvements
+    - Consider the document type: ${documentType}
+    - Preserve the author's voice while improving clarity
+    - Be especially careful with technical terms and proper nouns`
+    
+    // Add style profile specific instructions
+    if (styleProfile) {
+      systemPrompt += `\n\n${styleProfile.prompt}`
+      console.log('📝 Using style profile:', styleProfile.name, '- Type:', styleProfile.type)
+    }
+
+    if (checkType === 'grammar-only') {
+      systemPrompt += '\n\nFocus ONLY on grammar and spelling errors. Ignore style and tone.'
+    } else if (checkType === 'style-only') {
+      systemPrompt += '\n\nFocus ONLY on style, clarity, and tone. Ignore minor grammar issues.'
+    }
+
+    let userPrompt = context 
+      ? `Context about this document: ${context}\n\n`
+      : ''
+    
+    // Handle incremental checking
+    if (changedRanges && changedRanges.length > 0) {
+      const changedTexts: string[] = []
+      
+      changedRanges.forEach((range: { start: number; end: number }, index: number) => {
+        const changedText = text.substring(range.start, range.end + 1)
+        changedTexts.push(`[Paragraph ${index + 1} - Position ${range.start}-${range.end}]:\n${changedText}`)
+      })
+      
+      userPrompt += `INCREMENTAL CHECK - Only analyze the following changed paragraphs:\n\n${changedTexts.join('\n\n')}\n\nNote: The positions are relative to the full document for proper offset calculation.`
+      systemPrompt += '\n\nIMPORTANT: This is an incremental check. Only analyze the specific paragraphs provided.'
+    } else {
+      userPrompt += `Text to analyze:\n${text}`
+    }
+
+    console.log('🚀 Starting OpenAI streaming...')
+
+    // Send initial event
+    res.write('data: {"type":"start","message":"Starting AI grammar check..."}\n\n')
+    
+    const stream = await openai.chat.completions.create({
+      model: "gpt-4-turbo-preview",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      stream: true,
+      temperature: 0.3,
+      max_tokens: 2000
+    })
+
+    let buffer = ''
+    let suggestionCount = 0
+    const suggestions: any[] = []
+    
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content || ''
+      buffer += delta
+      
+      // Check if we have complete lines
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || '' // Keep incomplete line in buffer
+      
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (trimmed) {
+          try {
+            const suggestion = JSON.parse(trimmed)
+            
+            // Calculate offset
+            let offset = -1
+            let length = 0
+            
+            if (suggestion.originalText) {
+              length = suggestion.originalText.length
+              offset = findBestOccurrence(text, suggestion.originalText, suggestion.context)
+            }
+            
+            if (offset >= 0) {
+              const formattedSuggestion = {
+                id: `ai-${Date.now()}-${suggestionCount}`,
+                type: suggestion.type || 'grammar',
+                message: suggestion.message,
+                explanation: suggestion.explanation || suggestion.message,
+                replacements: suggestion.suggestions || [],
+                offset: offset,
+                length: length,
+                context: suggestion.originalText || '',
+                category: mapTypeToCategory(suggestion.type),
+                severity: suggestion.severity || 'medium',
+                confidence: suggestion.confidence || 80,
+                source: 'ai'
+              }
+              
+              suggestions.push(formattedSuggestion)
+              suggestionCount++
+              
+              // Send suggestion event
+              res.write(`data: ${JSON.stringify({
+                type: 'suggestion',
+                suggestion: formattedSuggestion,
+                count: suggestionCount
+              })}\n\n`)
+              
+              console.log(`📝 Streamed suggestion #${suggestionCount}:`, {
+                type: suggestion.type,
+                offset: offset,
+                message: suggestion.message.substring(0, 50) + '...'
+              })
+            }
+          } catch (e) {
+            // Not valid JSON yet or couldn't parse
+            console.log('Parse error:', e, 'Line:', trimmed)
+          }
+        }
+      }
+    }
+    
+    // Process any remaining buffer
+    if (buffer.trim()) {
+      try {
+        const suggestion = JSON.parse(buffer.trim())
+        // Process final suggestion...
+      } catch (e) {
+        // Ignore incomplete data
+      }
+    }
+
+    // Calculate statistics
+    const stats = {
+      totalIssues: suggestions.length,
+      grammarIssues: suggestions.filter((s: any) => s.type === 'grammar').length,
+      spellingIssues: suggestions.filter((s: any) => s.type === 'spelling').length,
+      styleIssues: suggestions.filter((s: any) => ['style', 'clarity', 'conciseness', 'tone'].includes(s.type)).length,
+      highSeverity: suggestions.filter((s: any) => s.severity === 'high').length,
+      mediumSeverity: suggestions.filter((s: any) => s.severity === 'medium').length,
+      lowSeverity: suggestions.filter((s: any) => s.severity === 'low').length,
+      averageConfidence: suggestions.length > 0 
+        ? Math.round(suggestions.reduce((sum: number, s: any) => sum + s.confidence, 0) / suggestions.length)
+        : 0
+    }
+
+    const duration = Date.now() - startTime
+    
+    // Send completion event
+    res.write(`data: ${JSON.stringify({
+      type: 'complete',
+      stats,
+      metadata: {
+        model: 'gpt-4-turbo',
+        checkType,
+        documentType,
+        textLength: text.length,
+        duration,
+        totalSuggestions: suggestions.length
+      }
+    })}\n\n`)
+    
+    console.log('✅ AI Grammar streaming complete:', {
+      suggestions: suggestions.length,
+      duration,
+      userId: req.user.id,
+      stats
+    })
+    
+    res.end()
+
+  } catch (error: any) {
+    console.error('💥 AI Grammar streaming error:', error)
+    
+    // Try to send error if connection is still open
+    try {
+      res.write(`data: ${JSON.stringify({
+        type: 'error',
+        error: error.message || 'Streaming failed'
+      })}\n\n`)
+      res.end()
+    } catch (e) {
+      // Connection already closed
+    }
+  }
+})
+
 // AI-powered grammar check
 router.post('/ai-grammar-check', async (req: AuthenticatedRequest, res) => {
   const startTime = Date.now()
@@ -497,7 +752,8 @@ router.post('/ai-grammar-check', async (req: AuthenticatedRequest, res) => {
       context = '', 
       documentType = 'general',
       checkType = 'comprehensive',
-      styleProfile
+      styleProfile,
+      changedRanges
     } = req.body
 
     // Validate input
@@ -507,7 +763,9 @@ router.post('/ai-grammar-check', async (req: AuthenticatedRequest, res) => {
       textLength: text.length,
       documentType,
       checkType,
-      userId: req.user.id
+      userId: req.user.id,
+      incremental: !!changedRanges,
+      changedRanges: changedRanges?.length || 0
     })
 
     if (!process.env.OPENAI_API_KEY) {
@@ -527,11 +785,14 @@ router.post('/ai-grammar-check', async (req: AuthenticatedRequest, res) => {
     - severity: "high" (errors), "medium" (likely issues), or "low" (style suggestions)
     - message: Brief description of the issue
     - explanation: Detailed explanation of why this is an issue
-    - originalText: The exact text that has the issue
+    - originalText: The EXACT text that has the issue (including any surrounding punctuation)
+    - context: A unique phrase of 10-20 words that includes the error (to help locate it precisely)
     - suggestions: Array of 1-3 suggested replacements
     - confidence: 0-100 score indicating confidence in the suggestion
     
     Important guidelines:
+    - For originalText, include the exact error and immediate context (e.g., "dog are" not just "are")
+    - For context, include enough surrounding text to make the location unambiguous
     - Only flag actual errors or improvements, not stylistic preferences unless they impact clarity
     - Consider the document type: ${documentType}
     - Preserve the author's voice while improving clarity and correctness
@@ -556,9 +817,27 @@ router.post('/ai-grammar-check', async (req: AuthenticatedRequest, res) => {
       systemPrompt += '\n\nFocus ONLY on style, clarity, and tone. Ignore minor grammar issues.'
     }
 
-    const userPrompt = context 
-      ? `Context about this document: ${context}\n\nText to analyze:\n${text}`
-      : `Text to analyze:\n${text}`
+    let userPrompt = context 
+      ? `Context about this document: ${context}\n\n`
+      : ''
+    
+    // Handle incremental checking
+    if (changedRanges && changedRanges.length > 0) {
+      // Extract only the changed paragraphs for checking
+      const changedTexts: string[] = []
+      
+      changedRanges.forEach((range: { start: number; end: number }, index: number) => {
+        const changedText = text.substring(range.start, range.end + 1)
+        changedTexts.push(`[Paragraph ${index + 1} - Position ${range.start}-${range.end}]:\n${changedText}`)
+      })
+      
+      userPrompt += `INCREMENTAL CHECK - Only analyze the following changed paragraphs:\n\n${changedTexts.join('\n\n')}\n\nNote: The positions are relative to the full document for proper offset calculation.`
+      
+      // Add to system prompt for incremental mode
+      systemPrompt += '\n\nIMPORTANT: This is an incremental check. Only analyze the specific paragraphs provided, not the entire document. Ensure offsets are calculated relative to the full document position provided.'
+    } else {
+      userPrompt += `Text to analyze:\n${text}`
+    }
 
     console.log('🚀 Calling OpenAI API...')
     
@@ -577,9 +856,26 @@ router.post('/ai-grammar-check', async (req: AuthenticatedRequest, res) => {
     
     // Process and format suggestions
     const suggestions = (aiResponse.suggestions || []).map((suggestion: any, index: number) => {
-      // Find the position of the original text in the content
-      const offset = text.indexOf(suggestion.originalText)
-      const length = suggestion.originalText ? suggestion.originalText.length : 0
+      // Better offset calculation that handles context
+      let offset = -1
+      let length = 0
+      
+      if (suggestion.originalText) {
+        length = suggestion.originalText.length
+        
+        // Use the best occurrence finder with context
+        offset = findBestOccurrence(text, suggestion.originalText, suggestion.context)
+      }
+      
+      // Log for debugging
+      const occurrenceCount = suggestion.originalText ? findAllOccurrences(text, suggestion.originalText).length : 0
+      console.log(`AI suggestion #${index}:`, {
+        originalText: suggestion.originalText,
+        foundAt: offset,
+        hasContext: !!suggestion.context,
+        occurrences: occurrenceCount,
+        type: suggestion.type
+      })
       
       return {
         id: `ai-${Date.now()}-${index}`,
@@ -589,7 +885,7 @@ router.post('/ai-grammar-check', async (req: AuthenticatedRequest, res) => {
         replacements: suggestion.suggestions || [],
         offset: offset >= 0 ? offset : 0,
         length: length,
-        context: getContextSnippet(text, offset, length),
+        context: suggestion.originalText || '',
         category: mapTypeToCategory(suggestion.type),
         severity: suggestion.severity || 'medium',
         confidence: suggestion.confidence || 80,
@@ -617,7 +913,9 @@ router.post('/ai-grammar-check', async (req: AuthenticatedRequest, res) => {
       suggestions: suggestions.length,
       duration,
       userId: req.user.id,
-      stats
+      stats,
+      incremental: !!changedRanges,
+      rangesChecked: changedRanges?.length || 0
     })
 
     res.status(200).json({
@@ -670,6 +968,61 @@ function getContextSnippet(text: string, offset: number, length: number): string
   if (end < text.length) snippet = snippet + '...'
   
   return snippet
+}
+
+// Find all occurrences of a substring in text
+function findAllOccurrences(text: string, searchStr: string): number[] {
+  const occurrences: number[] = []
+  let index = text.indexOf(searchStr)
+  
+  while (index !== -1) {
+    occurrences.push(index)
+    index = text.indexOf(searchStr, index + 1)
+  }
+  
+  return occurrences
+}
+
+// Find the best matching occurrence based on context
+function findBestOccurrence(text: string, searchStr: string, context?: string): number {
+  if (!context) {
+    return text.indexOf(searchStr)
+  }
+  
+  // Find all occurrences
+  const occurrences = findAllOccurrences(text, searchStr)
+  
+  if (occurrences.length === 0) return -1
+  if (occurrences.length === 1) return occurrences[0]
+  
+  // Score each occurrence based on context match
+  let bestScore = -1
+  let bestIndex = occurrences[0]
+  
+  for (const occurrence of occurrences) {
+    // Get surrounding context for this occurrence
+    const contextStart = Math.max(0, occurrence - 50)
+    const contextEnd = Math.min(text.length, occurrence + searchStr.length + 50)
+    const occurrenceContext = text.substring(contextStart, contextEnd)
+    
+    // Calculate similarity score (simple word overlap)
+    const contextWords = context.toLowerCase().split(/\s+/)
+    const occurrenceWords = occurrenceContext.toLowerCase().split(/\s+/)
+    
+    let score = 0
+    for (const word of contextWords) {
+      if (occurrenceWords.includes(word)) {
+        score++
+      }
+    }
+    
+    if (score > bestScore) {
+      bestScore = score
+      bestIndex = occurrence
+    }
+  }
+  
+  return bestIndex
 }
 
 function mapTypeToCategory(type: string): string {

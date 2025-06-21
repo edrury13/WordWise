@@ -15,8 +15,31 @@ const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({ suggestion, onApp
   const aiStats = useSelector(selectAIStats)
   const { loading } = useSelector((state: RootState) => state.suggestions)
 
+  const { content } = useSelector((state: RootState) => state.editor)
+  
   const handleToggleAI = () => {
     dispatch(toggleAICheck())
+    
+    // If we're enabling AI and there's content, trigger an AI check
+    if (!aiCheckEnabled && content && content.length > 0) {
+      const textContent = content.map((node: any) => {
+        if (node.children && Array.isArray(node.children)) {
+          return node.children.map((child: any) => child.text || '').join('')
+        }
+        return ''
+      }).join('\n')
+      
+      if (textContent.trim().length > 3) {
+        setTimeout(() => {
+          dispatch(checkTextWithAI({
+            text: textContent,
+            enableAI: true,
+            documentType: 'general',
+            checkType: 'comprehensive'
+          }))
+        }, 100) // Small delay to ensure state is updated
+      }
+    }
   }
 
   // Debug test function
@@ -163,6 +186,14 @@ const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({ suggestion, onApp
               <div className="text-xs text-gray-500 text-center">
                 Powered by GPT-4 • Updates every few seconds
               </div>
+              
+              {/* Debug button - remove in production */}
+              <button
+                onClick={testAICheck}
+                className="mt-2 w-full px-3 py-1 text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 rounded transition-colors"
+              >
+                🧪 Test AI with sample errors
+              </button>
             </div>
           ) : (
             <div className="text-sm text-gray-600 text-center py-4">

@@ -50,6 +50,11 @@ interface SuggestionState {
     styleIssues: number
     averageConfidence: number
   } | null
+  streamingStatus: {
+    isStreaming: boolean
+    suggestionsReceived: number
+    message?: string
+  }
 }
 
 const initialState: SuggestionState = {
@@ -66,6 +71,11 @@ const initialState: SuggestionState = {
   aiCheckEnabled: true,
   aiCheckLoading: false,
   aiStats: null,
+  streamingStatus: {
+    isStreaming: false,
+    suggestionsReceived: 0,
+    message: undefined
+  }
 }
 
 // Async thunks
@@ -145,7 +155,8 @@ export const checkTextWithAI = createAsyncThunk(
     documentType = 'general',
     checkType = 'comprehensive',
     enableAI = true,
-    styleProfile
+    styleProfile,
+    changedRanges
   }: { 
     text: string
     language?: string
@@ -153,13 +164,18 @@ export const checkTextWithAI = createAsyncThunk(
     checkType?: AIGrammarCheckOptions['checkType']
     enableAI?: boolean
     styleProfile?: StyleProfile | null
-  }) => {
+    changedRanges?: Array<{ start: number; end: number }>
+  }, { getState }) => {
     let grammarResults: { suggestions: Suggestion[], apiStatus: 'api' | 'client-fallback' | 'mixed' | 'ai-enhanced' } = { 
       suggestions: [], 
       apiStatus: 'client-fallback' as const 
     }
     let readabilityResults = null
     let aiResults = null
+    
+    // Get current suggestions for incremental checking
+    const state = getState() as any
+    const currentSuggestions = state.suggestions?.suggestions || []
 
     // Try traditional grammar checking first
     try {
@@ -170,14 +186,20 @@ export const checkTextWithAI = createAsyncThunk(
     }
 
     // Try AI-enhanced checking if enabled and text is substantial
-    if (enableAI && text.trim().length > 50) {
+    if (enableAI && text.trim().length > 10) {  // Reduced minimum length for testing
       try {
-        console.log('🤖 Starting AI grammar check...')
+        console.log('🤖 Starting AI grammar check...', {
+          textLength: text.length,
+          documentType,
+          checkType,
+          enableAI
+        })
         aiResults = await checkGrammarWithAI({
           text,
           documentType,
           checkType,
-          styleProfile
+          styleProfile,
+          changedRanges
         })
         
         console.log('🤖 AI Results received:', {
@@ -191,8 +213,10 @@ export const checkTextWithAI = createAsyncThunk(
           console.log('✅ AI grammar check completed:', aiResults.suggestions.length, 'AI suggestions')
           console.log('📝 Traditional suggestions before merge:', grammarResults.suggestions.length)
           
-          // Merge AI suggestions with traditional ones
-          const mergedSuggestions = mergeAISuggestions(grammarResults.suggestions, aiResults.suggestions)
+          // For incremental checking, merge with existing suggestions
+          // Otherwise, merge AI with traditional results
+          const baseSuggestions = changedRanges ? currentSuggestions : grammarResults.suggestions
+          const mergedSuggestions = mergeAISuggestions(baseSuggestions, aiResults.suggestions, changedRanges)
           
           console.log('🔀 Merged suggestions:', mergedSuggestions.length)
           console.log('🔀 Merge details:', {
@@ -256,6 +280,16 @@ export const checkTextWithAI = createAsyncThunk(
       )
       console.log('📋 Suggestions after profile rules:', finalSuggestions.length)
     }
+    
+    console.log('📊 Final checkTextWithAI result:', {
+      totalSuggestions: finalSuggestions.length,
+      bySource: finalSuggestions.reduce((acc, s) => {
+        acc[s.source || 'unknown'] = (acc[s.source || 'unknown'] || 0) + 1
+        return acc
+      }, {} as Record<string, number>),
+      apiStatus: grammarResults.apiStatus,
+      hasAIStats: !!aiResults?.stats
+    })
 
     return {
       suggestions: finalSuggestions,
@@ -354,6 +388,85 @@ const suggestionSlice = createSlice({
     setAICheckEnabled: (state, action: PayloadAction<boolean>) => {
       state.aiCheckEnabled = action.payload
     },
+    validateSuggestions: (state, action: PayloadAction<{ currentText: string }>) => {
+      const { currentText } = action.payload
+      const beforeCount = state.suggestions.length
+      
+      // Filter out suggestions that are no longer valid for the current text
+      state.suggestions = state.suggestions.filter(suggestion => {
+        // Check bounds
+        if (suggestion.offset < 0 || suggestion.offset + suggestion.length > currentText.length) {
+          console.log('Removing out-of-bounds suggestion:', {
+            id: suggestion.id,
+            offset: suggestion.offset,
+            length: suggestion.length,
+            textLength: currentText.length,
+            source: suggestion.source
+          })
+          return false
+        }
+        
+        return true
+      })
+      
+      const afterCount = state.suggestions.length
+      if (beforeCount !== afterCount) {
+        console.log(`Validation removed ${beforeCount - afterCount} suggestions (${beforeCount} -> ${afterCount})`)
+      }
+    },
+    // Streaming reducers
+    startStreaming: (state, action: PayloadAction<{ message?: string }>) => {
+      state.streamingStatus = {
+        isStreaming: true,
+        suggestionsReceived: 0,
+        message: action.payload.message || 'Starting AI analysis...'
+      }
+      state.loading = true
+      state.error = null
+    },
+    addStreamingSuggestion: (state, action: PayloadAction<{ suggestion: Suggestion; count: number }>) => {
+      const { suggestion, count } = action.payload
+      
+      // Check if this suggestion already exists
+      const existingIndex = state.suggestions.findIndex(s => 
+        s.offset === suggestion.offset && s.length === suggestion.length
+      )
+      
+      if (existingIndex >= 0) {
+        // Replace existing suggestion
+        state.suggestions[existingIndex] = suggestion
+      } else {
+        // Add new suggestion
+        state.suggestions.push(suggestion)
+      }
+      
+      // Update streaming status
+      state.streamingStatus.suggestionsReceived = count
+      state.streamingStatus.message = `Found ${count} issue${count !== 1 ? 's' : ''}...`
+      
+      // Sort suggestions by offset
+      state.suggestions.sort((a, b) => a.offset - b.offset)
+    },
+    completeStreaming: (state, action: PayloadAction<{ stats: any; metadata: any }>) => {
+      state.streamingStatus = {
+        isStreaming: false,
+        suggestionsReceived: state.suggestions.length,
+        message: 'Analysis complete'
+      }
+      state.loading = false
+      state.aiStats = action.payload.stats
+      state.apiStatus = 'ai-enhanced'
+      state.lastCheckTime = Date.now()
+    },
+    streamingError: (state, action: PayloadAction<string>) => {
+      state.streamingStatus = {
+        isStreaming: false,
+        suggestionsReceived: 0,
+        message: 'Streaming failed'
+      }
+      state.loading = false
+      state.error = action.payload
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -410,10 +523,12 @@ const suggestionSlice = createSlice({
       })
       // AI-enhanced text checking
       .addCase(checkTextWithAI.pending, (state, action) => {
+        console.log('🚀 AI check starting, request ID:', action.meta.requestId)
         state.loading = true
         state.aiCheckLoading = true
         state.error = null
         state.latestRequestId = action.meta.requestId
+        // Don't clear suggestions here - let the fulfilled action replace them
       })
       .addCase(checkTextWithAI.fulfilled, (state, action) => {
         if (action.meta.requestId !== state.latestRequestId) {
@@ -422,6 +537,20 @@ const suggestionSlice = createSlice({
         }
         state.loading = false
         state.aiCheckLoading = false
+        
+        console.log('📥 AI suggestions received:', {
+          count: action.payload.suggestions.length,
+          apiStatus: action.payload.apiStatus,
+          hasAIStats: !!action.payload.aiStats,
+          suggestions: action.payload.suggestions.slice(0, 3).map(s => ({
+            id: s.id,
+            type: s.type,
+            offset: s.offset,
+            length: s.length,
+            source: s.source
+          }))
+        })
+        
         state.suggestions = action.payload.suggestions.filter(
           (s: Suggestion) => !state.ignoredSuggestions.includes(s.id)
         )
@@ -445,6 +574,7 @@ const suggestionSlice = createSlice({
 export const selectApiStatus = (state: { suggestions: SuggestionState }) => state.suggestions.apiStatus
 export const selectAICheckEnabled = (state: { suggestions: SuggestionState }) => state.suggestions.aiCheckEnabled
 export const selectAIStats = (state: { suggestions: SuggestionState }) => state.suggestions.aiStats
+export const selectStreamingStatus = (state: { suggestions: SuggestionState }) => state.suggestions.streamingStatus
 
 export const {
   setActiveSuggestion,
@@ -460,6 +590,11 @@ export const {
   clearIgnoredSuggestions,
   toggleAICheck,
   setAICheckEnabled,
+  validateSuggestions,
+  startStreaming,
+  addStreamingSuggestion,
+  completeStreaming,
+  streamingError,
 } = suggestionSlice.actions
 
 export default suggestionSlice.reducer 
