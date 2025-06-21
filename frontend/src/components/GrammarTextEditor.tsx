@@ -16,6 +16,8 @@ import { updateDocument, updateCurrentDocumentContent } from '../store/slices/do
 import { Suggestion } from '../store/slices/suggestionSlice'
 import { /* analyzeSentences, */ clearCacheByType } from '../services/languageService' // analyzeSentences commented out - sentence structure feature disabled
 import { smartCorrectionService, SmartCorrection } from '../services/smartCorrectionService'
+import { ignoredWordsService } from '../services/ignoredWordsService'
+import { IgnoredWordsManager } from './IgnoredWordsManager'
 // import SentenceAnalysisPanel from './SentenceAnalysisPanel' // Commented out - sentence structure feature disabled
 import ToneRewritePanel from './ToneRewritePanel'
 import GradeLevelRewritePanel from './GradeLevelRewritePanel'
@@ -59,6 +61,7 @@ const GrammarTextEditor: React.FC = () => {
   const [combinedSuggestions, setCombinedSuggestions] = useState<Suggestion[]>([])
   const [showToneRewritePanel, setShowToneRewritePanel] = useState(false)
   const [smartCorrections, setSmartCorrections] = useState<SmartCorrection[]>([])
+  const [showIgnoredWordsManager, setShowIgnoredWordsManager] = useState(false)
   
   // Grade level rewrite panel state managed by Redux
   const showGradeLevelRewritePanel = useSelector(selectShowGradeLevelPanel)
@@ -165,6 +168,17 @@ const GrammarTextEditor: React.FC = () => {
       dispatch(loadDocumentProfile(currentDocument.id))
     }
   }, [currentDocument?.id, dispatch])
+
+  // Load ignored words when component mounts or user changes
+  useEffect(() => {
+    if (user) {
+      ignoredWordsService.loadIgnoredWords().then(words => {
+        console.log(`📝 Loaded ${words.length} ignored words for user`)
+      }).catch(error => {
+        console.error('Failed to load ignored words:', error)
+      })
+    }
+  }, [user])
   
   // Removed sidebar tab state - using unified panel instead
   
@@ -859,11 +873,13 @@ const GrammarTextEditor: React.FC = () => {
   }, [content, dispatch, autoSave, checkGrammarImmediate]) // Removed checkSentenceStructure dependency
 
   // Ignore suggestion
-  const handleIgnoreSuggestion = useCallback((suggestionId: string) => {
+  const handleIgnoreSuggestion = useCallback(async (suggestionId: string) => {
     // Find the suggestion to record the rejection
     const suggestion = suggestions.find(s => s.id === suggestionId)
     if (suggestion) {
       const originalText = content.substring(suggestion.offset, suggestion.offset + suggestion.length)
+      
+      // Record the rejection for smart corrections
       smartCorrectionService.recordUserChoice(
         suggestion,
         false, // rejected
@@ -871,6 +887,23 @@ const GrammarTextEditor: React.FC = () => {
         originalText, // no change
         content
       ).catch(console.error)
+      
+      // If this is a spelling suggestion, save it to ignored words
+      if (suggestion.type === 'spelling') {
+        const isProperNoun = ignoredWordsService.isLikelyProperNoun(originalText, suggestion.context)
+        
+        // Save to ignored words database
+        const result = await ignoredWordsService.addIgnoredWord(originalText, {
+          context: suggestion.context,
+          documentType: effectiveProfile?.profileType || 'general',
+          isProperNoun
+        })
+        
+        if (result) {
+          console.log('✅ Added to ignored words:', originalText, { isProperNoun })
+          toast.success(`"${originalText}" will no longer be marked as misspelled`)
+        }
+      }
       
       // Pass the original text when ignoring
       dispatch(ignoreSuggestion({ suggestionId, originalText }))
@@ -880,7 +913,7 @@ const GrammarTextEditor: React.FC = () => {
     }
     
     setShowTooltip(null)
-  }, [dispatch, suggestions, content])
+  }, [dispatch, suggestions, content, effectiveProfile])
 
   // Undo last applied suggestion
   const undoLastSuggestion = useCallback(() => {
@@ -1796,6 +1829,18 @@ const GrammarTextEditor: React.FC = () => {
             </>
           )}
 
+          {/* Ignored Words Manager Button */}
+          <button
+            onClick={() => setShowIgnoredWordsManager(true)}
+            className="px-3 py-1 bg-purple-100 hover:bg-purple-200 dark:bg-purple-900 dark:hover:bg-purple-800 text-purple-800 dark:text-purple-200 text-xs rounded transition-colors flex items-center space-x-1"
+            title="Manage ignored words"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+            <span>Ignored Words</span>
+          </button>
+
           {/* Performance Management */}
           {(performanceMetrics.requestCount > 0 || retryQueue.length > 0) && (
             <div className="flex items-center space-x-1">
@@ -2463,6 +2508,12 @@ const GrammarTextEditor: React.FC = () => {
                       onClose={() => dispatch(setShowGradeLevelPanel(false))}
         />
       )}
+
+      {/* Ignored Words Manager */}
+      <IgnoredWordsManager
+        isOpen={showIgnoredWordsManager}
+        onClose={() => setShowIgnoredWordsManager(false)}
+      />
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { checkGrammarAndSpelling, analyzeReadability } from '../../services/lang
 import { checkGrammarWithAI, mergeAISuggestions, AIGrammarCheckOptions } from '../../services/aiGrammarService'
 import { StyleProfile } from '../../types/styleProfile'
 import { profileGrammarService } from '../../services/profileGrammarService'
+import { ignoredWordsService } from '../../services/ignoredWordsService'
 
 export interface Suggestion {
   id: string
@@ -99,6 +100,12 @@ export const checkText = createAsyncThunk(
       // Keep default empty results
     }
 
+    // Filter out ignored words
+    const filteredSuggestions = ignoredWordsService.filterSuggestions(grammarResults.suggestions, text)
+    if (filteredSuggestions.length !== grammarResults.suggestions.length) {
+      console.log(`🔍 Filtered out ${grammarResults.suggestions.length - filteredSuggestions.length} ignored words`)
+    }
+
     // Try readability analysis separately - this should almost never fail
     try {
       readabilityResults = await analyzeReadability(text)
@@ -128,7 +135,7 @@ export const checkText = createAsyncThunk(
     }
 
     return {
-      suggestions: grammarResults.suggestions,
+      suggestions: filteredSuggestions,
       readabilityScore: readabilityResults,
       apiStatus: grammarResults.apiStatus,
     }
@@ -282,6 +289,10 @@ export const checkTextWithAI = createAsyncThunk(
       )
       console.log('📋 Suggestions after profile rules:', finalSuggestions.length)
     }
+    
+    // Filter out ignored words
+    finalSuggestions = ignoredWordsService.filterSuggestions(finalSuggestions, text)
+    console.log('🔍 Suggestions after ignored words filter:', finalSuggestions.length)
     
     console.log('📊 Final checkTextWithAI result:', {
       totalSuggestions: finalSuggestions.length,
