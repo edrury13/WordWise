@@ -14,13 +14,13 @@ import {
 import { setContent, setLastSaved, setAutoSave } from '../store/slices/editorSlice'
 import { updateDocument, updateCurrentDocumentContent } from '../store/slices/documentSlice'
 import { Suggestion } from '../store/slices/suggestionSlice'
-import { analyzeSentences, clearCacheByType } from '../services/languageService'
+import { /* analyzeSentences, */ clearCacheByType } from '../services/languageService' // analyzeSentences commented out - sentence structure feature disabled
 import { smartCorrectionService, SmartCorrection } from '../services/smartCorrectionService'
-import SentenceAnalysisPanel from './SentenceAnalysisPanel'
+// import SentenceAnalysisPanel from './SentenceAnalysisPanel' // Commented out - sentence structure feature disabled
 import ToneRewritePanel from './ToneRewritePanel'
 import GradeLevelRewritePanel from './GradeLevelRewritePanel'
 import ReadabilityPanel from './ReadabilityPanel'
-import AISuggestionPanel from './AISuggestionPanel'
+// import AISuggestionPanel from './AISuggestionPanel' // Commented out - AI Assistant tab removed from sidebar
 import SmartCorrectionPanel from './SmartCorrectionPanel'
 import { ProfileSelector } from './ProfileSelector'
 import { 
@@ -55,7 +55,7 @@ const GrammarTextEditor: React.FC = () => {
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 })
   const [lastSaveStatus, setLastSaveStatus] = useState<'saving' | 'saved' | 'error' | null>(null)
   const [sentenceAnalysis, setSentenceAnalysis] = useState<any>(null)
-  const [sentenceAnalysisLoading, setSentenceAnalysisLoading] = useState(false)
+  // const [sentenceAnalysisLoading, setSentenceAnalysisLoading] = useState(false) // Commented out - sentence structure feature disabled
   const [combinedSuggestions, setCombinedSuggestions] = useState<Suggestion[]>([])
   const [showToneRewritePanel, setShowToneRewritePanel] = useState(false)
   const [smartCorrections, setSmartCorrections] = useState<SmartCorrection[]>([])
@@ -173,10 +173,10 @@ const GrammarTextEditor: React.FC = () => {
   const debounceRef = useRef<NodeJS.Timeout>()
   const autoSaveRef = useRef<NodeJS.Timeout>()
   const currentDocumentIdRef = useRef<string | null>(null)
-  const sentenceDebounceRef = useRef<NodeJS.Timeout>()
+  // const sentenceDebounceRef = useRef<NodeJS.Timeout>() // Commented out - sentence structure feature disabled
 
   // Rate limiting tracking
-  const sentenceCallTimesRef = useRef<number[]>([])
+  // const sentenceCallTimesRef = useRef<number[]>([]) // Commented out - sentence structure feature disabled
 
   // Scroll synchronization handler
   const handleScroll = useCallback(() => {
@@ -188,7 +188,8 @@ const GrammarTextEditor: React.FC = () => {
   }, [])
 
   // Helper function to check if we can make an API call based on recent activity
-  const canMakeApiCall = useCallback((callTimes: number[], maxCallsPerMinute: number = 15) => {
+  // Commented out - only used for sentence structure feature
+  /* const canMakeApiCall = useCallback((callTimes: number[], maxCallsPerMinute: number = 15) => {
     const now = Date.now()
     const oneMinuteAgo = now - 60000
     
@@ -198,7 +199,7 @@ const GrammarTextEditor: React.FC = () => {
     callTimes.push(...recentCalls)
     
     return recentCalls.length < maxCallsPerMinute
-  }, [])
+  }, []) */
 
   // Immediate grammar check for after applying suggestions - bypasses debouncing
   const checkGrammarImmediate = useCallback((text: string) => {
@@ -254,7 +255,8 @@ const GrammarTextEditor: React.FC = () => {
   }, [dispatch, aiCheckEnabled, effectiveProfile])
 
   // Debounced sentence analysis - much longer delay since it's less critical than grammar
-  const checkSentenceStructure = useCallback((text: string) => {
+  // Commented out - sentence structure feature disabled
+  /* const checkSentenceStructure = useCallback((text: string) => {
     if (sentenceDebounceRef.current) {
       clearTimeout(sentenceDebounceRef.current)
     }
@@ -301,7 +303,7 @@ const GrammarTextEditor: React.FC = () => {
         setSentenceAnalysis(null)
       }
     }, 8000) // Increased to 8 seconds since sentence analysis is less critical than grammar
-  }, [canMakeApiCall])
+  }, [canMakeApiCall]) */
 
   // Auto-save functionality
   const autoSave = useCallback((text: string) => {
@@ -388,9 +390,9 @@ const GrammarTextEditor: React.FC = () => {
     
     // Trigger immediate grammar check after tone rewrite
     checkGrammarImmediate(rewrittenText)
-    checkSentenceStructure(rewrittenText)
+    // checkSentenceStructure(rewrittenText) // Disabled sentence structure check
     autoSave(rewrittenText)
-  }, [dispatch, checkSentenceStructure, autoSave, checkGrammarImmediate])
+  }, [dispatch, autoSave, checkGrammarImmediate]) // Removed checkSentenceStructure dependency
 
   // Handle grade level rewrite
   const handleGradeLevelRewrite = useCallback((rewrittenText: string) => {
@@ -412,9 +414,9 @@ const GrammarTextEditor: React.FC = () => {
     
     // Trigger immediate grammar check after grade level rewrite
     checkGrammarImmediate(rewrittenText)
-    checkSentenceStructure(rewrittenText)
+    // checkSentenceStructure(rewrittenText) // Disabled sentence structure check
     autoSave(rewrittenText)
-  }, [dispatch, checkSentenceStructure, autoSave, checkGrammarImmediate])
+  }, [dispatch, autoSave, checkGrammarImmediate]) // Removed checkSentenceStructure dependency
 
   // Keyboard shortcuts are handled by handleKeyDownEnhanced below
 
@@ -440,9 +442,9 @@ const GrammarTextEditor: React.FC = () => {
     
     // Trigger debounced grammar check for normal typing
     checkGrammarDebounced(newContent)
-    checkSentenceStructure(newContent)
+    // checkSentenceStructure(newContent) // Disabled sentence structure check
     autoSave(newContent)
-  }, [dispatch, checkSentenceStructure, autoSave, lastAppliedSuggestion, checkGrammarDebounced])
+  }, [dispatch, autoSave, lastAppliedSuggestion, checkGrammarDebounced]) // Removed checkSentenceStructure dependency
 
   // Create highlighted text overlay
   const createHighlightedText = useCallback(() => {
@@ -845,7 +847,7 @@ const GrammarTextEditor: React.FC = () => {
     
     // Trigger immediate grammar check after applying suggestion
     checkGrammarImmediate(newContent)
-    checkSentenceStructure(newContent)
+    // checkSentenceStructure(newContent) // Disabled sentence structure check
     autoSave(newContent)
     setShowTooltip(null)
     
@@ -854,7 +856,7 @@ const GrammarTextEditor: React.FC = () => {
       replacement,
       offset: suggestion.offset
     })
-  }, [content, dispatch, checkSentenceStructure, autoSave, checkGrammarImmediate])
+  }, [content, dispatch, autoSave, checkGrammarImmediate]) // Removed checkSentenceStructure dependency
 
   // Ignore suggestion
   const handleIgnoreSuggestion = useCallback((suggestionId: string) => {
@@ -1144,12 +1146,12 @@ const GrammarTextEditor: React.FC = () => {
     
     // Trigger immediate grammar check after accepting all suggestions
     checkGrammarImmediate(newContent)
-    checkSentenceStructure(newContent)
+    // checkSentenceStructure(newContent) // Disabled sentence structure check
     autoSave(newContent)
     setShowTooltip(null)
     
     console.log('📝 Applied all suggestions - undo available for bulk action')
-  }, [suggestions, content, dispatch, checkSentenceStructure, autoSave, checkGrammarImmediate])
+  }, [suggestions, content, dispatch, autoSave, checkGrammarImmediate]) // Removed checkSentenceStructure dependency
 
   // Ignore all suggestions
   const handleIgnoreAllSuggestions = useCallback(() => {
@@ -1335,7 +1337,7 @@ const GrammarTextEditor: React.FC = () => {
         } else {
           dispatch(checkText({ text: currentDocument.content }))
         }
-        checkSentenceStructure(currentDocument.content)
+        // checkSentenceStructure(currentDocument.content) // Disabled sentence structure check
       }
     } else if (currentDocument && currentDocId === previousDocId && !content) {
       // Only set content if it's empty (initial load case)
@@ -1361,10 +1363,10 @@ const GrammarTextEditor: React.FC = () => {
         } else {
           dispatch(checkText({ text: currentDocument.content }))
         }
-        checkSentenceStructure(currentDocument.content)
+        // checkSentenceStructure(currentDocument.content) // Disabled sentence structure check
       }
     }
-  }, [currentDocument, dispatch, checkSentenceStructure, content, aiCheckEnabled])
+  }, [currentDocument, dispatch, content, aiCheckEnabled]) // Removed checkSentenceStructure dependency
 
   // Track document ID changes to ensure suggestions are cleared when switching documents
   useEffect(() => {
@@ -1518,13 +1520,11 @@ const GrammarTextEditor: React.FC = () => {
       criticalIssues: suggestions.filter(s => s.type === 'spelling' || s.type === 'grammar').length,
       readabilityScore: currentDocument ? 
         (readabilityScore?.fleschKincaid ? `Grade ${readabilityScore.fleschKincaid.toFixed(1)}` : 'Analyzing...') : 
-        'N/A',
-      sentenceQuality: sentenceAnalysis ? 
-        `${sentenceAnalysis.qualityDistribution.good}/${sentenceAnalysis.totalSentences} good` : 
         'N/A'
+      // sentenceQuality removed - sentence structure feature disabled
     }
     return metrics
-  }, [suggestions, readabilityScore, sentenceAnalysis, currentDocument])
+  }, [suggestions, readabilityScore, currentDocument]) // Removed sentenceAnalysis dependency
 
   // Add MutationObserver to detect layout changes
   useEffect(() => {
@@ -1598,12 +1598,14 @@ const GrammarTextEditor: React.FC = () => {
               <span className="text-blue-500">Checking...</span>
             </div>
           )}
+          {/* Sentence analysis loading indicator - disabled
           {sentenceAnalysisLoading && (
             <div className="flex items-center space-x-2">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-500"></div>
               <span className="text-purple-500">Analyzing sentences...</span>
             </div>
           )}
+          */}
           {/* Save Status */}
           {(saving || lastSaveStatus) && (
             <div className="flex items-center space-x-2">
@@ -1654,6 +1656,32 @@ const GrammarTextEditor: React.FC = () => {
                 }`}>
                   <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
                     autoSaveEnabled 
+                      ? 'translate-x-5' 
+                      : 'translate-x-0.5'
+                  } mt-0.5`}></div>
+                </div>
+              </div>
+            </label>
+          </div>
+          
+          {/* AI Grammar Toggle */}
+          <div className="flex items-center space-x-2">
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <span className="text-sm text-gray-600 dark:text-gray-400">🤖 AI Grammar</span>
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={aiCheckEnabled}
+                  onChange={() => dispatch(toggleAICheck())}
+                  className="sr-only"
+                />
+                <div className={`w-10 h-5 rounded-full transition-colors duration-200 ${
+                  aiCheckEnabled 
+                    ? 'bg-purple-500' 
+                    : 'bg-gray-300 dark:bg-gray-600'
+                }`}>
+                  <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                    aiCheckEnabled 
                       ? 'translate-x-5' 
                       : 'translate-x-0.5'
                   } mt-0.5`}></div>
@@ -1959,7 +1987,8 @@ const GrammarTextEditor: React.FC = () => {
                 )}
               </div>
 
-              {/* AI Assistant Section */}
+              {/* AI Assistant Section - Removed from sidebar, toggle now in stats bar */}
+              {/*
               <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
                 <button
                   onClick={() => toggleSection('aiAssistant')}
@@ -1996,6 +2025,7 @@ const GrammarTextEditor: React.FC = () => {
                   </div>
                 )}
               </div>
+              */}
 
               {/* Critical Suggestions Section (Priority) */}
               {suggestions.filter(s => s.type === 'spelling' || s.type === 'grammar').length > 0 && (
@@ -2179,6 +2209,7 @@ const GrammarTextEditor: React.FC = () => {
               </div>
 
               {/* Sentence Analysis Section */}
+              {/*
               <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
                 <button
                   onClick={() => toggleSection('sentenceAnalysis')}
@@ -2261,6 +2292,7 @@ const GrammarTextEditor: React.FC = () => {
                   </div>
                 )}
               </div>
+              */}
 
 
             </div>
