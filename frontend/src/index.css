@@ -82,6 +82,53 @@
   .style-suggestion {
     @apply bg-blue-200 dark:bg-blue-900 underline decoration-blue-500 decoration-dotted;
   }
+
+  /* Line clamping utilities */
+  .line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Dashboard specific styles */
+  .document-card {
+    @apply bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg transition-all duration-200 hover:shadow-lg hover:border-navy dark:hover:border-blue-600;
+  }
+  
+  .document-card:hover {
+    transform: translateY(-2px);
+  }
+  
+  .document-type-badge {
+    @apply px-2 py-1 text-xs rounded-full text-white font-medium;
+  }
+  
+  .view-toggle-btn {
+    @apply p-2 rounded-md transition-colors;
+  }
+  
+  .view-toggle-btn.active {
+    @apply bg-white dark:bg-gray-600 text-navy dark:text-blue-400 shadow-sm;
+  }
+  
+  .view-toggle-btn:not(.active) {
+    @apply text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200;
+  }
 }
 
 @keyframes fadeIn {
@@ -98,6 +145,22 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Animation for document cards */
+.document-card {
+  animation: slideInUp 0.3s ease-out;
 }
 
 /* Dark mode variables */
