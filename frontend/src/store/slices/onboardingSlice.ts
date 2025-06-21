@@ -56,7 +56,7 @@ export const saveOnboardingProgress = createAsyncThunk(
 
 export const completeOnboarding = createAsyncThunk(
   'onboarding/complete',
-  async ({ userId, preferences }: { userId: string; preferences: Partial<UserPreferences> }) => {
+  async ({ userId, preferences }: { userId: string; preferences: Partial<UserPreferences> }, { dispatch }) => {
     // Save all preferences and mark onboarding complete
     const finalPreferences = {
       ...preferences,
@@ -64,6 +64,13 @@ export const completeOnboarding = createAsyncThunk(
       onboardingCompletedAt: new Date()
     }
     const saved = await userPreferencesService.saveUserPreferences(userId, finalPreferences)
+    
+    // Load the user's default profile after saving preferences
+    if (saved.defaultStyleProfileId) {
+      const { loadUserDefaultProfile } = await import('./styleProfileSlice')
+      await dispatch(loadUserDefaultProfile(userId))
+    }
+    
     return saved
   }
 )

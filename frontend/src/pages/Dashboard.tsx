@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { Plus, FileText, Edit, Trash2, Calendar, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Command, Download, Upload, Search, Grid, List, Table, Clock, X, Sparkles } from 'lucide-react'
 import { AppDispatch, RootState } from '../store'
 import { fetchDocuments, deleteDocument, createDocument } from '../store/slices/documentSlice'
+import { selectActiveProfile, associateProfileWithDocument } from '../store/slices/styleProfileSlice'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Navigation from '../components/Navigation'
 import DownloadMenu from '../components/DownloadMenu'
@@ -20,6 +21,7 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate()
   const { user } = useSelector((state: RootState) => state.auth)
   const { documents, loading, error } = useSelector((state: RootState) => state.documents)
+  const activeProfile = useSelector(selectActiveProfile)
   
   const [showNewDocModal, setShowNewDocModal] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
@@ -30,6 +32,7 @@ const Dashboard: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false)
   const [showOnboardingReminder, setShowOnboardingReminder] = useState(false)
+  const [userPreferences, setUserPreferences] = useState<any>(null)
 
   useEffect(() => {
     if (user) {
@@ -49,6 +52,7 @@ const Dashboard: React.FC = () => {
     if (user) {
       try {
         const prefs = await userPreferencesService.getUserPreferences(user.id)
+        setUserPreferences(prefs)
         // Show reminder if user skipped onboarding
         if (prefs && prefs.onboardingSkipped && !prefs.onboardingCompleted) {
           setShowOnboardingReminder(true)
@@ -70,10 +74,37 @@ const Dashboard: React.FC = () => {
       }))
 
       if (createDocument.fulfilled.match(result)) {
+        const newDocument = result.payload
+        
+        // Handle style profile association based on user preferences
+        if (userPreferences) {
+          // If auto-detect is enabled, we'll let the editor handle it when content is added
+          // If always-ask is enabled, we'll navigate to editor which will prompt
+          // Otherwise, use the active profile (which should be the default from preferences)
+          if (!userPreferences.autoDetectStyle && !userPreferences.alwaysAskStyle && activeProfile && newDocument.id) {
+            await dispatch(associateProfileWithDocument({
+              documentId: newDocument.id,
+              profileId: activeProfile.id
+            }))
+          }
+        } else if (activeProfile && newDocument.id) {
+          // Fallback: If no preferences loaded, use active profile
+          await dispatch(associateProfileWithDocument({
+            documentId: newDocument.id,
+            profileId: activeProfile.id
+          }))
+        }
+        
         setShowNewDocModal(false)
         setNewDocTitle('')
         toast.success('Document created successfully!')
-        navigate(`/editor/${result.payload.id}`)
+        
+        // Navigate with a flag if we need to prompt for style
+        if (userPreferences?.alwaysAskStyle) {
+          navigate(`/editor/${newDocument.id}?promptStyle=true`)
+        } else {
+          navigate(`/editor/${newDocument.id}`)
+        }
       }
     } catch (error) {
       toast.error('Failed to create document')

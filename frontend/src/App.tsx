@@ -4,6 +4,7 @@ import { useSelector, useDispatch } from 'react-redux'
 import { supabase } from './config/supabase'
 import { setAuth } from './store/slices/authSlice'
 import { initializeDarkMode } from './store/slices/editorSlice'
+import { loadUserDefaultProfile } from './store/slices/styleProfileSlice'
 import { RootState, AppDispatch } from './store'
 
 // Components
@@ -22,7 +23,7 @@ import AuthDebug from './components/AuthDebug'
 
 function App() {
   const dispatch = useDispatch<AppDispatch>()
-  const { isAuthenticated, loading: authLoading } = useSelector((state: RootState) => state.auth)
+  const { isAuthenticated, loading: authLoading, user } = useSelector((state: RootState) => state.auth)
   const [initialLoading, setInitialLoading] = React.useState(true)
 
   useEffect(() => {
@@ -34,6 +35,8 @@ function App() {
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
         dispatch(setAuth({ user: session.user, session }))
+        // Load user's default style profile
+        dispatch(loadUserDefaultProfile(session.user.id))
       }
       setInitialLoading(false)
     }
@@ -45,6 +48,11 @@ function App() {
       async (event, session) => {
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           dispatch(setAuth({ user: session?.user || null, session }))
+          
+          // Load user's default style profile when signing in
+          if (event === 'SIGNED_IN' && session?.user) {
+            dispatch(loadUserDefaultProfile(session.user.id))
+          }
           
           // Clean up pending confirmation email when user successfully signs in
           if (event === 'SIGNED_IN') {
@@ -60,6 +68,13 @@ function App() {
       subscription.unsubscribe()
     }
   }, [dispatch])
+
+  // Load user's default profile when user changes (e.g., after completing onboarding)
+  useEffect(() => {
+    if (user?.id) {
+      dispatch(loadUserDefaultProfile(user.id))
+    }
+  }, [user?.id, dispatch])
 
   if (initialLoading || authLoading) {
     return (

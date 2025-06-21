@@ -121,6 +121,37 @@ export const createDefaultProfiles = createAsyncThunk(
   }
 );
 
+// New thunk to load user's default profile from preferences
+export const loadUserDefaultProfile = createAsyncThunk(
+  'styleProfiles/loadUserDefault',
+  async (userId: string) => {
+    // First ensure profiles are loaded
+    const profiles = await styleProfileService.getUserProfiles();
+    
+    // Get user preferences to find default profile ID
+    const { userPreferencesService } = await import('../../services/userPreferencesService');
+    const preferences = await userPreferencesService.getUserPreferences(userId);
+    
+    if (preferences?.defaultStyleProfileId) {
+      // Set the default profile as active
+      await styleProfileService.setActiveProfile(preferences.defaultStyleProfileId);
+      const activeProfile = await styleProfileService.getProfile(preferences.defaultStyleProfileId);
+      
+      return {
+        profiles,
+        activeProfile,
+        preferences
+      };
+    }
+    
+    return {
+      profiles,
+      activeProfile: null,
+      preferences
+    };
+  }
+);
+
 const styleProfileSlice = createSlice({
   name: 'styleProfiles',
   initialState,
@@ -216,6 +247,12 @@ const styleProfileSlice = createSlice({
       // Create default profiles
       .addCase(createDefaultProfiles.fulfilled, (state, action) => {
         state.profiles = action.payload;
+      })
+      
+      // Load user default profile
+      .addCase(loadUserDefaultProfile.fulfilled, (state, action) => {
+        state.profiles = action.payload.profiles;
+        state.activeProfile = action.payload.activeProfile;
       });
   }
 });

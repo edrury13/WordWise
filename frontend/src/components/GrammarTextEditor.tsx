@@ -1967,19 +1967,19 @@ const GrammarTextEditor: React.FC = () => {
           <div className="flex-1 overflow-y-auto">
             <div className="p-4 space-y-4">
               {/* Style Profile Section */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300 hover:shadow-lg">
+              <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
                 <button
                   onClick={() => toggleSection('styleProfile')}
-                  className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 group"
+                  className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
                 >
-                  <div className="flex items-center space-x-3">
-                    <span className="text-2xl group-hover:scale-110 transition-transform duration-200">✍️</span>
-                    <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xl">✍️</span>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                       Style Profile
                     </h3>
                   </div>
                   <svg 
-                    className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${
+                    className={`w-4 h-4 text-gray-400 transition-transform ${
                       collapsedSections.styleProfile ? '' : 'rotate-180'
                     }`} 
                     fill="none" 
@@ -1991,14 +1991,12 @@ const GrammarTextEditor: React.FC = () => {
                 </button>
                 
                 {!collapsedSections.styleProfile && (
-                  <div className="border-t border-gray-200 dark:border-gray-700 animate-slide-up">
-                    <div className="p-4">
-                      <ProfileSelector 
-                        documentId={currentDocument?.id}
-                        documentContent={content}
-                        compact={false}
-                      />
-                    </div>
+                  <div className="px-4 pb-4">
+                    <ProfileSelector 
+                      documentId={currentDocument?.id}
+                      documentContent={content}
+                      compact={false}
+                    />
                   </div>
                 )}
               </div>
