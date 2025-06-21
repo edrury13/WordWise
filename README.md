@@ -5,13 +5,18 @@ WordWise is a real-time, intelligent text editor that provides grammar and spell
 ## 🌟 Features
 
 - **Real-time Grammar & Spell Checking**: Powered by LanguageTool API
+- **Personalized Onboarding Experience**: 6-step setup to customize writing preferences
+- **Style Profiles**: Academic, Business, Creative, Technical, Email, and Social Media writing modes
+- **Smart Corrections**: AI-powered grammar checking that learns from your writing patterns
 - **Style Suggestions & Readability Analysis**: Flesch-Kincaid scoring and writing insights
 - **Clean, Responsive Text Editor**: Built with Slate.js for rich text editing
 - **User Authentication**: Supabase Auth with Google sign-in support
 - **Document Management**: Create, save, edit, and delete documents
+- **Ignored Words**: Personal dictionary for technical terms and proper nouns
 - **Dark/Light Theme**: Toggle between themes
 - **Auto-save**: Documents automatically saved every few seconds
 - **Grammarly-like Experience**: Inline suggestions with hover explanations
+- **Writing Analytics**: Track your progress and improvement over time
 
 ## 🛠 Tech Stack
 

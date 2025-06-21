@@ -10,6 +10,7 @@ import dotenv from 'dotenv'
 import authRoutes from './routes/auth'
 import documentRoutes from './routes/documents'
 import languageRoutes from './routes/language'
+import preferencesRoutes from './routes/preferences'
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler'
@@ -85,6 +86,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/auth', authRoutes)
 app.use('/api/documents', authMiddleware, documentRoutes)
 app.use('/api/language', authMiddleware, languageLimiter, languageRoutes)
+app.use('/api/preferences', authMiddleware, preferencesRoutes)
 
 // 404 handler
 app.use('*', (req, res) => {

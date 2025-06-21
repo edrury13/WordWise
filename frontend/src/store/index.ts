@@ -4,6 +4,7 @@ import documentReducer from './slices/documentSlice.js'
 import editorReducer from './slices/editorSlice.js'
 import suggestionReducer from './slices/suggestionSlice.js'
 import styleProfileReducer from './slices/styleProfileSlice.js'
+import onboardingReducer from './slices/onboardingSlice.js'
 
 export const store = configureStore({
   reducer: {
@@ -12,6 +13,7 @@ export const store = configureStore({
     editor: editorReducer,
     suggestions: suggestionReducer,
     styleProfiles: styleProfileReducer,
+    onboarding: onboardingReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

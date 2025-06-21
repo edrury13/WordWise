@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Edit, Trash2, Calendar, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Command, Download, Upload, Search, Grid, List, Table, Clock } from 'lucide-react'
-import { AppDispatch } from '../store'
+import { Plus, FileText, Edit, Trash2, Calendar, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Command, Download, Upload, Search, Grid, List, Table, Clock, X, Sparkles } from 'lucide-react'
+import { AppDispatch, RootState } from '../store'
 import { fetchDocuments, deleteDocument, createDocument } from '../store/slices/documentSlice'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Navigation from '../components/Navigation'
 import DownloadMenu from '../components/DownloadMenu'
 import UploadModal from '../components/UploadModal'
 import { documentService } from '../services/documentService'
+import { userPreferencesService } from '../services/userPreferencesService'
 import toast from 'react-hot-toast'
 import WritingInsights from '../components/WritingInsights'
 
@@ -17,8 +18,8 @@ type ViewMode = 'list' | 'grid' | 'table'
 const Dashboard: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
   const navigate = useNavigate()
-  const { user } = useSelector((state: any) => state.auth)
-  const { documents, loading, error } = useSelector((state: any) => state.documents)
+  const { user } = useSelector((state: RootState) => state.auth)
+  const { documents, loading, error } = useSelector((state: RootState) => state.documents)
   
   const [showNewDocModal, setShowNewDocModal] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
@@ -28,10 +29,14 @@ const Dashboard: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false)
+  const [showOnboardingReminder, setShowOnboardingReminder] = useState(false)
+  const [preferences, setPreferences] = useState<any>(null)
 
   useEffect(() => {
     if (user) {
       dispatch(fetchDocuments(user.id))
+      // Check if user has completed onboarding
+      checkOnboardingStatus()
     }
   }, [dispatch, user])
 
@@ -40,6 +45,21 @@ const Dashboard: React.FC = () => {
       toast.error(error)
     }
   }, [error])
+
+  const checkOnboardingStatus = async () => {
+    if (user) {
+      try {
+        const prefs = await userPreferencesService.getUserPreferences(user.id)
+        setPreferences(prefs)
+        // Show reminder if user skipped onboarding
+        if (prefs && prefs.onboardingSkipped && !prefs.onboardingCompleted) {
+          setShowOnboardingReminder(true)
+        }
+      } catch (error) {
+        console.error('Error checking onboarding status:', error)
+      }
+    }
+  }
 
   const handleCreateDocument = async () => {
     if (!newDocTitle.trim() || !user) return
@@ -194,6 +214,51 @@ const Dashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-cream dark:bg-gray-900">
       <Navigation />
+      
+      {/* Onboarding Reminder */}
+      {showOnboardingReminder && (
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="bg-gradient-to-r from-primary-50 to-blue-50 dark:from-primary-900/20 dark:to-blue-900/20 rounded-lg shadow-md border border-primary-200 dark:border-primary-800 p-6">
+            <div className="flex items-start justify-between">
+              <div className="flex items-start space-x-4">
+                <div className="w-12 h-12 bg-primary-600 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Sparkles className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                    Complete Your Personalization
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-300 mb-4">
+                    Take 2 minutes to personalize WordWise for your writing needs. Get tailored suggestions, 
+                    default style profiles, and features customized just for you.
+                  </p>
+                  <div className="flex items-center space-x-4">
+                    <button
+                      onClick={() => navigate('/onboarding')}
+                      className="btn btn-primary btn-sm flex items-center space-x-2"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      <span>Start Personalization</span>
+                    </button>
+                    <button
+                      onClick={() => setShowOnboardingReminder(false)}
+                      className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    >
+                      Remind me later
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowOnboardingReminder(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Main Content - Academic Layout */}
       <main className="max-w-7xl mx-auto px-6 py-8">

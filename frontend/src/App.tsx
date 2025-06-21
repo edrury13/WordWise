@@ -13,6 +13,8 @@ import RegisterPage from './pages/RegisterPage'
 import EmailConfirmationPage from './pages/EmailConfirmationPage'
 import Dashboard from './pages/Dashboard'
 import EditorPage from './pages/EditorPage'
+import OnboardingPage from './pages/OnboardingPage'
+import TutorialPage from './pages/TutorialPage'
 import LoadingSpinner from './components/LoadingSpinner'
 import ProtectedRoute from './components/ProtectedRoute'
 import GrammarTestPanel from './components/GrammarTestPanel'
@@ -89,6 +91,22 @@ function App() {
         />
 
         {/* Protected routes */}
+        <Route 
+          path="/onboarding" 
+          element={
+            <ProtectedRoute>
+              <OnboardingPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/tutorial" 
+          element={
+            <ProtectedRoute>
+              <TutorialPage />
+            </ProtectedRoute>
+          } 
+        />
         <Route 
           path="/dashboard" 
           element={
