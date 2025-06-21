@@ -155,7 +155,6 @@ const OnboardingPage: React.FC = () => {
           <TutorialSetup
             onComplete={handleComplete}
             onBack={handleBack}
-            onSkip={handleSkip}
           />
         )
       default:

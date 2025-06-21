@@ -7,10 +7,9 @@ import { PlayCircle, FileText, Rocket, Upload, Mail, CheckCircle } from 'lucide-
 interface TutorialSetupProps {
   onComplete: () => void
   onBack: () => void
-  onSkip: () => void
 }
 
-const TutorialSetup: React.FC<TutorialSetupProps> = ({ onComplete, onBack, onSkip }) => {
+const TutorialSetup: React.FC<TutorialSetupProps> = ({ onComplete, onBack }) => {
   const dispatch = useDispatch()
   const responses = useSelector(selectOnboardingResponses)
   
@@ -27,7 +26,8 @@ const TutorialSetup: React.FC<TutorialSetupProps> = ({ onComplete, onBack, onSki
     dispatch(updateResponses({
       showTips,
       weeklyProgressReports: weeklyInsights,
-      grammarTips
+      grammarTips,
+      tutorialOption: selectedOption as any // Type assertion needed since selectedOption is string
     }))
     onComplete()
   }

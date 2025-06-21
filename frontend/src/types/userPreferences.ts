@@ -64,7 +64,8 @@ export type TutorialOption =
   | 'interactive'
   | 'templates'
   | 'jump_in'
-  | 'import_doc';
+  | 'import_doc'
+  | 'import';
 
 export interface UserPreferences {
   id: string;

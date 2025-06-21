@@ -30,7 +30,6 @@ const Dashboard: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false)
   const [showOnboardingReminder, setShowOnboardingReminder] = useState(false)
-  const [preferences, setPreferences] = useState<any>(null)
 
   useEffect(() => {
     if (user) {
@@ -50,7 +49,6 @@ const Dashboard: React.FC = () => {
     if (user) {
       try {
         const prefs = await userPreferencesService.getUserPreferences(user.id)
-        setPreferences(prefs)
         // Show reminder if user skipped onboarding
         if (prefs && prefs.onboardingSkipped && !prefs.onboardingCompleted) {
           setShowOnboardingReminder(true)
