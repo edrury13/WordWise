@@ -181,6 +181,26 @@
 /* Grammar error highlighting styles */
 .grammar-overlay {
   pointer-events: none;
+  /* Ensure exact matching with textarea */
+  box-sizing: border-box;
+  /* Match textarea's line height and letter spacing exactly */
+  line-height: inherit;
+  letter-spacing: inherit;
+  /* Prevent any layout shifts */
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  /* Match textarea's overflow behavior */
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  /* Ensure text wraps identically to textarea */
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  word-break: normal !important;
+  /* Disable text selection on the overlay itself */
+  user-select: none;
 }
 
 /* Hide scrollbar for grammar overlay in webkit browsers */
@@ -188,15 +208,20 @@
   display: none;
 }
 
+/* Hide scrollbar for Firefox */
+.grammar-overlay {
+  scrollbar-width: none;
+}
+
 .grammar-overlay span[data-suggestion-id] {
   pointer-events: auto;
   position: relative;
-  cursor: text;
-}
-
-/* Ensure the overlay spans don't interfere with text selection */
-.grammar-overlay span[data-suggestion-id]:hover {
-  z-index: 1;
+  cursor: pointer;
+  /* Ensure spans don't affect text flow */
+  display: inline;
+  /* Maintain text flow */
+  white-space: inherit;
+  word-break: inherit;
 }
 
 /* Improve tooltip positioning */

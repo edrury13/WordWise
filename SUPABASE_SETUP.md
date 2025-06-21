@@ -150,6 +150,52 @@ For production:
 4. Monitor usage and scale as needed
 5. Configure rate limiting and security policies
 
+## 🛠️ Fixing Missing Tables in Existing Deployments
+
+If you're getting 404 errors related to `user_correction_patterns` table:
+
+1. Go to **SQL Editor** in your Supabase dashboard
+2. Run the complete `database/schema.sql` file which now includes the Smart Auto-Correction tables
+3. Alternatively, run just the missing table creation:
+
+```sql
+-- Create user_correction_patterns table for Smart Auto-Correction
+CREATE TABLE IF NOT EXISTS user_correction_patterns (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    original_text TEXT NOT NULL,
+    corrected_text TEXT NOT NULL,
+    suggestion_type VARCHAR(50) NOT NULL,
+    context_before TEXT,
+    context_after TEXT,
+    document_type VARCHAR(50),
+    accepted BOOLEAN NOT NULL,
+    confidence_gained INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_user_patterns_user_id ON user_correction_patterns(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_patterns_created ON user_correction_patterns(created_at);
+CREATE INDEX IF NOT EXISTS idx_user_patterns_type ON user_correction_patterns(suggestion_type);
+CREATE INDEX IF NOT EXISTS idx_user_patterns_accepted ON user_correction_patterns(accepted);
+
+-- Enable RLS
+ALTER TABLE user_correction_patterns ENABLE ROW LEVEL SECURITY;
+
+-- Create policies
+CREATE POLICY "Users can view own correction patterns" ON user_correction_patterns
+    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own correction patterns" ON user_correction_patterns
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own correction patterns" ON user_correction_patterns
+    FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own correction patterns" ON user_correction_patterns
+    FOR DELETE USING (auth.uid() = user_id);
+```
+
+After running this SQL, the Smart Auto-Correction feature should work properly.
+
 ---
 
 **Need help?** Check the [Supabase Documentation](https://supabase.com/docs) or open an issue in this repository. 

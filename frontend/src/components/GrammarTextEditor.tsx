@@ -53,21 +53,23 @@ const GrammarTextEditor: React.FC = () => {
   
   const [content, setContentState] = useState('')
   const [highlightedContent, setHighlightedContent] = useState('')
-  const [showTooltip, setShowTooltip] = useState<string | null>(null)
+  const [showTooltip, setShowTooltip] = useState<Suggestion | null>(null)
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 })
   const [lastSaveStatus, setLastSaveStatus] = useState<'saving' | 'saved' | 'error' | null>(null)
   const [sentenceAnalysis, setSentenceAnalysis] = useState<any>(null)
   const [sentenceAnalysisLoading, setSentenceAnalysisLoading] = useState(false)
   const [combinedSuggestions, setCombinedSuggestions] = useState<Suggestion[]>([])
   const [showToneRewritePanel, setShowToneRewritePanel] = useState(false)
+  const [loadingSmartCorrections, setLoadingSmartCorrections] = useState(false)
+  const [smartCorrections, setSmartCorrections] = useState<SmartCorrection[]>([])
+  
   // Grade level rewrite panel state managed by Redux
   const showGradeLevelRewritePanel = useSelector(selectShowGradeLevelPanel)
   const canUndo = useSelector(selectCanUndo)
   const canRedo = useSelector(selectCanRedo)
   
-  // Smart corrections state
-  const [smartCorrections, setSmartCorrections] = useState<SmartCorrection[]>([])
-  const [, setLoadingSmartCorrections] = useState(false)
+  // Add flag to prevent concurrent highlight updates
+  const isUpdatingHighlightsRef = useRef(false)
   
   // Performance monitoring state
   const retryQueue = useSelector(selectRetryQueue)
@@ -96,10 +98,72 @@ const GrammarTextEditor: React.FC = () => {
     return saved === 'true'
   })
   
+  // Collapsible sections state
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
+    const saved = localStorage.getItem('wordwise-collapsed-sections')
+    return saved ? JSON.parse(saved) : {
+      styleProfile: false,
+      smartCorrections: false,
+      aiAssistant: false,
+      criticalSuggestions: false,
+      styleSuggestions: false,
+      readability: false,
+      sentenceAnalysis: false
+    }
+  })
+  
+  // Toggle section function
+  const toggleSection = useCallback((section: string) => {
+    setCollapsedSections(prev => {
+      const newState = { ...prev, [section]: !prev[section] }
+      localStorage.setItem('wordwise-collapsed-sections', JSON.stringify(newState))
+      return newState
+    })
+  }, [])
+  
   // Save sidebar collapsed state to localStorage
   useEffect(() => {
     localStorage.setItem('wordwise-sidebar-collapsed', isSidebarCollapsed.toString())
   }, [isSidebarCollapsed])
+  
+  // Handle sidebar resizing
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsResizing(true)
+  }, [])
+  
+  // Handle mouse move and mouse up for sidebar resizing
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return
+      
+      const newWidth = window.innerWidth - e.clientX - 16 // 16px for margins
+      const clampedWidth = Math.max(300, Math.min(800, newWidth))
+      setSidebarWidth(clampedWidth)
+      
+      // Save to localStorage
+      localStorage.setItem('wordwise-sidebar-width', clampedWidth.toString())
+    }
+    
+    const handleMouseUp = () => {
+      setIsResizing(false)
+    }
+    
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+      // Prevent text selection while resizing
+      document.body.style.userSelect = 'none'
+      document.body.style.cursor = 'col-resize'
+    }
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.userSelect = ''
+      document.body.style.cursor = ''
+    }
+  }, [isResizing])
   
   // Load profile for current document
   useEffect(() => {
@@ -871,6 +935,134 @@ const GrammarTextEditor: React.FC = () => {
     return smartCorrections.find(sc => sc.suggestion.id === suggestionId)
   }
 
+  // Manual sync function to force overlay updates
+  const syncOverlayWithTextarea = useCallback(() => {
+    if (editorRef.current && overlayRef.current) {
+      // Force layout reflow
+      void overlayRef.current.offsetHeight;
+      
+      const textareaStyles = window.getComputedStyle(editorRef.current)
+      
+      // Get the exact client dimensions (content area excluding scrollbar)
+      const textareaClientWidth = editorRef.current.clientWidth
+      const textareaClientHeight = editorRef.current.clientHeight
+      
+      // Calculate scrollbar width (difference between offset and client width)
+      const scrollbarWidth = editorRef.current.offsetWidth - editorRef.current.clientWidth
+      
+      // Set the overlay to match the exact client dimensions
+      overlayRef.current.style.width = `${textareaClientWidth}px`
+      overlayRef.current.style.height = `${textareaClientHeight}px`
+      
+      // Apply all padding styles to ensure content area matches
+      overlayRef.current.style.padding = textareaStyles.padding
+      overlayRef.current.style.paddingLeft = textareaStyles.paddingLeft
+      overlayRef.current.style.paddingRight = textareaStyles.paddingRight
+      overlayRef.current.style.paddingTop = textareaStyles.paddingTop
+      overlayRef.current.style.paddingBottom = textareaStyles.paddingBottom
+      overlayRef.current.style.margin = textareaStyles.margin
+      overlayRef.current.style.boxSizing = textareaStyles.boxSizing
+      
+      // Apply text styles
+      overlayRef.current.style.lineHeight = textareaStyles.lineHeight
+      overlayRef.current.style.fontSize = textareaStyles.fontSize
+      overlayRef.current.style.fontFamily = textareaStyles.fontFamily
+      overlayRef.current.style.fontWeight = textareaStyles.fontWeight
+      overlayRef.current.style.letterSpacing = textareaStyles.letterSpacing
+      overlayRef.current.style.wordSpacing = textareaStyles.wordSpacing
+      overlayRef.current.style.textAlign = textareaStyles.textAlign
+      overlayRef.current.style.textIndent = textareaStyles.textIndent
+      overlayRef.current.style.whiteSpace = 'pre-wrap'
+      overlayRef.current.style.wordWrap = 'break-word'
+      overlayRef.current.style.wordBreak = textareaStyles.wordBreak
+      overlayRef.current.style.overflowWrap = textareaStyles.overflowWrap
+      
+      // Compensate for scrollbar - overlay has scrollbar hidden
+      // Add padding-right to match the space taken by textarea's scrollbar
+      const currentPaddingRight = parseFloat(textareaStyles.paddingRight) || 0
+      overlayRef.current.style.paddingRight = `${currentPaddingRight + scrollbarWidth}px`
+      
+      // Ensure overflow matches but with hidden scrollbar
+      overlayRef.current.style.overflowY = 'auto'
+      overlayRef.current.style.overflowX = 'hidden'
+      
+      // Sync scroll position
+      overlayRef.current.scrollTop = editorRef.current.scrollTop
+      overlayRef.current.scrollLeft = editorRef.current.scrollLeft
+      
+      // Force another reflow
+      void overlayRef.current.offsetHeight;
+      
+      // Recreate highlights
+      createHighlightedText()
+      
+      // Debug logging
+      console.log('📐 Overlay sync:', {
+        textareaClientWidth,
+        textareaClientHeight,
+        scrollbarWidth,
+        paddingRight: `${currentPaddingRight + scrollbarWidth}px`
+      })
+    }
+  }, [createHighlightedText])
+
+  // Enhanced setSidebarCollapsed to sync overlay
+  const handleSetSidebarCollapsed = useCallback((collapsed: boolean) => {
+    setIsSidebarCollapsed(collapsed)
+    
+    // Wait for React to update the DOM with the new sidebar state
+    requestAnimationFrame(() => {
+      // Then wait for CSS transitions to start
+      setTimeout(() => {
+        if (editorRef.current && overlayRef.current) {
+          // Force the textarea to recalculate its dimensions
+          void editorRef.current.offsetHeight;
+          
+          // Copy all computed styles to ensure exact matching
+          const textareaStyles = window.getComputedStyle(editorRef.current)
+          
+          // Apply all critical styles
+          overlayRef.current.style.width = textareaStyles.width
+          overlayRef.current.style.height = textareaStyles.height
+          overlayRef.current.style.padding = textareaStyles.padding
+          overlayRef.current.style.paddingLeft = textareaStyles.paddingLeft
+          overlayRef.current.style.paddingRight = textareaStyles.paddingRight
+          overlayRef.current.style.paddingTop = textareaStyles.paddingTop
+          overlayRef.current.style.paddingBottom = textareaStyles.paddingBottom
+          overlayRef.current.style.margin = textareaStyles.margin
+          overlayRef.current.style.boxSizing = textareaStyles.boxSizing
+          overlayRef.current.style.lineHeight = textareaStyles.lineHeight
+          overlayRef.current.style.fontSize = textareaStyles.fontSize
+          overlayRef.current.style.fontFamily = textareaStyles.fontFamily
+          overlayRef.current.style.fontWeight = textareaStyles.fontWeight
+          overlayRef.current.style.letterSpacing = textareaStyles.letterSpacing
+          overlayRef.current.style.wordSpacing = textareaStyles.wordSpacing
+          overlayRef.current.style.textAlign = textareaStyles.textAlign
+          overlayRef.current.style.textIndent = textareaStyles.textIndent
+          overlayRef.current.style.whiteSpace = 'pre-wrap'
+          overlayRef.current.style.wordWrap = 'break-word'
+          overlayRef.current.style.wordBreak = textareaStyles.wordBreak
+          overlayRef.current.style.overflowWrap = textareaStyles.overflowWrap
+          overlayRef.current.style.overflowY = 'auto'
+          overlayRef.current.style.overflowX = 'hidden'
+          
+          // Sync scroll position
+          overlayRef.current.scrollTop = editorRef.current.scrollTop
+          overlayRef.current.scrollLeft = editorRef.current.scrollLeft
+          
+          // Force another reflow to ensure styles are applied
+          void overlayRef.current.offsetHeight;
+          
+          // Wait for CSS transitions to complete (typically 300-500ms)
+          setTimeout(() => {
+            // Final sync and highlight recreation
+            syncOverlayWithTextarea()
+          }, 400) // Wait for CSS transitions to complete
+        }
+      }, 100) // Initial delay for DOM update
+    })
+  }, [syncOverlayWithTextarea, createHighlightedText])
+
   // Enhanced keyboard shortcuts with undo support
   const handleKeyDownEnhanced = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.ctrlKey && event.key === 's') {
@@ -895,8 +1087,8 @@ const GrammarTextEditor: React.FC = () => {
       }
     } else if (event.ctrlKey && event.key === 'b') {
       event.preventDefault()
-      // Toggle sidebar
-      setIsSidebarCollapsed(!isSidebarCollapsed)
+      // Toggle sidebar using the enhanced function
+      handleSetSidebarCollapsed(!isSidebarCollapsed)
       console.log(`📋 Keyboard shortcut: Sidebar ${isSidebarCollapsed ? 'shown' : 'hidden'}`)
     } else if (event.ctrlKey && event.shiftKey && event.key === 'A') {
       event.preventDefault()
@@ -916,7 +1108,7 @@ const GrammarTextEditor: React.FC = () => {
         toast('⚡ Quick correction applied!', { duration: 1500 })
       }
     }
-  }, [manualSave, undoLastSuggestion, canUndo, canRedo, dispatch, isSidebarCollapsed, aiCheckEnabled, showTooltip, activeSuggestion, getSmartCorrectionForSuggestion, handleApplySuggestion])
+  }, [manualSave, undoLastSuggestion, canUndo, canRedo, dispatch, isSidebarCollapsed, aiCheckEnabled, showTooltip, activeSuggestion, getSmartCorrectionForSuggestion, handleApplySuggestion, handleSetSidebarCollapsed])
 
   // Accept all suggestions
   const handleAcceptAllSuggestions = useCallback(() => {
@@ -1248,229 +1440,85 @@ const GrammarTextEditor: React.FC = () => {
     getSmartCorrections()
   }, [suggestions, content])
 
-  // Ensure scroll synchronization on mount and when highlighted content changes
+  // Sync scroll position between textarea and overlay
   useEffect(() => {
-    if (editorRef.current && overlayRef.current) {
+    if (content && editorRef.current && overlayRef.current) {
       overlayRef.current.scrollTop = editorRef.current.scrollTop
       overlayRef.current.scrollLeft = editorRef.current.scrollLeft
     }
-  }, [highlightedContent])
+  }, [content, highlightedContent])
 
-  // Removed auto-switch logic - using unified panel with all sections visible
-
-  // Performance monitoring: Process retry queue periodically
+  // Force re-render of highlights when sidebar state changes
   useEffect(() => {
-    const processRetries = () => {
-      if (retryQueue.length > 0) {
-        console.log(`🔄 Processing ${retryQueue.length} items in retry queue`)
-        dispatch(processRetryQueue())
+    // Trigger a re-creation of highlighted content when sidebar width changes
+    // This ensures highlights are positioned correctly after text reflow
+    if (content) {
+      // Small delay to ensure DOM has updated with new dimensions
+      const timer = setTimeout(() => {
+        // Use the syncOverlayWithTextarea function which properly handles clientWidth and scrollbar compensation
+        syncOverlayWithTextarea()
+      }, 150) // Increased delay to ensure layout is complete
+      
+      return () => clearTimeout(timer)
+    }
+  }, [sidebarWidth, isSidebarCollapsed, content, syncOverlayWithTextarea])
+
+  // Also handle window resize events
+  useEffect(() => {
+    const handleWindowResize = () => {
+      if (content) {
+        // Debounce the resize handler to avoid excessive re-renders
+        const timer = setTimeout(() => {
+          // Use syncOverlayWithTextarea which properly handles clientWidth and scrollbar compensation
+          syncOverlayWithTextarea()
+        }, 150)
+        
+        return () => clearTimeout(timer)
       }
     }
 
-    // Process retries every 30 seconds
-    const intervalId = setInterval(processRetries, 30000)
-    
-    // Also process immediately if there are items in the queue
-    if (retryQueue.length > 0) {
-      retryQueueTimerRef.current = setTimeout(processRetries, 5000) // Wait 5 seconds before first retry
-    }
+    window.addEventListener('resize', handleWindowResize)
+    return () => window.removeEventListener('resize', handleWindowResize)
+  }, [content, syncOverlayWithTextarea])
+
+  // Add ResizeObserver to detect textarea dimension changes
+  useEffect(() => {
+    if (!editorRef.current || !overlayRef.current) return
+
+    let resizeTimeout: NodeJS.Timeout
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      // Clear any existing timeout
+      if (resizeTimeout) {
+        clearTimeout(resizeTimeout)
+      }
+
+      // Debounce the resize handling to prevent excessive updates during transitions
+      resizeTimeout = setTimeout(() => {
+        for (const entry of entries) {
+          if (entry.target === editorRef.current) {
+            // Use syncOverlayWithTextarea which properly handles clientWidth and scrollbar compensation
+            syncOverlayWithTextarea()
+          }
+        }
+      }, 50) // 50ms debounce to let CSS transitions settle
+    })
+
+    resizeObserver.observe(editorRef.current)
 
     return () => {
-      clearInterval(intervalId)
-      if (retryQueueTimerRef.current) {
-        clearTimeout(retryQueueTimerRef.current)
+      if (resizeTimeout) {
+        clearTimeout(resizeTimeout)
       }
+      resizeObserver.disconnect()
     }
-  }, [retryQueue.length, dispatch])
+  }, [syncOverlayWithTextarea])
 
-  // Performance monitoring: Show notifications for performance issues
+  // Create a combined array of all suggestions for rendering
   useEffect(() => {
-    if (performanceMetrics.rateLimitHits > 0 && performanceMetrics.rateLimitHits % 5 === 0) {
-      toast.error('⏳ Frequent rate limiting detected. Consider typing more slowly to improve performance.')
-    }
-    
-    if (performanceMetrics.averageResponseTime > 10000) { // 10 seconds
-      toast('🐌 Slow response times detected. Consider clearing the cache or checking your connection.', {
-        icon: '⚠️',
-        style: {
-          background: '#fbbf24',
-          color: '#92400e',
-        },
-      })
-    }
-  }, [performanceMetrics.rateLimitHits, performanceMetrics.averageResponseTime])
-
-  // Cleanup timeouts on unmount
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current)
-      }
-      if (autoSaveRef.current) {
-        clearTimeout(autoSaveRef.current)
-      }
-      if (sentenceDebounceRef.current) {
-        clearTimeout(sentenceDebounceRef.current)
-      }
-      if (retryQueueTimerRef.current) {
-        clearTimeout(retryQueueTimerRef.current)
-      }
-    }
-  }, [])
-
-  // Monitor Redux error state and show toast notifications
-  useEffect(() => {
-    if (error && error.includes('Rate limited')) {
-      toast.error('⏳ Please slow down - too many requests. Try again in a moment.')
-      // Clear the error after showing the toast
-      dispatch(clearError())
-    }
-  }, [error, dispatch])
-
-  // Save content to localStorage as backup to prevent loss on tab switching
-  useEffect(() => {
-    if (content && currentDocument?.id) {
-      const backupKey = `wordwise-backup-${currentDocument.id}`
-      const lastSavedContent = currentDocument.content || ''
-      
-      // Only save to localStorage if content differs from last saved version
-      if (content !== lastSavedContent) {
-        localStorage.setItem(backupKey, content)
-        console.log('💾 Backed up unsaved content to localStorage:', {
-          docId: currentDocument.id,
-          contentLength: content.length,
-          savedLength: lastSavedContent.length
-        })
-      }
-    }
-  }, [content, currentDocument])
-
-  // Restore from localStorage backup if available and newer than saved content
-  useEffect(() => {
-    if (currentDocument?.id) {
-      const backupKey = `wordwise-backup-${currentDocument.id}`
-      const backup = localStorage.getItem(backupKey)
-      const savedContent = currentDocument.content || ''
-      
-      // Check if backup exists and is different/newer than saved content
-      if (backup && backup !== savedContent && backup.length > savedContent.length && !content) {
-        console.log('🔄 Restoring unsaved changes from localStorage backup:', {
-          docId: currentDocument.id,
-          backupLength: backup.length,
-          savedLength: savedContent.length
-        })
-        
-        setContentState(backup)
-        if (editorRef.current) {
-          editorRef.current.value = backup
-        }
-        
-        // Update Redux state with restored content
-        dispatch(updateCurrentDocumentContent(backup))
-        
-        // Trigger grammar check for restored content
-        if (backup.trim() && backup.length > 10) {
-          console.log('🔍 Restored content - triggering grammar check and sentence analysis')
-          dispatch(checkText({ text: backup }))
-          checkSentenceStructure(backup)
-        }
-        
-        toast.success('📝 Restored unsaved changes from backup')
-      } else if (backup && backup === savedContent) {
-        // Clean up backup if it matches saved content
-        localStorage.removeItem(backupKey)
-        console.log('🗑️ Cleaned up backup - matches saved content')
-      }
-    }
-  }, [currentDocument, content, dispatch, checkSentenceStructure])
-
-  // Handle page visibility changes to maintain state
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        console.log('👁️ Tab became visible, preserving current content')
-        // Don't reset content when tab becomes visible
-      } else {
-        console.log('👁️ Tab became hidden, content preserved')
-        // Save current state when tab becomes hidden
-        if (content && currentDocument?.id) {
-          const backupKey = `wordwise-backup-${currentDocument.id}`
-          localStorage.setItem(backupKey, content)
-        }
-      }
-
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [content, currentDocument?.id])
-
-  // Handle sidebar resizing
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing) return
-      
-      const container = resizerRef.current?.parentElement
-      if (!container) return
-      
-      const containerRect = container.getBoundingClientRect()
-      const newWidth = containerRect.right - e.clientX
-      
-      // Constrain sidebar width between 250px and 600px
-      const constrainedWidth = Math.max(250, Math.min(600, newWidth))
-      setSidebarWidth(constrainedWidth)
-      
-      // Save to localStorage for persistence
-      localStorage.setItem('wordwise-sidebar-width', constrainedWidth.toString())
-    }
-
-    const handleMouseUp = () => {
-      setIsResizing(false)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-
-    if (isResizing) {
-      document.body.style.cursor = 'col-resize'
-      document.body.style.userSelect = 'none'
-      document.addEventListener('mousemove', handleMouseMove)
-      document.addEventListener('mouseup', handleMouseUp)
-      
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove)
-        document.removeEventListener('mouseup', handleMouseUp)
-        document.body.style.cursor = ''
-        document.body.style.userSelect = ''
-      }
-    }
-  }, [isResizing])
-
-  // Handle resize start
-  const handleResizeStart = () => {
-    setIsResizing(true)
-  }
-
-  // Collapsible sections state - everything collapsed by default except critical issues
-  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
-    styleProfile: false,         // Keep style profile expanded by default
-    smartCorrections: false,     // Keep smart corrections expanded by default
-    aiAssistant: false,          // Keep AI assistant expanded by default
-    criticalSuggestions: false,  // Keep critical issues expanded by default
-    styleSuggestions: true,      // Collapsed by default
-    readability: true,           // Collapsed by default
-    sentenceAnalysis: true,      // Collapsed by default
-    writingGoals: true           // Collapsed by default
-  })
-  
-  const toggleSection = (section: string) => {
-    setCollapsedSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }))
-  }
+    const allSuggestions = [...suggestions]
+    setCombinedSuggestions(allSuggestions)
+  }, [suggestions])
 
   // Calculate priority score for suggestions
   const getPrioritySuggestions = useCallback(() => {
@@ -1499,6 +1547,65 @@ const GrammarTextEditor: React.FC = () => {
     }
     return metrics
   }, [suggestions, readabilityScore, sentenceAnalysis, currentDocument])
+
+  // Add MutationObserver to detect layout changes
+  useEffect(() => {
+    if (!editorRef.current || !overlayRef.current) return
+
+    let mutationTimeout: NodeJS.Timeout
+    const editorContainer = editorRef.current.parentElement
+
+    // Watch for changes to the editor container that might affect layout
+    const mutationObserver = new MutationObserver((mutations) => {
+      // Clear any existing timeout
+      if (mutationTimeout) {
+        clearTimeout(mutationTimeout)
+      }
+
+      // Check if any mutations affected layout
+      const layoutAffectingMutation = mutations.some(mutation => {
+        return mutation.type === 'attributes' && 
+               (mutation.attributeName === 'style' || 
+                mutation.attributeName === 'class')
+      })
+
+      if (layoutAffectingMutation) {
+        // Debounce to avoid excessive updates
+        mutationTimeout = setTimeout(() => {
+          if (editorRef.current && overlayRef.current) {
+            // Sync styles and recreate highlights
+            syncOverlayWithTextarea()
+          }
+        }, 300) // Wait for animations to complete
+      }
+    })
+
+    // Observe the editor container and its ancestors for style/class changes
+    if (editorContainer) {
+      mutationObserver.observe(editorContainer, {
+        attributes: true,
+        attributeFilter: ['style', 'class'],
+        subtree: false
+      })
+      
+      // Also observe the parent flex container
+      const flexContainer = editorContainer.parentElement
+      if (flexContainer) {
+        mutationObserver.observe(flexContainer, {
+          attributes: true,
+          attributeFilter: ['style', 'class'],
+          subtree: false
+        })
+      }
+    }
+
+    return () => {
+      if (mutationTimeout) {
+        clearTimeout(mutationTimeout)
+      }
+      mutationObserver.disconnect()
+    }
+  }, [syncOverlayWithTextarea])
 
   return (
     <div className="relative w-full h-full flex flex-col">
@@ -1737,13 +1844,22 @@ const GrammarTextEditor: React.FC = () => {
         {/* Overlay for highlights */}
         <div
           ref={overlayRef}
+          key={`overlay-${isSidebarCollapsed ? 'collapsed' : 'expanded'}-${sidebarWidth}`}
           className="grammar-overlay absolute inset-0 p-4 font-serif text-lg leading-relaxed text-transparent z-10 overflow-auto"
           style={{ 
             fontFamily: 'ui-serif, Georgia, serif',
             whiteSpace: 'pre-wrap',
             wordWrap: 'break-word',
+            wordBreak: 'normal',
+            overflowWrap: 'break-word',
             scrollbarWidth: 'none', // Hide scrollbar for Firefox
-            msOverflowStyle: 'none' // Hide scrollbar for IE and Edge
+            msOverflowStyle: 'none', // Hide scrollbar for IE and Edge
+            boxSizing: 'border-box',
+            lineHeight: 'inherit',
+            letterSpacing: 'inherit',
+            textAlign: 'left',
+            textIndent: '0px',
+            textTransform: 'none'
           }}
           dangerouslySetInnerHTML={{ __html: highlightedContent }}
         />
@@ -1772,7 +1888,7 @@ const GrammarTextEditor: React.FC = () => {
           <div className="px-4 py-3 bg-white dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 relative">
             {/* Collapse button */}
             <button
-              onClick={() => setIsSidebarCollapsed(true)}
+              onClick={() => handleSetSidebarCollapsed(true)}
               className="absolute right-2 top-2 p-1 hover:bg-gray-100 dark:hover:bg-gray-600 rounded transition-colors"
               title="Hide analysis panel (Ctrl+B)"
             >
@@ -2185,7 +2301,7 @@ const GrammarTextEditor: React.FC = () => {
       {/* Floating sidebar toggle button when collapsed */}
       {isSidebarCollapsed && (
         <button
-          onClick={() => setIsSidebarCollapsed(false)}
+          onClick={() => handleSetSidebarCollapsed(false)}
           className="fixed right-4 top-20 z-30 p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg shadow-lg transition-all duration-200 flex items-center space-x-1"
           title="Show analysis panel (Ctrl+B)"
         >
