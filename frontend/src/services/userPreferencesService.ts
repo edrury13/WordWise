@@ -13,8 +13,22 @@ export const userPreferencesService = {
 
       if (error) {
         if (error.code === 'PGRST116') {
-          // No preferences found, return null
-          return null
+          // No preferences found, create them
+          console.log('No preferences found, creating default preferences...')
+          
+          // Create default preferences
+          const { data: newPrefs, error: createError } = await supabase
+            .from('user_preferences')
+            .insert({ user_id: userId })
+            .select()
+            .single()
+          
+          if (createError) {
+            console.error('Error creating default preferences:', createError)
+            return null
+          }
+          
+          return this.mapDbToPreferences(newPrefs)
         }
         throw error
       }
@@ -136,14 +150,14 @@ export const userPreferencesService = {
       const preferences = await this.getUserPreferences(userId)
       
       if (!preferences) {
-        // No preferences record, definitely needs onboarding
+        // If we couldn't get or create preferences, assume they need onboarding
         return true
       }
 
       return !preferences.onboardingCompleted && !preferences.onboardingSkipped
     } catch (error) {
       console.error('Error checking onboarding status:', error)
-      // Default to true if there's an error
+      // Default to true if there's an error, so users can complete onboarding
       return true
     }
   },
