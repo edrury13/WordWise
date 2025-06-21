@@ -70,7 +70,8 @@ export default async function handler(req, res) {
       text, 
       context = '', 
       documentType = 'general',
-      checkType = 'comprehensive' // comprehensive, grammar-only, style-only
+      checkType = 'comprehensive', // comprehensive, grammar-only, style-only
+      styleProfile
     } = body
 
     if (!text || typeof text !== 'string') {
@@ -88,7 +89,7 @@ export default async function handler(req, res) {
     }
 
     // Generate cache key
-    const cacheKey = `${user.id}-${text.substring(0, 100)}-${checkType}-${documentType}`
+    const cacheKey = `${user.id}-${text.substring(0, 100)}-${checkType}-${documentType}-${styleProfile?.name || 'none'}`
     
     // Check cache first
     const cached = responseCache.get(cacheKey)
@@ -120,6 +121,12 @@ export default async function handler(req, res) {
     - For style suggestions, confidence should be 60-85
     - Be especially careful with technical terms, proper nouns, and domain-specific language
     - If the text seems intentionally informal or creative, adjust expectations accordingly`
+
+    // Add style profile specific instructions
+    if (styleProfile) {
+      systemPrompt += `\n\n${styleProfile.prompt}`
+      console.log('📝 Using style profile:', styleProfile.name, '- Type:', styleProfile.type)
+    }
 
     if (checkType === 'grammar-only') {
       systemPrompt += '\n\nFocus ONLY on grammar and spelling errors. Ignore style and tone.'

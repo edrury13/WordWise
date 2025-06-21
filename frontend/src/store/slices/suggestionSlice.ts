@@ -1,6 +1,8 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
 import { checkGrammarAndSpelling, analyzeReadability } from '../../services/languageService'
 import { checkGrammarWithAI, mergeAISuggestions, AIGrammarCheckOptions } from '../../services/aiGrammarService'
+import { StyleProfile } from '../../types/styleProfile'
+import { profileGrammarService } from '../../services/profileGrammarService'
 
 export interface Suggestion {
   id: string
@@ -142,13 +144,15 @@ export const checkTextWithAI = createAsyncThunk(
     language = 'en-US',
     documentType = 'general',
     checkType = 'comprehensive',
-    enableAI = true
+    enableAI = true,
+    styleProfile
   }: { 
     text: string
     language?: string
     documentType?: AIGrammarCheckOptions['documentType']
     checkType?: AIGrammarCheckOptions['checkType']
     enableAI?: boolean
+    styleProfile?: StyleProfile | null
   }) => {
     let grammarResults: { suggestions: Suggestion[], apiStatus: 'api' | 'client-fallback' | 'mixed' | 'ai-enhanced' } = { 
       suggestions: [], 
@@ -172,7 +176,8 @@ export const checkTextWithAI = createAsyncThunk(
         aiResults = await checkGrammarWithAI({
           text,
           documentType,
-          checkType
+          checkType,
+          styleProfile
         })
         
         console.log('🤖 AI Results received:', {
@@ -236,8 +241,24 @@ export const checkTextWithAI = createAsyncThunk(
       }
     }
 
+    // Apply profile rules to suggestions if a profile is provided
+    let finalSuggestions = grammarResults.suggestions
+    if (styleProfile) {
+      console.log('📋 Applying style profile rules to suggestions')
+      finalSuggestions = profileGrammarService.applyProfileRules(
+        grammarResults.suggestions,
+        styleProfile,
+        text
+      )
+      // Filter out ignored suggestions based on profile rules
+      finalSuggestions = finalSuggestions.filter(s => 
+        !('profileSeverity' in s) || (s as any).profileSeverity !== 'ignore'
+      )
+      console.log('📋 Suggestions after profile rules:', finalSuggestions.length)
+    }
+
     return {
-      suggestions: grammarResults.suggestions,
+      suggestions: finalSuggestions,
       readabilityScore: readabilityResults,
       apiStatus: grammarResults.apiStatus,
       aiStats: aiResults?.stats || null,

@@ -23,6 +23,7 @@ import GradeLevelRewritePanel from './GradeLevelRewritePanel'
 import ReadabilityPanel from './ReadabilityPanel'
 import AISuggestionPanel from './AISuggestionPanel'
 import SmartCorrectionPanel from './SmartCorrectionPanel'
+import { ProfileSelector } from './ProfileSelector'
 import { 
   selectShowGradeLevelPanel, 
   setShowGradeLevelPanel,
@@ -35,6 +36,10 @@ import {
   selectPerformanceMetrics,
   clearCache
 } from '../store/slices/editorSlice'
+import { 
+  selectEffectiveProfile,
+  loadDocumentProfile
+} from '../store/slices/styleProfileSlice'
 import toast from 'react-hot-toast'
 
 const GrammarTextEditor: React.FC = () => {
@@ -44,6 +49,7 @@ const GrammarTextEditor: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth)
   const { autoSaveEnabled } = useSelector((state: RootState) => state.editor)
   const aiCheckEnabled = useSelector(selectAICheckEnabled)
+  const effectiveProfile = useSelector(selectEffectiveProfile)
   
   const [content, setContentState] = useState('')
   const [highlightedContent, setHighlightedContent] = useState('')
@@ -94,6 +100,13 @@ const GrammarTextEditor: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('wordwise-sidebar-collapsed', isSidebarCollapsed.toString())
   }, [isSidebarCollapsed])
+  
+  // Load profile for current document
+  useEffect(() => {
+    if (currentDocument?.id) {
+      dispatch(loadDocumentProfile(currentDocument.id))
+    }
+  }, [currentDocument?.id, dispatch])
   
   // Removed sidebar tab state - using unified panel instead
   
@@ -150,15 +163,16 @@ const GrammarTextEditor: React.FC = () => {
     if (aiCheckEnabled) {
       dispatch(checkTextWithAI({ 
         text,
-        documentType: 'general', // Could be made dynamic based on document type
-        checkType: 'comprehensive'
+        documentType: (effectiveProfile && ['social', 'custom'].includes(effectiveProfile.profileType) ? 'general' : effectiveProfile?.profileType || 'general') as any,
+        checkType: 'comprehensive',
+        styleProfile: effectiveProfile
       }))
-      console.log('🚀 Triggered immediate AI-enhanced grammar recheck')
+      console.log('🚀 Triggered immediate AI-enhanced grammar recheck with profile:', effectiveProfile?.name)
     } else {
       dispatch(recheckText({ text }))
       console.log('🚀 Triggered immediate grammar recheck')
     }
-  }, [dispatch, aiCheckEnabled])
+  }, [dispatch, aiCheckEnabled, effectiveProfile])
 
   // Debounced grammar check for typing
   const checkGrammarDebounced = useCallback((text: string) => {
@@ -170,16 +184,17 @@ const GrammarTextEditor: React.FC = () => {
       if (aiCheckEnabled) {
         dispatch(checkTextWithAI({ 
           text,
-          documentType: 'general',
-          checkType: 'comprehensive'
+          documentType: (effectiveProfile && ['social', 'custom'].includes(effectiveProfile.profileType) ? 'general' : effectiveProfile?.profileType || 'general') as any,
+          checkType: 'comprehensive',
+          styleProfile: effectiveProfile
         }))
-        console.log('⏱️ Triggered debounced AI-enhanced grammar check')
+        console.log('⏱️ Triggered debounced AI-enhanced grammar check with profile:', effectiveProfile?.name)
       } else {
         dispatch(checkText({ text }))
         console.log('⏱️ Triggered debounced grammar check')
       }
     }, 300)
-  }, [dispatch, aiCheckEnabled])
+  }, [dispatch, aiCheckEnabled, effectiveProfile])
 
   // Debounced sentence analysis - much longer delay since it's less critical than grammar
   const checkSentenceStructure = useCallback((text: string) => {
@@ -1440,6 +1455,7 @@ const GrammarTextEditor: React.FC = () => {
 
   // Collapsible sections state - everything collapsed by default except critical issues
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
+    styleProfile: false,         // Keep style profile expanded by default
     smartCorrections: false,     // Keep smart corrections expanded by default
     aiAssistant: false,          // Keep AI assistant expanded by default
     criticalSuggestions: false,  // Keep critical issues expanded by default
@@ -1790,6 +1806,41 @@ const GrammarTextEditor: React.FC = () => {
           {/* Scrollable Content Area */}
           <div className="flex-1 overflow-y-auto">
             <div className="p-4 space-y-4">
+              {/* Style Profile Section */}
+              <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                <button
+                  onClick={() => toggleSection('styleProfile')}
+                  className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xl">✍️</span>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      Style Profile
+                    </h3>
+                  </div>
+                  <svg 
+                    className={`w-4 h-4 text-gray-400 transition-transform ${
+                      collapsedSections.styleProfile ? '' : 'rotate-180'
+                    }`} 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {!collapsedSections.styleProfile && (
+                  <div className="px-4 pb-4">
+                    <ProfileSelector 
+                      documentId={currentDocument?.id}
+                      documentContent={content}
+                      compact={false}
+                    />
+                  </div>
+                )}
+              </div>
+
               {/* Smart Corrections Section */}
               <div className="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
                 <button

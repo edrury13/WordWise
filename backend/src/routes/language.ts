@@ -496,7 +496,8 @@ router.post('/ai-grammar-check', async (req: AuthenticatedRequest, res) => {
       text, 
       context = '', 
       documentType = 'general',
-      checkType = 'comprehensive'
+      checkType = 'comprehensive',
+      styleProfile
     } = req.body
 
     // Validate input
@@ -537,9 +538,17 @@ router.post('/ai-grammar-check', async (req: AuthenticatedRequest, res) => {
     - For grammar/spelling errors, confidence should be 90-100
     - For style suggestions, confidence should be 60-85
     - Be especially careful with technical terms, proper nouns, and domain-specific language
-    - If the text seems intentionally informal or creative, adjust expectations accordingly
+    - If the text seems intentionally informal or creative, adjust expectations accordingly`
     
-    Return ONLY valid JSON with a "suggestions" array, nothing else.`
+    // Add style profile specific instructions
+    if (styleProfile) {
+      systemPrompt += `\n\n${styleProfile.prompt}`
+      
+      // Log that we're using a style profile
+      console.log('📝 Using style profile:', styleProfile.name, '- Type:', styleProfile.type)
+    }
+    
+    systemPrompt += '\n\nReturn ONLY valid JSON with a "suggestions" array, nothing else.'
 
     if (checkType === 'grammar-only') {
       systemPrompt += '\n\nFocus ONLY on grammar and spelling errors. Ignore style and tone.'

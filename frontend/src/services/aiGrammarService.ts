@@ -1,10 +1,13 @@
 import { supabase } from '../config/supabase'
+import { StyleProfile } from '../types/styleProfile'
+import { profileGrammarService } from './profileGrammarService'
 
 export interface AIGrammarCheckOptions {
   text: string
   context?: string
   documentType?: 'general' | 'academic' | 'business' | 'creative' | 'technical' | 'email'
   checkType?: 'comprehensive' | 'grammar-only' | 'style-only'
+  styleProfile?: StyleProfile | null
 }
 
 export interface AIGrammarSuggestion {
@@ -123,6 +126,13 @@ export async function checkGrammarWithAI(options: AIGrammarCheckOptions): Promis
     console.log('🌐 AI API URL:', apiUrl)
     console.log('🚀 Making AI API request...')
 
+    // Generate profile prompt if profile is provided
+    let profilePrompt: string | undefined
+    if (options.styleProfile) {
+      profilePrompt = profileGrammarService.generateProfilePrompt(options.styleProfile)
+      console.log('📝 Using style profile:', options.styleProfile.name)
+    }
+
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -133,7 +143,12 @@ export async function checkGrammarWithAI(options: AIGrammarCheckOptions): Promis
         text: options.text,
         context: options.context,
         documentType: options.documentType || 'general',
-        checkType: options.checkType || 'comprehensive'
+        checkType: options.checkType || 'comprehensive',
+        styleProfile: options.styleProfile ? {
+          name: options.styleProfile.name,
+          type: options.styleProfile.profileType,
+          prompt: profilePrompt
+        } : undefined
       })
     })
 
