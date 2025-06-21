@@ -2,16 +2,15 @@ import React, { useCallback, useEffect, useState, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
 import { 
-  checkText, 
+  checkText,
   checkTextWithAI,
-  ignoreSuggestion, 
-  clearSuggestions, 
-  ignoreAllCurrentSuggestions, 
-  clearError, 
   recheckText,
+  clearSuggestions,
+  ignoreSuggestion,
+  ignoreAllCurrentSuggestions,
   selectAICheckEnabled,
-  selectAIStats,
-  toggleAICheck
+  toggleAICheck,
+  clearError
 } from '../store/slices/suggestionSlice'
 import { setContent, setLastSaved, setAutoSave } from '../store/slices/editorSlice'
 import { updateDocument, updateCurrentDocumentContent } from '../store/slices/documentSlice'
@@ -45,7 +44,6 @@ const GrammarTextEditor: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth)
   const { autoSaveEnabled } = useSelector((state: RootState) => state.editor)
   const aiCheckEnabled = useSelector(selectAICheckEnabled)
-  const aiStats = useSelector(selectAIStats)
   
   const [content, setContentState] = useState('')
   const [highlightedContent, setHighlightedContent] = useState('')
@@ -63,7 +61,7 @@ const GrammarTextEditor: React.FC = () => {
   
   // Smart corrections state
   const [smartCorrections, setSmartCorrections] = useState<SmartCorrection[]>([])
-  const [loadingSmartCorrections, setLoadingSmartCorrections] = useState(false)
+  const [, setLoadingSmartCorrections] = useState(false)
   
   // Performance monitoring state
   const retryQueue = useSelector(selectRetryQueue)

@@ -287,7 +287,7 @@ class SmartCorrectionService {
    * Generate human-readable reason for the suggestion
    */
   private generateReason(
-    suggestion: Suggestion,
+    _suggestion: Suggestion,
     confidence: number,
     learningBased: boolean,
     patterns: UserCorrectionPattern[]
@@ -387,7 +387,7 @@ class SmartCorrectionService {
     }
 
     // Check partial context matches
-    for (const [key, pattern] of this.contextualPatterns) {
+    for (const [key] of this.contextualPatterns) {
       if (key.includes(originalText.toLowerCase()) &&
           (key.includes(contextBefore) || key.includes(contextAfter))) {
         return 15 // Medium bonus for partial context match
