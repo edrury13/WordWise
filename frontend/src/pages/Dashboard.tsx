@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Edit, Trash2, Calendar, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Command, Download, Upload, Search, Grid, List, Table, Clock, ChevronDown } from 'lucide-react'
+import { Plus, FileText, Edit, Trash2, Calendar, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Command, Download, Upload, Search, Grid, List, Table, Clock } from 'lucide-react'
 import { AppDispatch } from '../store'
 import { fetchDocuments, deleteDocument, createDocument } from '../store/slices/documentSlice'
 import LoadingSpinner from '../components/LoadingSpinner'
