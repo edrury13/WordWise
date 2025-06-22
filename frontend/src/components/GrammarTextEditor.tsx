@@ -59,7 +59,8 @@ const GrammarTextEditor: React.FC = () => {
   const [showTooltip, setShowTooltip] = useState<string | null>(null)
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 })
   const [lastSaveStatus, setLastSaveStatus] = useState<'saving' | 'saved' | 'error' | null>(null)
-  const [sentenceAnalysis, setSentenceAnalysis] = useState<any>(null)
+  // sentenceAnalysis state is read elsewhere; setter currently unused (sentence feature disabled)
+  const [sentenceAnalysis, _setSentenceAnalysis] = useState<any>(null)
   // const [sentenceAnalysisLoading, setSentenceAnalysisLoading] = useState(false) // Commented out - sentence structure feature disabled
   const [combinedSuggestions, setCombinedSuggestions] = useState<Suggestion[]>([])
   const [showToneRewritePanel, setShowToneRewritePanel] = useState(false)
