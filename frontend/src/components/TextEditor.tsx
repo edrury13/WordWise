@@ -13,10 +13,7 @@ import {
   completeStreaming,
   streamingError,
   applySuggestion,
-  validateSuggestions,
-  adjustSuggestionsForEdit,
-  invalidateCurrentRequest,
-  clearApplyingSuggestionFlag
+  validateSuggestions
 } from '../store/slices/suggestionSlice'
 import { setContent, setLastSaved } from '../store/slices/editorSlice'
 import { updateDocument } from '../store/slices/documentSlice'
@@ -66,7 +63,6 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const [showDebounceMenu, setShowDebounceMenu] = useState(false)
   const [hasInitialized, setHasInitialized] = useState(false)
   const [persistedContent, setPersistedContent] = useState<string>('')
-  const [recentEditPositions, setRecentEditPositions] = useState<Array<{ offset: number; timestamp: number }>>([])
   
   const editorRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<NodeJS.Timeout>()
@@ -78,7 +74,6 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const lastTypingTimeRef = useRef<number>(Date.now())
   const wordCountRef = useRef<number>(0)
   const isMountedRef = useRef<boolean>(true)
-  const isApplyingSuggestionRef = useRef<boolean>(false)
   
   // Create a unique key for localStorage based on document ID
   const localStorageKey = `wordwise_editor_content_${documentId || 'default'}`
@@ -87,66 +82,6 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const normalizeText = useCallback((text: string): string => {
     // Ensure consistent line break representation
     return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
-  }, [])
-
-  // Helper function to detect edit operations
-  const detectEditOperation = useCallback((oldText: string, newText: string): {
-    type: 'insert' | 'delete' | 'replace' | 'other'
-    offset: number
-    deleteLength: number
-    insertLength: number
-  } | null => {
-    const oldLength = oldText.length
-    const newLength = newText.length
-    
-    // Find the first character that differs
-    let firstDiff = 0
-    const minLength = Math.min(oldLength, newLength)
-    while (firstDiff < minLength && oldText[firstDiff] === newText[firstDiff]) {
-      firstDiff++
-    }
-    
-    // Find the last character that differs (from the end)
-    let oldEnd = oldLength - 1
-    let newEnd = newLength - 1
-    while (
-      oldEnd >= firstDiff && 
-      newEnd >= firstDiff && 
-      oldEnd >= 0 && 
-      newEnd >= 0 &&
-      oldText[oldEnd] === newText[newEnd]
-    ) {
-      oldEnd--
-      newEnd--
-    }
-    
-    // Calculate the edit region
-    const deleteLength = oldEnd - firstDiff + 1
-    const insertLength = newEnd - firstDiff + 1
-    
-    // Validate the detected edit
-    if (deleteLength < 0 || insertLength < 0) {
-      return null
-    }
-    
-    // Determine the type of edit
-    let type: 'insert' | 'delete' | 'replace' | 'other'
-    if (deleteLength === 0 && insertLength > 0) {
-      type = 'insert'
-    } else if (deleteLength > 0 && insertLength === 0) {
-      type = 'delete'
-    } else if (deleteLength > 0 && insertLength > 0) {
-      type = 'replace'
-    } else {
-      type = 'other'
-    }
-    
-    return {
-      type,
-      offset: firstDiff,
-      deleteLength: Math.max(0, deleteLength),
-      insertLength: Math.max(0, insertLength)
-    }
   }, [])
 
   // Calculate typing speed
@@ -314,31 +249,16 @@ const TextEditor: React.FC<TextEditorProps> = ({
     const paragraphs = getParagraphsWithPositions(text)
     const changed: Array<{ text: string; start: number; end: number; index: number }> = []
     
-    // Build a map of old paragraph hashes for comparison
-    const oldParagraphHashes = new Map<string, number>()
-    paragraphCache.forEach((text, index) => {
-      const hash = text.trim() // Simple hash using trimmed text
-      oldParagraphHashes.set(hash, index)
-    })
-    
-    // Find paragraphs that have actually changed content
     for (const para of paragraphs) {
-      const paraHash = para.text.trim()
       const cached = paragraphCache.get(para.index)
-      
-      // Check if this exact paragraph exists in the cache at this index
       if (cached !== para.text) {
-        // Also check if this paragraph existed elsewhere (might have just moved)
-        if (!oldParagraphHashes.has(paraHash) || para.text.length < 10) {
-          // This is genuinely new or changed content, or very short (likely edited)
-          changed.push(para)
-        }
+        changed.push(para)
       }
     }
     
-    // If paragraphs were deleted or many were changed, force full check
-    if (paragraphCache.size > paragraphs.length || changed.length > paragraphs.length * 0.5) {
-      // More than 50% changed or paragraphs deleted - return all for full check
+    // Also check if paragraphs were deleted (cache has more than current)
+    if (paragraphCache.size > paragraphs.length) {
+      // Force full check if paragraphs were deleted
       return paragraphs
     }
     
@@ -348,19 +268,6 @@ const TextEditor: React.FC<TextEditorProps> = ({
   // Intelligent grammar checking triggers
   const checkGrammar = useCallback(
     (text: string, trigger: 'typing' | 'sentence' | 'paragraph' | 'pause' | 'blur' = 'typing', editPattern?: any) => {
-      console.log('[checkGrammar] Called:', {
-        trigger,
-        isApplyingSuggestion: isApplyingSuggestionRef.current,
-        textLength: text.length,
-        lastCheckLength: lastCheckRef.current?.length || 0
-      })
-      
-      // Skip if we're applying a suggestion
-      if (isApplyingSuggestionRef.current) {
-        console.log('[checkGrammar] Skipping - applying suggestion')
-        return
-      }
-      
       if (debounceRef.current) {
         clearTimeout(debounceRef.current)
       }
@@ -412,7 +319,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
           // Get changed paragraphs for incremental checking
           const changedParagraphs = findChangedParagraphs(normalizedText)
           
-          // Update paragraph cache
+                      // Update paragraph cache
           const newCache = new Map<number, string>()
           const allParagraphs = getParagraphsWithPositions(normalizedText)
           for (const para of allParagraphs) {
@@ -420,38 +327,13 @@ const TextEditor: React.FC<TextEditorProps> = ({
           }
           setParagraphCache(newCache)
           
-          // If we have recent edit positions, filter changed paragraphs to only those near edits
-          let targetParagraphs = changedParagraphs
-          if (recentEditPositions.length > 0 && changedParagraphs.length > 0) {
-            const now = Date.now()
-            const recentEdits = recentEditPositions.filter(e => now - e.timestamp < 5000) // Edits in last 5 seconds
-            
-            if (recentEdits.length > 0) {
-              // Filter to only paragraphs that contain or are near recent edits
-              targetParagraphs = changedParagraphs.filter(para => {
-                return recentEdits.some(edit => {
-                  // Check if edit is within or near this paragraph (with 50 char buffer)
-                  return edit.offset >= para.start - 50 && edit.offset <= para.end + 50
-                })
-              })
-              
-              if (targetParagraphs.length === 0 && changedParagraphs.length > 0) {
-                // Fallback: if no paragraphs match, use all changed ones
-                targetParagraphs = changedParagraphs
-              }
-              
-              console.log(`🎯 Targeted checking: ${targetParagraphs.length} of ${changedParagraphs.length} changed paragraphs near recent edits`)
-            }
-          }
-          
           // Log paragraph changes for debugging
-          if (targetParagraphs.length > 0 && targetParagraphs.length < allParagraphs.length) {
+          if (changedParagraphs.length > 0 && changedParagraphs.length < allParagraphs.length) {
             console.log('📝 Paragraph changes detected:', {
               total: allParagraphs.length,
               changed: changedParagraphs.length,
-              targeted: targetParagraphs.length,
-              targetedIndices: targetParagraphs.map(p => p.index),
-              targetedText: targetParagraphs.map(p => ({
+              changedIndices: changedParagraphs.map(p => p.index),
+              changedText: changedParagraphs.map(p => ({
                 index: p.index,
                 preview: p.text.substring(0, 50) + (p.text.length > 50 ? '...' : '')
               }))
@@ -460,14 +342,13 @@ const TextEditor: React.FC<TextEditorProps> = ({
           
           // Use AI check if enabled, otherwise use regular check
           if (aiCheckEnabled) {
-            if (targetParagraphs.length === 0) {
-              console.log('No paragraphs to check, skipping')
+            if (changedParagraphs.length === 0) {
+              console.log('No paragraphs changed, skipping check')
               return
             }
             
             // Abort any existing stream
             if (streamAbortRef.current) {
-              console.log('Aborting active grammar check stream')
               streamAbortRef.current()
               streamAbortRef.current = null
             }
@@ -476,18 +357,13 @@ const TextEditor: React.FC<TextEditorProps> = ({
             dispatch(validateSuggestions({ currentText: normalizedText }))
             
             // Determine if incremental or full check
-            const isIncremental = targetParagraphs.length < allParagraphs.length
-            const changedRanges = isIncremental ? targetParagraphs.map(p => ({ start: p.start, end: p.end })) : undefined
+            const isIncremental = changedParagraphs.length < allParagraphs.length
+            const changedRanges = isIncremental ? changedParagraphs.map(p => ({ start: p.start, end: p.end })) : undefined
             
             if (streamingEnabled) {
               // Use streaming mode
               console.log(`Starting streaming ${isIncremental ? 'incremental' : 'full'} check`)
-              // Don't clear suggestions if we're applying a suggestion
-              if (!isApplyingSuggestionRef.current) {
-                dispatch(clearSuggestions()) // Clear existing suggestions for streaming
-              } else {
-                console.log('[checkGrammar] Skipping clearSuggestions - applying suggestion')
-              }
+              dispatch(clearSuggestions()) // Clear existing suggestions for streaming
               dispatch(startStreaming({ message: 'Analyzing text...' }))
               
               checkGrammarWithAIStream({
@@ -526,12 +402,12 @@ const TextEditor: React.FC<TextEditorProps> = ({
               })
               
               if (isIncremental) {
-                setIncrementalStatus({ active: true, paragraphs: targetParagraphs.length })
+                setIncrementalStatus({ active: true, paragraphs: changedParagraphs.length })
                 setTimeout(() => setIncrementalStatus({ active: false, paragraphs: 0 }), 3000)
               }
             } else {
               // Use non-streaming mode
-              if (targetParagraphs.length === allParagraphs.length) {
+              if (changedParagraphs.length === allParagraphs.length) {
                 console.log('Full document check')
                 lastAICheckTextRef.current = normalizedText
                 dispatch(checkTextWithAI({ 
@@ -541,8 +417,8 @@ const TextEditor: React.FC<TextEditorProps> = ({
                   checkType: 'comprehensive'
                 }))
               } else {
-                console.log(`Incremental check: ${targetParagraphs.length} changed paragraphs out of ${allParagraphs.length}`)
-                setIncrementalStatus({ active: true, paragraphs: targetParagraphs.length })
+                console.log(`Incremental check: ${changedParagraphs.length} changed paragraphs out of ${allParagraphs.length}`)
+                setIncrementalStatus({ active: true, paragraphs: changedParagraphs.length })
                 lastAICheckTextRef.current = normalizedText
                 dispatch(checkTextWithAI({ 
                   text: normalizedText,
@@ -560,7 +436,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
         }
       }, delay)
     },
-    [dispatch, aiCheckEnabled, normalizeText, findChangedParagraphs, getParagraphsWithPositions, streamingEnabled, calculateSmartDelay, typingSpeed, recentEditPositions]
+    [dispatch, aiCheckEnabled, normalizeText, findChangedParagraphs, getParagraphsWithPositions, streamingEnabled, calculateSmartDelay, typingSpeed]
   )
 
   // Auto-save functionality
@@ -592,28 +468,6 @@ const TextEditor: React.FC<TextEditorProps> = ({
       
       // Only update if content actually changed
       if (newContent !== content) {
-        console.log('[handleContentChange] Content changed:', {
-          isApplyingSuggestion: isApplyingSuggestionRef.current,
-          oldLength: content.length,
-          newLength: newContent.length,
-          diff: newContent.length - content.length
-        })
-        
-        // If we're programmatically applying a suggestion, just update state without re-checking
-        if (isApplyingSuggestionRef.current) {
-          console.log('[handleContentChange] Skipping grammar check - applying suggestion')
-          setContentState(newContent)
-          dispatch(setContent([{
-            type: 'paragraph',
-            children: [{ text: newContent }]
-          }]))
-          onContentChange?.(newContent)
-          autoSave(newContent)
-          return
-        }
-        
-        console.log('[handleContentChange] Processing as manual edit')
-        
         // Update typing speed
         updateTypingSpeed()
         
@@ -645,44 +499,12 @@ const TextEditor: React.FC<TextEditorProps> = ({
         
         setContentState(newContent)
         
-        // Detect the edit operation to adjust suggestion offsets
-        const editOp = detectEditOperation(content, newContent)
-        
-        if (editOp && editOp.type !== 'other') {
-          // For most edits, adjust suggestion offsets instead of clearing
-          console.log('Edit operation detected:', editOp)
-          
-          // Track this edit position for incremental checking
-          setRecentEditPositions(prev => {
-            const now = Date.now()
-            // Keep edits from last 10 seconds
-            const recent = prev.filter(e => now - e.timestamp < 10000)
-            return [...recent, { offset: editOp.offset, timestamp: now }]
-          })
-          
-          // Only clear suggestions for major structural changes
-          const isMajorChange = 
-            editOp.deleteLength > 50 || // Large deletion
-            editOp.insertLength > 50 || // Large insertion
-            (editOp.type === 'replace' && editOp.deleteLength > 20 && editOp.insertLength > 20) || // Large replacement
-            newContent.includes('\n\n') && !content.includes('\n\n') || // New paragraph structure
-            Math.abs(newContent.split('\n').length - content.split('\n').length) > 3 // Many line changes
-          
-          if (isMajorChange || editPattern.isHeavyEditing) {
-            console.log('Major structural change detected, clearing suggestions')
-            dispatch(clearSuggestions())
-          } else {
-            // Adjust suggestion offsets based on the edit
-            dispatch(adjustSuggestionsForEdit({
-              editOffset: editOp.offset,
-              deleteLength: editOp.deleteLength,
-              insertLength: editOp.insertLength,
-              currentText: newContent
-            }))
-          }
-        } else if (Math.abs(newContent.length - content.length) > 1 || editPattern.isHeavyEditing) {
-          // Fallback for complex edits that couldn't be detected
-          console.log('Complex edit detected, validating suggestions')
+        // Clear suggestions if text has changed significantly to avoid offset issues
+        // This helps prevent stale highlights when user manually edits text
+        if (Math.abs(newContent.length - content.length) > 1 || editPattern.isHeavyEditing) {
+          dispatch(clearSuggestions())
+        } else {
+          // For minor changes, just validate existing suggestions
           dispatch(validateSuggestions({ currentText: newContent }))
         }
         
@@ -718,7 +540,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
         autoSave(newContent)
       }
     },
-    [content, onContentChange, checkGrammar, autoSave, dispatch, normalizeText, updateTypingSpeed, analyzeEditPattern, typingSpeed, detectEditOperation]
+    [content, onContentChange, checkGrammar, autoSave, dispatch, normalizeText, updateTypingSpeed, analyzeEditPattern, typingSpeed]
   )
 
   // Handle text selection for cursor position
@@ -976,146 +798,88 @@ const TextEditor: React.FC<TextEditorProps> = ({
 
   // Apply suggestion
   const handleApplySuggestion = useCallback((suggestion: Suggestion, replacement: string) => {
-    console.log('[handleApplySuggestion] START:', {
-      suggestionId: suggestion.id,
-      type: suggestion.type,
-      offset: suggestion.offset,
-      replacement,
-      currentSuggestions: suggestions.length
-    })
+    // Get the current editor text to ensure we're working with the actual content
+    const currentEditorText = editorRef.current ? normalizeText(editorRef.current.innerText || editorRef.current.textContent || '') : content
     
-    try {
-      // Get the current editor text to ensure we're working with the actual content
-      const currentEditorText = editorRef.current ? normalizeText(editorRef.current.innerText || editorRef.current.textContent || '') : content
+    // Use the editor text if it's different from state (but similar length)
+    const textToUse = Math.abs(currentEditorText.length - content.length) < 5 ? currentEditorText : content
+    
+    const newContent = 
+      textToUse.substring(0, suggestion.offset) + 
+      replacement + 
+      textToUse.substring(suggestion.offset + suggestion.length)
+    
+    setContentState(newContent)
+    
+    // Mark this suggestion as recently applied to hide it immediately
+    setRecentlyAppliedSuggestions(prev => new Set(prev).add(suggestion.id))
+    
+    // Update editor content with plain text first
+    if (editorRef.current) {
+      // Set as plain text to avoid any lingering highlights
+      editorRef.current.innerText = newContent
       
-      // Use the editor text if it's different from state (but similar length)
-      const textToUse = Math.abs(currentEditorText.length - content.length) < 5 ? currentEditorText : content
-      
-      const newContent = 
-        textToUse.substring(0, suggestion.offset) + 
-        replacement + 
-        textToUse.substring(suggestion.offset + suggestion.length)
-      
-      console.log('[handleApplySuggestion] Text update:', {
-        oldLength: textToUse.length,
-        newLength: newContent.length,
-        delta: newContent.length - textToUse.length
-      })
-      
-      setContentState(newContent)
-      
-      // Mark this suggestion as recently applied to hide it immediately
-      setRecentlyAppliedSuggestions(prev => new Set(prev).add(suggestion.id))
-      
-      // Set flag to indicate we're applying a suggestion programmatically
-      isApplyingSuggestionRef.current = true
-      console.log('[handleApplySuggestion] Flag set to true')
-      
-      // Invalidate any in-flight grammar check requests
-      dispatch(invalidateCurrentRequest())
-      
-      // Cancel any pending grammar checks to prevent them from running after applying the suggestion
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current)
-        debounceRef.current = undefined
-      }
-      if (pauseDetectionRef.current) {
-        clearTimeout(pauseDetectionRef.current)
-        pauseDetectionRef.current = undefined
-      }
-      
-      // Abort any active grammar check stream
-      if (streamAbortRef.current) {
-        console.log('Aborting active grammar check stream')
-        streamAbortRef.current()
-        streamAbortRef.current = null
-      }
-      
-      // Update editor content with plain text first
-      if (editorRef.current) {
-        console.log('[handleApplySuggestion] Updating editor innerText')
-        // Set as plain text to avoid any lingering highlights
-        editorRef.current.innerText = newContent
+      // Position cursor after the replacement
+      const selection = window.getSelection()
+      if (selection && editorRef.current.firstChild) {
+        const cursorPos = suggestion.offset + replacement.length
+        const textNode = editorRef.current.firstChild
         
-        // Reset the flag after DOM update and event processing
-        // Using requestAnimationFrame to ensure DOM has updated
-        requestAnimationFrame(() => {
-          setTimeout(() => {
-            console.log('[handleApplySuggestion] Resetting flag')
-            isApplyingSuggestionRef.current = false
-            dispatch(clearApplyingSuggestionFlag())
-          }, 50) // Small delay to ensure content change event has been processed
-        })
-        
-        // Position cursor after the replacement
-        const selection = window.getSelection()
-        if (selection && editorRef.current.firstChild) {
-          const cursorPos = suggestion.offset + replacement.length
-          const textNode = editorRef.current.firstChild
-          
-          if (textNode.nodeType === Node.TEXT_NODE && cursorPos <= textNode.textContent!.length) {
-            const range = document.createRange()
-            range.setStart(textNode, cursorPos)
-            range.collapse(true)
-            selection.removeAllRanges()
-            selection.addRange(range)
-          }
+        if (textNode.nodeType === Node.TEXT_NODE && cursorPos <= textNode.textContent!.length) {
+          const range = document.createRange()
+          range.setStart(textNode, cursorPos)
+          range.collapse(true)
+          selection.removeAllRanges()
+          selection.addRange(range)
         }
       }
-      
-      // Use the applySuggestion action which properly handles offset adjustments
-      // and adds ignored patterns for style suggestions
-      dispatch(applySuggestion({
-        suggestionId: suggestion.id,
-        replacement,
-        offset: suggestion.offset,
-        length: suggestion.length
-      }))
-      
-      console.log('Redux applySuggestion dispatched, current suggestions:', {
-        before: suggestions.length,
-        applied: suggestion.id,
-        offset: suggestion.offset
-      })
-      
-      // Track this edit position for potential future incremental checking
-      setRecentEditPositions(prev => {
-        const now = Date.now()
-        const recent = prev.filter(e => now - e.timestamp < 10000)
-        return [...recent, { offset: suggestion.offset, timestamp: now }]
-      })
-      
-      // Record the user choice for smart correction learning
-      smartCorrectionService.recordUserChoice(
-        suggestion,
-        true, // accepted
-        textToUse.substring(suggestion.offset, suggestion.offset + suggestion.length),
-        replacement,
-        textToUse
-      ).catch(console.error)
-      
-      dispatch(setContent([
-        {
-          type: 'paragraph',
-          children: [{ text: newContent }],
-        },
-      ]))
-      
-      onContentChange?.(newContent)
-      
-      // Don't trigger any grammar check after applying suggestions
-      // The Redux action has already adjusted offsets for remaining suggestions
-      console.log('Suggestion applied - existing suggestions adjusted, no re-check needed')
-      
-      setShowSuggestionTooltip(null)
-      console.log('[handleApplySuggestion] END - Success')
-    } catch (error) {
-      console.error('Error applying suggestion:', error)
-      // Ensure flag is reset even on error
-      isApplyingSuggestionRef.current = false
-      dispatch(clearApplyingSuggestionFlag())
-      console.log('[handleApplySuggestion] END - Error')
     }
+    
+    // Use the applySuggestion action which properly handles offset adjustments
+    // and adds ignored patterns for style suggestions
+    dispatch(applySuggestion({
+      suggestionId: suggestion.id,
+      replacement,
+      offset: suggestion.offset,
+      length: suggestion.length
+    }))
+    
+    // Record the user choice for smart correction learning
+    smartCorrectionService.recordUserChoice(
+      suggestion,
+      true, // accepted
+      textToUse.substring(suggestion.offset, suggestion.offset + suggestion.length),
+      replacement,
+      textToUse
+    ).catch(console.error)
+    
+    dispatch(setContent([
+      {
+        type: 'paragraph',
+        children: [{ text: newContent }],
+      },
+    ]))
+    
+    onContentChange?.(newContent)
+    
+    // For style suggestions, don't trigger any grammar check
+    // The suggestion has been applied and added to ignored patterns
+    if (['style', 'clarity', 'engagement', 'delivery'].includes(suggestion.type)) {
+      // Clear any pending debounce timers
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+      }
+      // Don't schedule a new check - let the user continue editing
+      console.log('Style suggestion applied - skipping grammar check to prevent re-detection')
+    } else {
+      // For grammar/spelling fixes, validate remaining suggestions after Redux updates
+      // Give Redux time to update before validating
+      setTimeout(() => {
+        dispatch(validateSuggestions({ currentText: newContent }))
+      }, 50)
+    }
+    
+    setShowSuggestionTooltip(null)
   }, [content, dispatch, onContentChange, normalizeText])
 
   // Ignore suggestion
@@ -1145,12 +909,6 @@ const TextEditor: React.FC<TextEditorProps> = ({
 
   // Handle editor blur (when user clicks away)
   const handleEditorBlur = useCallback(() => {
-    // Don't check grammar if we're in the middle of applying a suggestion
-    if (isApplyingSuggestionRef.current) {
-      console.log('Editor blur during suggestion application - skipping grammar check')
-      return
-    }
-    
     console.log('Editor blur - checking grammar immediately')
     if (content && content.trim().length > 3) {
       checkGrammar(content, 'blur', { isHeavyEditing: false, isContinuousTyping: false, isMinorCorrection: false })

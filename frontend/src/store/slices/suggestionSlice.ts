@@ -57,7 +57,6 @@ interface SuggestionState {
     suggestionsReceived: number
     message?: string
   }
-  isApplyingSuggestion: boolean
 }
 
 const initialState: SuggestionState = {
@@ -79,8 +78,7 @@ const initialState: SuggestionState = {
     isStreaming: false,
     suggestionsReceived: 0,
     message: undefined
-  },
-  isApplyingSuggestion: false
+  }
 }
 
 // Async thunks
@@ -404,88 +402,6 @@ const suggestionSlice = createSlice({
     setActiveSuggestion: (state, action: PayloadAction<Suggestion | null>) => {
       state.activeSuggestion = action.payload
     },
-    adjustSuggestionsForEdit: (state, action: PayloadAction<{
-      editOffset: number
-      deleteLength: number
-      insertLength: number
-      currentText: string
-    }>) => {
-      const { editOffset, deleteLength, insertLength, currentText } = action.payload
-      const delta = insertLength - deleteLength
-      
-      console.log('Adjusting suggestions for manual edit:', {
-        editOffset,
-        deleteLength,
-        insertLength,
-        delta,
-        totalSuggestions: state.suggestions.length
-      })
-      
-      // Filter and adjust suggestions based on the edit
-      const adjustedSuggestions: Suggestion[] = []
-      
-      state.suggestions.forEach(suggestion => {
-        const suggestionEnd = suggestion.offset + suggestion.length
-        
-        // Case 1: Suggestion is completely before the edit - keep it unchanged
-        if (suggestionEnd <= editOffset) {
-          adjustedSuggestions.push(suggestion)
-          return
-        }
-        
-        // Case 2: Suggestion starts after the edit - adjust offset
-        if (suggestion.offset >= editOffset + deleteLength) {
-          adjustedSuggestions.push({
-            ...suggestion,
-            offset: suggestion.offset + delta
-          })
-          return
-        }
-        
-        // Case 3: Suggestion overlaps with the edit region
-        // Check if it's partially affected or completely within the edit
-        const editEnd = editOffset + deleteLength
-        
-        // If suggestion starts before edit and ends after it (spans the edit)
-        if (suggestion.offset < editOffset && suggestionEnd > editEnd) {
-          // Adjust the length to account for the edit
-          const newLength = suggestion.length + delta
-          
-          // Only keep if the suggestion is still meaningful (length > 0)
-          if (newLength > 0) {
-            // Verify the suggestion still makes sense by checking bounds
-            if (suggestion.offset + newLength <= currentText.length) {
-              adjustedSuggestions.push({
-                ...suggestion,
-                length: newLength
-              })
-            } else {
-              console.log('Removing suggestion that exceeds text bounds after edit:', suggestion.id)
-            }
-          } else {
-            console.log('Removing suggestion that became invalid after edit:', suggestion.id)
-          }
-          return
-        }
-        
-        // If suggestion is partially or completely within the edit region, remove it
-        console.log('Removing suggestion that overlaps with edit region:', {
-          id: suggestion.id,
-          offset: suggestion.offset,
-          length: suggestion.length,
-          editOffset,
-          editEnd
-        })
-      })
-      
-      state.suggestions = adjustedSuggestions
-      
-      console.log('Suggestions after adjustment:', {
-        before: state.suggestions.length,
-        after: adjustedSuggestions.length,
-        removed: state.suggestions.length - adjustedSuggestions.length
-      })
-    },
     applySuggestion: (state, action: PayloadAction<{ suggestionId: string; replacement: string; offset: number; length: number }>) => {
       const { suggestionId, replacement, offset, length } = action.payload
       
@@ -496,9 +412,6 @@ const suggestionSlice = createSlice({
         replacementLength: replacement.length,
         delta: replacement.length - length
       })
-      
-      // Set flag to indicate we're applying a suggestion
-      state.isApplyingSuggestion = true
       
       // Find the suggestion being applied
       const appliedSuggestion = state.suggestions.find(s => s.id === suggestionId)
@@ -627,12 +540,6 @@ const suggestionSlice = createSlice({
       state.activeSuggestion = null
     },
     clearSuggestions: (state) => {
-      // Don't clear suggestions if we're applying a suggestion
-      if (state.isApplyingSuggestion) {
-        console.log('Not clearing suggestions - applying suggestion in progress')
-        return
-      }
-      
       state.suggestions = []
       state.activeSuggestion = null
     },
@@ -651,16 +558,6 @@ const suggestionSlice = createSlice({
     },
     setAICheckEnabled: (state, action: PayloadAction<boolean>) => {
       state.aiCheckEnabled = action.payload
-    },
-    invalidateCurrentRequest: (state) => {
-      // Invalidate the current request ID to prevent in-flight requests from updating suggestions
-      console.log('Invalidating current request ID:', state.latestRequestId)
-      state.latestRequestId = null
-    },
-    clearApplyingSuggestionFlag: (state) => {
-      // Clear the flag that indicates we're applying a suggestion
-      console.log('Clearing isApplyingSuggestion flag')
-      state.isApplyingSuggestion = false
     },
     validateSuggestions: (state, action: PayloadAction<{ currentText: string }>) => {
       const { currentText } = action.payload
@@ -690,12 +587,6 @@ const suggestionSlice = createSlice({
     },
     // Streaming reducers
     startStreaming: (state, action: PayloadAction<{ message?: string }>) => {
-      // Don't start streaming if we're applying a suggestion
-      if (state.isApplyingSuggestion) {
-        console.log('Not starting streaming - applying suggestion in progress')
-        return
-      }
-      
       state.streamingStatus = {
         isStreaming: true,
         suggestionsReceived: 0,
@@ -706,12 +597,6 @@ const suggestionSlice = createSlice({
     },
     addStreamingSuggestion: (state, action: PayloadAction<{ suggestion: Suggestion; count: number; currentText?: string }>) => {
       const { suggestion, count, currentText } = action.payload
-      
-      // Don't add suggestions if we're in the middle of applying a suggestion
-      if (state.isApplyingSuggestion) {
-        console.log('Skipping streaming suggestion - applying suggestion in progress')
-        return
-      }
       
       // Check if this suggestion is in the ignored list
       if (state.ignoredSuggestions.includes(suggestion.id)) {
@@ -780,14 +665,6 @@ const suggestionSlice = createSlice({
           console.warn('⏭️ Ignoring out-of-date grammar check result')
           return
         }
-        
-        // Don't update suggestions if we're in the middle of applying a suggestion
-        if (state.isApplyingSuggestion) {
-          console.warn('📌 Ignoring grammar check result - applying suggestion in progress')
-          state.loading = false
-          return
-        }
-        
         state.loading = false
         state.suggestions = action.payload.suggestions.filter(
           (s: Suggestion) => !state.ignoredSuggestions.includes(s.id)
@@ -841,15 +718,6 @@ const suggestionSlice = createSlice({
           console.warn('⏭️ Ignoring out-of-date AI grammar check result')
           return
         }
-        
-        // Don't update suggestions if we're in the middle of applying a suggestion
-        if (state.isApplyingSuggestion) {
-          console.warn('📌 Ignoring grammar check result - applying suggestion in progress')
-          state.loading = false
-          state.aiCheckLoading = false
-          return
-        }
-        
         state.loading = false
         state.aiCheckLoading = false
         
@@ -894,7 +762,6 @@ export const selectStreamingStatus = (state: { suggestions: SuggestionState }) =
 
 export const {
   setActiveSuggestion,
-  adjustSuggestionsForEdit,
   applySuggestion,
   ignoreSuggestion,
   ignoreAllSuggestions,
@@ -907,8 +774,6 @@ export const {
   clearIgnoredSuggestions,
   toggleAICheck,
   setAICheckEnabled,
-  invalidateCurrentRequest,
-  clearApplyingSuggestionFlag,
   validateSuggestions,
   startStreaming,
   addStreamingSuggestion,
