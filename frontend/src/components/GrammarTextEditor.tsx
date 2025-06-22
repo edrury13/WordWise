@@ -1062,6 +1062,16 @@ const GrammarTextEditor: React.FC<GrammarTextEditorProps> = ({ isDemo = false })
   const handleApplySuggestion = useCallback(async (suggestion: Suggestion, replacement: string) => {
     console.log('Applying suggestion:', { suggestion, replacement })
     
+    // Check if this is an informational-only suggestion
+    if (suggestion.isInformational || suggestion.offset < 0) {
+      console.log('Suggestion is informational only, not applying:', suggestion)
+      toast('This suggestion is informational only - location in text could not be determined', {
+        icon: 'ℹ️',
+        duration: 3000
+      })
+      return
+    }
+    
     // Store the current state for undo
     const originalText = content.substring(suggestion.offset, suggestion.offset + suggestion.length)
     setLastAppliedSuggestion({
@@ -2502,15 +2512,24 @@ const GrammarTextEditor: React.FC<GrammarTextEditorProps> = ({ isDemo = false })
                                 </p>
                                 {suggestion.replacements && suggestion.replacements.length > 0 && (
                                   <div className="flex flex-wrap gap-1">
-                                    {suggestion.replacements.slice(0, 3).map((replacement, index) => (
-                                      <button
-                                        key={index}
-                                        onClick={() => handleApplySuggestion(suggestion, replacement)}
-                                        className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-                                      >
-                                        "{replacement}"
-                                      </button>
-                                    ))}
+                                    {suggestion.isInformational || suggestion.offset < 0 ? (
+                                      <div className="text-xs text-gray-500 dark:text-gray-400 italic">
+                                        <svg className="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        Informational only - location cannot be determined
+                                      </div>
+                                    ) : (
+                                      suggestion.replacements.slice(0, 3).map((replacement, index) => (
+                                        <button
+                                          key={index}
+                                          onClick={() => handleApplySuggestion(suggestion, replacement)}
+                                          className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                                        >
+                                          "{replacement}"
+                                        </button>
+                                      ))
+                                    )}
                                   </div>
                                 )}
                                 <div className="mt-2">
@@ -2574,15 +2593,24 @@ const GrammarTextEditor: React.FC<GrammarTextEditorProps> = ({ isDemo = false })
                                 </p>
                                 {suggestion.replacements && suggestion.replacements.length > 0 && (
                                   <div className="flex flex-wrap gap-1">
-                                    {suggestion.replacements.slice(0, 3).map((replacement, index) => (
-                                      <button
-                                        key={index}
-                                        onClick={() => handleApplySuggestion(suggestion, replacement)}
-                                        className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-                                      >
-                                        "{replacement}"
-                                      </button>
-                                    ))}
+                                    {suggestion.isInformational || suggestion.offset < 0 ? (
+                                      <div className="text-xs text-gray-500 dark:text-gray-400 italic">
+                                        <svg className="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        Informational only - location cannot be determined
+                                      </div>
+                                    ) : (
+                                      suggestion.replacements.slice(0, 3).map((replacement, index) => (
+                                        <button
+                                          key={index}
+                                          onClick={() => handleApplySuggestion(suggestion, replacement)}
+                                          className="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                                        >
+                                          "{replacement}"
+                                        </button>
+                                      ))
+                                    )}
                                   </div>
                                 )}
                                 <div className="mt-2">
@@ -2832,31 +2860,50 @@ const GrammarTextEditor: React.FC<GrammarTextEditorProps> = ({ isDemo = false })
                   <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
                     Suggestions:
                   </p>
-                  <div className="space-y-1">
-                    {activeSuggestion.replacements.slice(0, 3).map((replacement, index) => {
-                      const smartCorrection = getSmartCorrectionForSuggestion(activeSuggestion.id)
-                      const isQuickAccept = smartCorrection?.quickAccept && index === 0
-                      
-                      return (
-                        <button
-                          key={index}
-                          onClick={() => handleApplySuggestion(activeSuggestion, replacement)}
-                          className={`block w-full text-left px-3 py-2 text-sm rounded transition-colors ${
-                            isQuickAccept 
-                              ? 'bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50 border border-green-300 dark:border-green-700' 
-                              : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span>"{replacement}"</span>
-                            {isQuickAccept && (
-                              <span className="text-xs text-green-700 dark:text-green-300">⚡ Quick</span>
-                            )}
+                  {activeSuggestion.isInformational || activeSuggestion.offset < 0 ? (
+                    <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded text-xs text-gray-600 dark:text-gray-400">
+                      <div className="flex items-center space-x-1 mb-1">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="font-medium">Informational Only</span>
+                      </div>
+                      <p>Location in text could not be determined. Suggested corrections:</p>
+                      <div className="mt-2 space-y-1">
+                        {activeSuggestion.replacements.slice(0, 3).map((replacement, index) => (
+                          <div key={index} className="px-2 py-1 bg-white dark:bg-gray-800 rounded">
+                            "{replacement}"
                           </div>
-                        </button>
-                      )
-                    })}
-                  </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {activeSuggestion.replacements.slice(0, 3).map((replacement, index) => {
+                        const smartCorrection = getSmartCorrectionForSuggestion(activeSuggestion.id)
+                        const isQuickAccept = smartCorrection?.quickAccept && index === 0
+                        
+                        return (
+                          <button
+                            key={index}
+                            onClick={() => handleApplySuggestion(activeSuggestion, replacement)}
+                            className={`block w-full text-left px-3 py-2 text-sm rounded transition-colors ${
+                              isQuickAccept 
+                                ? 'bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50 border border-green-300 dark:border-green-700' 
+                                : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span>"{replacement}"</span>
+                              {isQuickAccept && (
+                                <span className="text-xs text-green-700 dark:text-green-300">⚡ Quick</span>
+                              )}
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
               

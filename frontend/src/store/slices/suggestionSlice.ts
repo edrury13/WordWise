@@ -18,6 +18,7 @@ export interface Suggestion {
   severity: 'low' | 'medium' | 'high'
   source?: 'rule-based' | 'languagetool' | 'ai'
   confidence?: number
+  isInformational?: boolean
 }
 
 export interface ReadabilityScore {
@@ -665,10 +666,26 @@ const suggestionSlice = createSlice({
       const { currentText } = action.payload
       const beforeCount = state.suggestions.length
       
-      // Filter out suggestions that are no longer valid for the current text
-      state.suggestions = state.suggestions.filter(suggestion => {
-        // Check bounds
-        if (suggestion.offset < 0 || suggestion.offset + suggestion.length > currentText.length) {
+      // Update suggestions to mark those with negative offsets as informational
+      state.suggestions = state.suggestions.map(suggestion => {
+        // Check if offset is negative
+        if (suggestion.offset < 0) {
+          console.log('Marking suggestion as informational (negative offset):', {
+            id: suggestion.id,
+            offset: suggestion.offset,
+            type: suggestion.type,
+            source: suggestion.source
+          })
+          // Add an informational flag instead of filtering out
+          return {
+            ...suggestion,
+            isInformational: true,
+            explanation: (suggestion.explanation || suggestion.message) + ' (Informational only - location in text could not be determined)'
+          }
+        }
+        
+        // Check bounds for positive offset suggestions
+        if (suggestion.offset + suggestion.length > currentText.length) {
           console.log('Removing out-of-bounds suggestion:', {
             id: suggestion.id,
             offset: suggestion.offset,
@@ -676,11 +693,11 @@ const suggestionSlice = createSlice({
             textLength: currentText.length,
             source: suggestion.source
           })
-          return false
+          return null // Will be filtered out below
         }
         
-        return true
-      })
+        return suggestion
+      }).filter(Boolean) as Suggestion[] // Remove nulls
       
       const afterCount = state.suggestions.length
       if (beforeCount !== afterCount) {

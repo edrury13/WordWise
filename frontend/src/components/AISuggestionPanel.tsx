@@ -83,17 +83,36 @@ const AISuggestionPanel: React.FC<AISuggestionPanelProps> = ({ suggestion, onApp
           {suggestion.replacements && suggestion.replacements.length > 0 && (
             <div>
               <p className="text-xs font-medium text-gray-700 mb-2">Suggested corrections:</p>
-              <div className="flex flex-wrap gap-2">
-                {suggestion.replacements.map((replacement: string, index: number) => (
-                  <button
-                    key={index}
-                    onClick={() => onApply?.(replacement)}
-                    className="px-3 py-1 text-sm bg-white border border-purple-300 rounded-md hover:bg-purple-100 hover:border-purple-400 transition-colors"
-                  >
-                    {replacement}
-                  </button>
-                ))}
-              </div>
+              {suggestion.isInformational || suggestion.offset < 0 ? (
+                <div className="p-2 bg-purple-50 dark:bg-purple-900/20 rounded text-xs text-purple-700 dark:text-purple-300">
+                  <div className="flex items-center space-x-1 mb-1">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="font-medium">Informational Only</span>
+                  </div>
+                  <p className="mb-2">Location in text could not be determined. Suggested corrections:</p>
+                  <div className="space-y-1">
+                    {suggestion.replacements.map((replacement: string, index: number) => (
+                      <div key={index} className="px-2 py-1 bg-white dark:bg-gray-800 rounded">
+                        "{replacement}"
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {suggestion.replacements.map((replacement: string, index: number) => (
+                    <button
+                      key={index}
+                      onClick={() => onApply?.(replacement)}
+                      className="px-3 py-1 text-sm bg-white border border-purple-300 rounded-md hover:bg-purple-100 hover:border-purple-400 transition-colors"
+                    >
+                      {replacement}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
