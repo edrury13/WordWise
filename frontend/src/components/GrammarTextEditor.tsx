@@ -460,6 +460,16 @@ const GrammarTextEditor: React.FC = () => {
     autoSave(newContent)
   }, [dispatch, autoSave, lastAppliedSuggestion, checkGrammarDebounced]) // Removed checkSentenceStructure dependency
 
+  // Helper function to escape HTML
+  const escapeHtml = (text: string): string => {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#x27;')
+  }
+
   // Create highlighted text overlay
   const createHighlightedText = useCallback(() => {
     if (!content) {
@@ -482,7 +492,6 @@ const GrammarTextEditor: React.FC = () => {
     console.log('📝 Regular suggestions count:', suggestions.length)
     console.log('📝 Sentence analysis available:', !!sentenceAnalysis?.sentences)
 
-    let result = content
     const allHighlights: Array<{
       offset: number
       length: number
@@ -740,58 +749,48 @@ const GrammarTextEditor: React.FC = () => {
       
       console.log(`🔄 Reduced ${validHighlights.length} highlights to ${uniqueHighlights.length} unique highlights`)
 
-      uniqueHighlights.forEach((highlight) => {
-      const { offset, length, type, id, className } = highlight
+      // Sort highlights by offset (ascending) to process from start to end
+      const sortedForProcessing = [...uniqueHighlights].sort((a, b) => a.offset - b.offset)
+      
+      // Build the result by processing segments
+      let result = ''
+      let lastOffset = 0
+      
+      sortedForProcessing.forEach((highlight) => {
+        const { offset, length, type, id, className } = highlight
         
-        // Validate highlight bounds before applying (double-check)
-        if (offset < 0 || offset + length > result.length || length > 500) {
-          console.warn(`⚠️ Skipping invalid highlight:`, {
-            id,
-            offset,
-            length,
-            resultLength: result.length,
-            type,
-            reason: offset < 0 ? 'negative offset' : 
-                    offset + length > result.length ? 'exceeds content bounds' :
-                    length > 500 ? 'too long (>500 chars)' : 'unknown'
-          })
-          return
+        // Add the text before this highlight (escaped)
+        if (offset > lastOffset) {
+          result += escapeHtml(content.substring(lastOffset, offset))
         }
         
-      const before = result.substring(0, offset)
-      const highlightedText = result.substring(offset, offset + length)
-      const after = result.substring(offset + length)
-      
-        // Escape HTML in the highlighted text to prevent corruption
-        const escapedText = highlightedText
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#x27;')
+        // Get the highlighted text
+        const highlightedText = content.substring(offset, offset + length)
+        const escapedHighlightText = escapeHtml(highlightedText)
         
-        console.log(`🎨 Applying highlight:`, {
+        // Escape the ID to prevent any potential XSS
+        const escapedId = id.replace(/"/g, '&quot;').replace(/'/g, '&#x27;')
+        const eventHandlers = `data-suggestion-id="${escapedId}" data-offset="${offset}" data-length="${length}" style="pointer-events: auto;" onmouseenter="window.handleSuggestionHover && window.handleSuggestionHover('${escapedId}', event)" onmouseleave="window.handleSuggestionLeave && window.handleSuggestionLeave()" onclick="window.handleSuggestionClick && window.handleSuggestionClick(${offset}, event)"`
+        
+        // Add the highlighted span
+        result += `<span class="${className}" ${eventHandlers}>${escapedHighlightText}</span>`
+        
+        // Update lastOffset
+        lastOffset = offset + length
+        
+        console.log(`🎨 Applied highlight:`, {
           id,
           type,
           offset,
           length,
-          highlightedText: highlightedText.substring(0, 50) + (highlightedText.length > 50 ? '...' : ''),
-          textLength: highlightedText.length,
-          beforeLength: before.length,
-          afterLength: after.length
+          highlightedText: highlightedText.substring(0, 50) + (highlightedText.length > 50 ? '...' : '')
         })
-        
-        // Create the highlight span with escaped content
-      // Escape the ID to prevent any potential XSS
-      const escapedId = id.replace(/"/g, '&quot;').replace(/'/g, '&#x27;')
-      const eventHandlers = `data-suggestion-id="${escapedId}" data-offset="${offset}" data-length="${length}" style="pointer-events: auto;" onmouseenter="window.handleSuggestionHover && window.handleSuggestionHover('${escapedId}', event)" onmouseleave="window.handleSuggestionLeave && window.handleSuggestionLeave()" onclick="window.handleSuggestionClick && window.handleSuggestionClick(${offset}, event)"`
+      })
       
-        const highlightedSpan = `<span class="${className}" ${eventHandlers}>${escapedText}</span>`
-      
-      result = before + highlightedSpan + after
-        
-        console.log(`📝 New result length: ${result.length}`)
-    })
+      // Add any remaining text after the last highlight (escaped)
+      if (lastOffset < content.length) {
+        result += escapeHtml(content.substring(lastOffset))
+      }
 
     setHighlightedContent(result)
     
@@ -977,24 +976,6 @@ const GrammarTextEditor: React.FC = () => {
       // Get fresh computed styles
       const textareaStyles = window.getComputedStyle(editorRef.current)
       
-      // Get the actual scrollbar width from the textarea
-      const scrollbarWidth = editorRef.current.offsetWidth - editorRef.current.clientWidth
-      
-      // Copy all dimensions and styles
-      overlayRef.current.style.position = 'absolute'
-      overlayRef.current.style.top = '0'
-      overlayRef.current.style.left = '0'
-      // Use the clientWidth to match the content area (excluding scrollbar)
-      overlayRef.current.style.width = `${editorRef.current.clientWidth}px`
-      overlayRef.current.style.height = `${editorRef.current.clientHeight}px`
-      
-      // Copy all padding values exactly
-      overlayRef.current.style.padding = textareaStyles.padding
-      overlayRef.current.style.paddingLeft = textareaStyles.paddingLeft
-      overlayRef.current.style.paddingRight = textareaStyles.paddingRight
-      overlayRef.current.style.paddingTop = textareaStyles.paddingTop
-      overlayRef.current.style.paddingBottom = textareaStyles.paddingBottom
-      
       // Copy text styles exactly - including computed values
       overlayRef.current.style.lineHeight = textareaStyles.lineHeight
       overlayRef.current.style.fontSize = textareaStyles.fontSize
@@ -1011,17 +992,8 @@ const GrammarTextEditor: React.FC = () => {
       overlayRef.current.style.wordWrap = 'break-word'
       overlayRef.current.style.wordBreak = textareaStyles.wordBreak || 'normal'
       overlayRef.current.style.overflowWrap = textareaStyles.overflowWrap || 'break-word'
-      overlayRef.current.style.boxSizing = textareaStyles.boxSizing
       overlayRef.current.style.direction = textareaStyles.direction
       overlayRef.current.style.unicodeBidi = textareaStyles.unicodeBidi
-      
-      // Copy border styles to ensure proper box model
-      overlayRef.current.style.borderWidth = textareaStyles.borderWidth
-      overlayRef.current.style.borderStyle = 'solid'
-      overlayRef.current.style.borderColor = 'transparent'
-      
-      // Set overflow to hidden since overlay doesn't need its own scrollbar
-      overlayRef.current.style.overflow = 'hidden'
       
       // Sync scroll position
       overlayRef.current.scrollTop = editorRef.current.scrollTop
@@ -1034,10 +1006,6 @@ const GrammarTextEditor: React.FC = () => {
       createHighlightedText()
       
       console.log('📐 Overlay synced:', {
-        textareaWidth: editorRef.current.offsetWidth,
-        textareaClientWidth: editorRef.current.clientWidth,
-        scrollbarWidth,
-        overlayWidth: overlayRef.current.style.width,
         scrollTop: editorRef.current.scrollTop
       })
     }
@@ -1902,8 +1870,8 @@ const GrammarTextEditor: React.FC = () => {
           ref={editorRef}
           value={content}
           onChange={handleContentChange}
-              onKeyDown={handleKeyDownEnhanced}
-              className="w-full flex-1 p-4 bg-transparent text-gray-900 dark:text-gray-100 resize-none focus:outline-none font-serif text-lg leading-relaxed min-h-0"
+          onKeyDown={handleKeyDownEnhanced}
+          className="w-full flex-1 p-4 bg-transparent text-gray-900 dark:text-gray-100 resize-none focus:outline-none font-serif text-lg leading-relaxed min-h-0"
           placeholder={`Start writing your document... Grammar checking will begin automatically. ${autoSaveEnabled ? 'Auto-save is enabled.' : 'Auto-save is disabled - press Ctrl+S to save manually.'}`}
           style={{ fontFamily: 'ui-serif, Georgia, serif' }}
           onScroll={handleScroll}
@@ -1912,20 +1880,24 @@ const GrammarTextEditor: React.FC = () => {
         {/* Overlay for highlights */}
         <div
           ref={overlayRef}
-          className="grammar-overlay font-serif text-lg leading-relaxed text-transparent z-10 pointer-events-none"
+          className="grammar-overlay p-4 font-serif text-lg leading-relaxed pointer-events-none"
           style={{ 
             fontFamily: 'ui-serif, Georgia, serif',
             whiteSpace: 'pre-wrap',
             wordWrap: 'break-word',
             wordBreak: 'normal',
             overflowWrap: 'break-word',
-            scrollbarWidth: 'none', // Hide scrollbar for Firefox
-            msOverflowStyle: 'none', // Hide scrollbar for IE and Edge
             position: 'absolute',
             top: 0,
             left: 0,
-            padding: '1rem', // Match the p-4 class from textarea
-            color: 'transparent' // Ensure text is transparent except for highlights
+            right: 0,
+            bottom: 0,
+            overflow: 'hidden',
+            color: 'transparent',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            MozUserSelect: 'none',
+            msUserSelect: 'none'
           }}
           dangerouslySetInnerHTML={{ __html: highlightedContent }}
         />
