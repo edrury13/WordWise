@@ -55,7 +55,7 @@ const GrammarDemo: React.FC = () => {
         </div>
         
         <div className="p-6">
-          <GrammarTextEditor />
+          <GrammarTextEditor isDemo={true} />
         </div>
       </div>
 

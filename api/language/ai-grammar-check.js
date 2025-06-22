@@ -184,7 +184,7 @@ export default async function handler(req, res) {
         message: suggestion.message,
         explanation: suggestion.explanation || suggestion.message,
         replacements: suggestion.suggestions || [],
-        offset: offset >= 0 ? offset : 0,
+        offset: offset,
         length: length,
         context: getContextSnippet(text, offset, length),
         category: mapTypeToCategory(suggestion.type),
@@ -262,6 +262,11 @@ export default async function handler(req, res) {
 }
 
 function getContextSnippet(text, offset, length) {
+  // Handle negative offset gracefully
+  if (offset < 0) {
+    return ''
+  }
+  
   const contextRadius = 40
   const start = Math.max(0, offset - contextRadius)
   const end = Math.min(text.length, offset + length + contextRadius)

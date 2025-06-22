@@ -9,6 +9,7 @@ export interface AIGrammarCheckOptions {
   checkType?: 'comprehensive' | 'grammar-only' | 'style-only'
   styleProfile?: StyleProfile | null
   changedRanges?: Array<{ start: number; end: number }>
+  isDemo?: boolean
 }
 
 export interface AIGrammarSuggestion {
@@ -77,18 +78,9 @@ export async function checkGrammarWithAI(options: AIGrammarCheckOptions): Promis
       }
     }
     
-    console.log('🤖 AI Grammar Check Started:', {
-      textLength: options.text.length,
-      textPreview: options.text.substring(0, 100) + '...',
-      checkType: options.checkType,
-      documentType: options.documentType
-    })
-
-    // Get current session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    
-    if (sessionError || !session) {
-      console.error('AI Grammar check auth error:', sessionError)
+    // Apply demo mode text length limit
+    if (options.isDemo && options.text.length > 1000) {
+      console.log('Text too long for demo mode (max 1000 characters)')
       return {
         success: false,
         suggestions: [],
@@ -102,11 +94,49 @@ export async function checkGrammarWithAI(options: AIGrammarCheckOptions): Promis
           lowSeverity: 0,
           averageConfidence: 0
         },
-        error: 'Authentication required for AI grammar checking'
+        error: 'Demo mode is limited to 1000 characters. Please sign up for full access.'
       }
     }
+    
+    console.log('🤖 AI Grammar Check Started:', {
+      textLength: options.text.length,
+      textPreview: options.text.substring(0, 100) + '...',
+      checkType: options.checkType,
+      documentType: options.documentType,
+      isDemo: options.isDemo
+    })
 
-    console.log('🔐 AI Auth successful, user:', session.user.email)
+    // For demo mode, skip authentication check
+    let session: any = null
+    
+    if (!options.isDemo) {
+      // Get current session
+      const { data: { session: authSession }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError || !authSession) {
+        console.error('AI Grammar check auth error:', sessionError)
+        return {
+          success: false,
+          suggestions: [],
+          stats: {
+            totalIssues: 0,
+            grammarIssues: 0,
+            spellingIssues: 0,
+            styleIssues: 0,
+            highSeverity: 0,
+            mediumSeverity: 0,
+            lowSeverity: 0,
+            averageConfidence: 0
+          },
+          error: 'Authentication required for AI grammar checking'
+        }
+      }
+
+      session = authSession
+      console.log('🔐 AI Auth successful, user:', session.user.email)
+    } else {
+      console.log('🎯 Running in demo mode - skipping authentication')
+    }
 
     // Rate limiting
     const now = Date.now()
@@ -165,7 +195,7 @@ export async function checkGrammarWithAI(options: AIGrammarCheckOptions): Promis
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`
+        ...(session && { 'Authorization': `Bearer ${session.access_token}` })
       },
       body: JSON.stringify({
         text: options.text,
@@ -177,7 +207,8 @@ export async function checkGrammarWithAI(options: AIGrammarCheckOptions): Promis
           type: options.styleProfile.profileType,
           prompt: profilePrompt
         } : undefined,
-        changedRanges: options.changedRanges
+        changedRanges: options.changedRanges,
+        isDemo: options.isDemo || false
       })
     })
 
@@ -538,7 +569,7 @@ export async function checkGrammarWithAIStream(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`
+        ...(session && { 'Authorization': `Bearer ${session.access_token}` })
       },
       body: JSON.stringify({
         text: options.text,
@@ -581,7 +612,7 @@ export async function checkGrammarWithAIStream(
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${newSession.access_token}`
+                ...(newSession && { 'Authorization': `Bearer ${newSession.access_token}` })
               },
               body: JSON.stringify({
                 text: options.text,

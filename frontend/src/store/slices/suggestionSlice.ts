@@ -165,7 +165,8 @@ export const checkTextWithAI = createAsyncThunk(
     checkType = 'comprehensive',
     enableAI = true,
     styleProfile,
-    changedRanges
+    changedRanges,
+    isDemo = false
   }: { 
     text: string
     language?: string
@@ -174,6 +175,7 @@ export const checkTextWithAI = createAsyncThunk(
     enableAI?: boolean
     styleProfile?: StyleProfile | null
     changedRanges?: Array<{ start: number; end: number }>
+    isDemo?: boolean
   }, { getState }) => {
     let grammarResults: { suggestions: Suggestion[], apiStatus: 'api' | 'client-fallback' | 'mixed' | 'ai-enhanced' } = { 
       suggestions: [], 
@@ -186,14 +188,16 @@ export const checkTextWithAI = createAsyncThunk(
     const state = getState() as any
     const currentSuggestions = state.suggestions?.suggestions || []
 
-    // Try traditional grammar checking first
-    try {
-      // For incremental checking with traditional API, we still pass the full text
-      // but also send changedRanges so the backend can optimize
-      grammarResults = await checkGrammarAndSpelling(text, language, 3, changedRanges)
-      console.log('✅ Grammar check completed:', grammarResults.suggestions.length, 'suggestions', changedRanges ? '(incremental)' : '(full)')
-    } catch (grammarError) {
-      console.warn('⚠️ Grammar check failed:', grammarError)
+    // Try traditional grammar checking first - skip for demo mode
+    if (!isDemo) {
+      try {
+        // For incremental checking with traditional API, we still pass the full text
+        // but also send changedRanges so the backend can optimize
+        grammarResults = await checkGrammarAndSpelling(text, language, 3, changedRanges)
+        console.log('✅ Grammar check completed:', grammarResults.suggestions.length, 'suggestions', changedRanges ? '(incremental)' : '(full)')
+      } catch (grammarError) {
+        console.warn('⚠️ Grammar check failed:', grammarError)
+      }
     }
 
     // Try AI-enhanced checking if enabled and text is substantial
@@ -203,14 +207,16 @@ export const checkTextWithAI = createAsyncThunk(
           textLength: text.length,
           documentType,
           checkType,
-          enableAI
+          enableAI,
+          isDemo
         })
         aiResults = await checkGrammarWithAI({
           text,
           documentType,
           checkType,
           styleProfile,
-          changedRanges
+          changedRanges,
+          isDemo
         })
         
         console.log('🤖 AI Results received:', {

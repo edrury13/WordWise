@@ -49,7 +49,11 @@ import toast from 'react-hot-toast'
 import { runPartialGrammarCheck } from '../utils/partialGrammarCheck'
 import { extractSentenceWithContext } from '../utils/sentenceExtraction'
 
-const GrammarTextEditor: React.FC = () => {
+interface GrammarTextEditorProps {
+  isDemo?: boolean
+}
+
+const GrammarTextEditor: React.FC<GrammarTextEditorProps> = ({ isDemo = false }) => {
   const dispatch = useDispatch<AppDispatch>()
   const { suggestions, loading, readabilityScore } = useSelector((state: RootState) => state.suggestions)
   const { currentDocument, saving } = useSelector((state: RootState) => state.documents)
@@ -310,7 +314,8 @@ const GrammarTextEditor: React.FC = () => {
         text,
         documentType: (effectiveProfile && ['social', 'custom'].includes(effectiveProfile.profileType) ? 'general' : effectiveProfile?.profileType || 'general') as any,
         checkType: 'comprehensive',
-        styleProfile: effectiveProfile
+        styleProfile: effectiveProfile,
+        isDemo
         // No changedRanges for immediate check - always do full check
       }))
       console.log('🚀 Triggered immediate full AI-enhanced grammar recheck with profile:', effectiveProfile?.name)
@@ -318,7 +323,7 @@ const GrammarTextEditor: React.FC = () => {
       dispatch(recheckText({ text }))
       console.log('🚀 Triggered immediate full grammar recheck')
     }
-  }, [dispatch, aiCheckEnabled, effectiveProfile, getParagraphsWithPositions])
+  }, [dispatch, aiCheckEnabled, effectiveProfile, getParagraphsWithPositions, isDemo])
 
   // Debounced grammar check for typing
   const checkGrammarDebounced = useCallback((text: string, ranges?: Array<{ start: number; end: number }>) => {
@@ -385,11 +390,12 @@ const GrammarTextEditor: React.FC = () => {
         checkType: 'comprehensive',
         styleProfile: effectiveProfile,
         changedRanges,
-        enableAI: aiCheckEnabled
+        enableAI: aiCheckEnabled,
+        isDemo
       }))
       console.log('⏱️ Triggered grammar check on ranges:', effectiveRanges?.map(r=>`${r.start}-${r.end}`).join(','))
     }, 300)
-  }, [dispatch, aiCheckEnabled, effectiveProfile, lastCheckText, findChangedParagraphs, getParagraphsWithPositions])
+  }, [dispatch, aiCheckEnabled, effectiveProfile, lastCheckText, findChangedParagraphs, getParagraphsWithPositions, isDemo])
 
   // Debounced sentence analysis - much longer delay since it's less critical than grammar
   // Commented out - sentence structure feature disabled
@@ -1723,7 +1729,8 @@ const GrammarTextEditor: React.FC = () => {
           dispatch(checkTextWithAI({ 
             text: currentDocument.content,
             documentType: 'general',
-            checkType: 'comprehensive'
+            checkType: 'comprehensive',
+            isDemo
           }))
         } else {
           dispatch(checkText({ text: currentDocument.content }))
@@ -1749,7 +1756,8 @@ const GrammarTextEditor: React.FC = () => {
           dispatch(checkTextWithAI({ 
             text: currentDocument.content,
             documentType: 'general',
-            checkType: 'comprehensive'
+            checkType: 'comprehensive',
+            isDemo
           }))
         } else {
           dispatch(checkText({ text: currentDocument.content }))
@@ -1757,7 +1765,7 @@ const GrammarTextEditor: React.FC = () => {
         // checkSentenceStructure(currentDocument.content) // Disabled sentence structure check
       }
     }
-  }, [currentDocument, dispatch, content, aiCheckEnabled]) // Removed checkSentenceStructure dependency
+  }, [currentDocument, dispatch, content, aiCheckEnabled, isDemo]) // Removed checkSentenceStructure dependency
 
   // Track document ID changes to ensure suggestions are cleared when switching documents
   useEffect(() => {

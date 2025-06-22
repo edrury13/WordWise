@@ -780,32 +780,39 @@ router.post('/ai-grammar-check', async (req: AuthenticatedRequest, res) => {
   const startTime = Date.now()
   
   try {
-    if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        error: 'User not authenticated'
-      })
-    }
-
     const { 
       text, 
       context = '', 
       documentType = 'general',
       checkType = 'comprehensive',
       styleProfile,
-      changedRanges
+      changedRanges,
+      isDemo = false
     } = req.body
 
-    // Validate input
-    validateTextInput(text, 10000) // 10k limit for AI
+    // Check if it's a demo request - allow without authentication
+    if (!isDemo && !req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated'
+      })
+    }
 
+    // For demo requests, apply stricter limits
+    const maxTextLength = isDemo ? 1000 : 10000
+    
+    // Validate input
+    validateTextInput(text, maxTextLength)
+
+    // Log the request details
     console.log('🤖 AI Grammar check request:', {
       textLength: text.length,
       documentType,
       checkType,
-      userId: req.user.id,
+      userId: req.user?.id || 'demo',
       incremental: !!changedRanges,
-      changedRanges: changedRanges?.length || 0
+      changedRanges: changedRanges?.length || 0,
+      isDemo
     })
 
     if (!process.env.OPENAI_API_KEY) {
@@ -923,7 +930,7 @@ router.post('/ai-grammar-check', async (req: AuthenticatedRequest, res) => {
         message: suggestion.message,
         explanation: suggestion.explanation || suggestion.message,
         replacements: suggestion.suggestions || [],
-        offset: offset >= 0 ? offset : 0,
+        offset: offset,
         length: length,
         context: suggestion.originalText || '',
         category: mapTypeToCategory(suggestion.type),
@@ -952,10 +959,11 @@ router.post('/ai-grammar-check', async (req: AuthenticatedRequest, res) => {
     console.log('✅ AI Grammar check complete:', {
       suggestions: suggestions.length,
       duration,
-      userId: req.user.id,
+      userId: req.user?.id || 'demo',
       stats,
       incremental: !!changedRanges,
-      rangesChecked: changedRanges?.length || 0
+      rangesChecked: changedRanges?.length || 0,
+      isDemo
     })
 
     res.status(200).json({
@@ -998,6 +1006,11 @@ router.post('/ai-grammar-check', async (req: AuthenticatedRequest, res) => {
 })
 
 function getContextSnippet(text: string, offset: number, length: number): string {
+  // Handle negative offset gracefully
+  if (offset < 0) {
+    return ''
+  }
+  
   const contextRadius = 40
   const start = Math.max(0, offset - contextRadius)
   const end = Math.min(text.length, offset + length + contextRadius)
