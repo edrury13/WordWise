@@ -46,7 +46,6 @@ import {
   loadDocumentProfile
 } from '../store/slices/styleProfileSlice'
 import toast from 'react-hot-toast'
-import { checkGrammarWithAI, checkGrammarAndSpelling } from '../services/languageService' // analyzeSentences commented out - sentence structure feature disabled
 import { runPartialGrammarCheck } from '../utils/partialGrammarCheck'
 
 const GrammarTextEditor: React.FC = () => {
