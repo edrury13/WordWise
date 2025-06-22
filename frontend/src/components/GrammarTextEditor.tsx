@@ -1940,23 +1940,23 @@ const GrammarTextEditor: React.FC = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
-            <div className="grid grid-cols-2 gap-2 text-xs pr-8">
+            <div className="space-y-2 text-xs pr-8">
               <div className="flex items-center justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Issues:</span>
-                <div className="flex items-center space-x-1">
+                <span className="text-gray-600 dark:text-gray-400 flex-shrink-0">Issues:</span>
+                <div className="flex items-center space-x-1 flex-wrap justify-end">
                   {getSummaryMetrics().criticalIssues > 0 && (
-                    <span className="px-2 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-full font-medium">
+                    <span className="px-2 py-0.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-full font-medium whitespace-nowrap">
                       {getSummaryMetrics().criticalIssues} critical
                     </span>
                   )}
-                  <span className="px-2 py-0.5 bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 rounded-full">
+                  <span className="px-2 py-0.5 bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 rounded-full whitespace-nowrap">
                     {getSummaryMetrics().totalIssues} total
                   </span>
                 </div>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Grade:</span>
-                <span className="font-medium text-gray-900 dark:text-gray-100">
+                <span className="text-gray-600 dark:text-gray-400 flex-shrink-0">Grade:</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">
                   {getSummaryMetrics().readabilityScore}
                 </span>
               </div>

@@ -606,7 +606,7 @@ const GradeLevelRewritePanel: React.FC<GradeLevelRewritePanelProps> = ({ text, o
                 <div className="font-medium text-gray-900 dark:text-white mb-1 flex items-center">
                   GPT-4 Turbo
                   <span className="ml-2 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full">
-                    Recommended
+                    Premium
                   </span>
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">

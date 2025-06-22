@@ -554,6 +554,613 @@ router.get('/export-all', async (req: AuthenticatedRequest, res) => {
   }
 })
 
+// Version Control Endpoints
+
+// Get version history for a document
+router.get('/:id/versions', async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated'
+      })
+    }
+
+    // Verify user owns the document
+    const { data: document, error: docError } = await supabase
+      .from('documents')
+      .select('id')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .single()
+
+    if (docError || !document) {
+      return res.status(404).json({
+        success: false,
+        error: 'Document not found'
+      })
+    }
+
+    // Get versions
+    const { data: versions, error } = await supabase
+      .from('document_versions')
+      .select('*')
+      .eq('document_id', req.params.id)
+      .order('version_number', { ascending: false })
+
+    if (error) throw error
+
+    res.status(200).json({
+      success: true,
+      versions: versions || []
+    })
+  } catch (error) {
+    console.error('Error fetching versions:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch version history'
+    })
+  }
+})
+
+// Get a specific version
+router.get('/:id/versions/:versionId', async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated'
+      })
+    }
+
+    // Get version with document ownership check
+    const { data: version, error } = await supabase
+      .from('document_versions')
+      .select(`
+        *,
+        documents!inner(user_id)
+      `)
+      .eq('id', req.params.versionId)
+      .eq('document_id', req.params.id)
+      .eq('documents.user_id', req.user.id)
+      .single()
+
+    if (error || !version) {
+      return res.status(404).json({
+        success: false,
+        error: 'Version not found'
+      })
+    }
+
+    res.status(200).json({
+      success: true,
+      version
+    })
+  } catch (error) {
+    console.error('Error fetching version:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch version'
+    })
+  }
+})
+
+// Create a new version
+router.post('/:id/versions', async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated'
+      })
+    }
+
+    const { commitMessage, isMajorVersion = false, isAutomatic = false } = req.body
+
+    // Get the document
+    const { data: document, error: docError } = await supabase
+      .from('documents')
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .single()
+
+    if (docError || !document) {
+      return res.status(404).json({
+        success: false,
+        error: 'Document not found'
+      })
+    }
+
+    // Get the latest version to calculate diff summary
+    const { data: latestVersion } = await supabase
+      .from('document_versions')
+      .select('*')
+      .eq('document_id', req.params.id)
+      .order('version_number', { ascending: false })
+      .limit(1)
+      .single()
+
+    let diffSummary = null
+    if (latestVersion) {
+      const oldWords = latestVersion.content.split(/\s+/).filter((w: string) => w.length > 0)
+      const newWords = document.content.split(/\s+/).filter((w: string) => w.length > 0)
+      const oldParagraphs = latestVersion.content.split(/\n\n+/).filter((p: string) => p.trim().length > 0)
+      const newParagraphs = document.content.split(/\n\n+/).filter((p: string) => p.trim().length > 0)
+
+      diffSummary = {
+        words_added: Math.max(0, newWords.length - oldWords.length),
+        words_removed: Math.max(0, oldWords.length - newWords.length),
+        paragraphs_changed: Math.abs(newParagraphs.length - oldParagraphs.length)
+      }
+    }
+
+    // Get next version number
+    const { data: versionNumber, error: versionError } = await supabase
+      .rpc('get_next_version_number', { 
+        doc_id: req.params.id, 
+        is_major: isMajorVersion 
+      })
+
+    if (versionError) throw versionError
+
+    // Create the version
+    const { data: version, error } = await supabase
+      .from('document_versions')
+      .insert({
+        document_id: req.params.id,
+        version_number: versionNumber,
+        title: document.title,
+        content: document.content,
+        created_by: req.user.id,
+        commit_message: commitMessage || (isAutomatic ? 'Auto-save' : isMajorVersion ? 'Major update' : 'Minor update'),
+        word_count: document.word_count,
+        character_count: document.character_count,
+        is_major_version: isMajorVersion,
+        is_automatic: isAutomatic,
+        diff_summary: diffSummary
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+
+    // If automatic version, clean up old ones
+    if (isAutomatic) {
+      try {
+        await supabase.rpc('cleanup_old_automatic_versions', { doc_id: req.params.id })
+      } catch (cleanupError) {
+        console.error('Error cleaning up old automatic versions:', cleanupError)
+        // Don't throw - the version was created successfully
+      }
+    }
+
+    res.status(201).json({
+      success: true,
+      version
+    })
+  } catch (error) {
+    console.error('Error creating version:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create version'
+    })
+  }
+})
+
+// Restore a version
+router.post('/:id/versions/:versionId/restore', async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated'
+      })
+    }
+
+    const { message } = req.body
+
+    // Get the version to restore
+    const { data: version, error: versionError } = await supabase
+      .from('document_versions')
+      .select(`
+        *,
+        documents!inner(user_id)
+      `)
+      .eq('id', req.params.versionId)
+      .eq('document_id', req.params.id)
+      .eq('documents.user_id', req.user.id)
+      .single()
+
+    if (versionError || !version) {
+      return res.status(404).json({
+        success: false,
+        error: 'Version not found'
+      })
+    }
+
+    // Update the document
+    const { error: updateError } = await supabase
+      .from('documents')
+      .update({
+        title: version.title,
+        content: version.content,
+        word_count: version.word_count,
+        character_count: version.character_count,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+
+    if (updateError) throw updateError
+
+    // Create a new version marking the restore
+    const { data: versionNumber } = await supabase
+      .rpc('get_next_version_number', { 
+        doc_id: req.params.id, 
+        is_major: true 
+      })
+
+    const { data: newVersion, error: newVersionError } = await supabase
+      .from('document_versions')
+      .insert({
+        document_id: req.params.id,
+        version_number: versionNumber,
+        title: version.title,
+        content: version.content,
+        created_by: req.user.id,
+        commit_message: message || `Restored from version ${version.version_number}`,
+        word_count: version.word_count,
+        character_count: version.character_count,
+        is_major_version: true
+      })
+      .select()
+      .single()
+
+    if (newVersionError) throw newVersionError
+
+    res.status(200).json({
+      success: true,
+      message: 'Version restored successfully',
+      version: newVersion
+    })
+  } catch (error) {
+    console.error('Error restoring version:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to restore version'
+    })
+  }
+})
+
+// Compare two versions
+router.get('/:id/versions/compare', async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated'
+      })
+    }
+
+    const { from, to } = req.query
+
+    if (!from || !to) {
+      return res.status(400).json({
+        success: false,
+        error: 'Both "from" and "to" version IDs are required'
+      })
+    }
+
+    // Check cache first
+    const { data: cached } = await supabase
+      .from('version_comparisons')
+      .select('*')
+      .or(`version_from.eq.${from},version_from.eq.${to}`)
+      .or(`version_to.eq.${from},version_to.eq.${to}`)
+      .single()
+
+    if (cached) {
+      return res.status(200).json({
+        success: true,
+        comparison: cached
+      })
+    }
+
+    // Get both versions with ownership check
+    const [fromResult, toResult] = await Promise.all([
+      supabase
+        .from('document_versions')
+        .select(`
+          *,
+          documents!inner(user_id)
+        `)
+        .eq('id', from)
+        .eq('documents.user_id', req.user.id)
+        .single(),
+      supabase
+        .from('document_versions')
+        .select(`
+          *,
+          documents!inner(user_id)
+        `)
+        .eq('id', to)
+        .eq('documents.user_id', req.user.id)
+        .single()
+    ])
+
+    if (fromResult.error || toResult.error || !fromResult.data || !toResult.data) {
+      return res.status(404).json({
+        success: false,
+        error: 'One or both versions not found'
+      })
+    }
+
+    // Calculate diff (simple line-based diff)
+    const oldLines = fromResult.data.content.split('\n')
+    const newLines = toResult.data.content.split('\n')
+    
+    const segments = []
+    let additions = 0
+    let deletions = 0
+    let modifications = 0
+
+    // Simple diff algorithm
+    let i = 0, j = 0
+    while (i < oldLines.length || j < newLines.length) {
+      if (i >= oldLines.length) {
+        segments.push({
+          type: 'added',
+          content: newLines[j],
+          startLine: j + 1,
+          endLine: j + 1
+        })
+        additions++
+        j++
+      } else if (j >= newLines.length) {
+        segments.push({
+          type: 'removed',
+          content: oldLines[i],
+          startLine: i + 1,
+          endLine: i + 1
+        })
+        deletions++
+        i++
+      } else if (oldLines[i] === newLines[j]) {
+        segments.push({
+          type: 'unchanged',
+          content: oldLines[i],
+          startLine: j + 1,
+          endLine: j + 1
+        })
+        i++
+        j++
+      } else {
+        segments.push({
+          type: 'removed',
+          content: oldLines[i],
+          startLine: i + 1,
+          endLine: i + 1
+        })
+        segments.push({
+          type: 'added',
+          content: newLines[j],
+          startLine: j + 1,
+          endLine: j + 1
+        })
+        modifications++
+        i++
+        j++
+      }
+    }
+
+    const diffData = {
+      segments,
+      statistics: {
+        additions,
+        deletions,
+        modifications
+      }
+    }
+
+    // Cache the comparison
+    const { data: comparison, error: cacheError } = await supabase
+      .from('version_comparisons')
+      .insert({
+        version_from: from as string,
+        version_to: to as string,
+        diff_data: diffData
+      })
+      .select()
+      .single()
+
+    if (cacheError) {
+      console.error('Error caching comparison:', cacheError)
+    }
+
+    res.status(200).json({
+      success: true,
+      comparison: comparison || { diff_data: diffData }
+    })
+  } catch (error) {
+    console.error('Error comparing versions:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to compare versions'
+    })
+  }
+})
+
+// Get version tags for a document
+router.get('/:id/version-tags', async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated'
+      })
+    }
+
+    // Verify user owns the document
+    const { data: document, error: docError } = await supabase
+      .from('documents')
+      .select('id')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .single()
+
+    if (docError || !document) {
+      return res.status(404).json({
+        success: false,
+        error: 'Document not found'
+      })
+    }
+
+    // Get tags
+    const { data: tags, error } = await supabase
+      .from('document_version_tags')
+      .select('*')
+      .eq('document_id', req.params.id)
+      .order('created_at', { ascending: false })
+
+    if (error) throw error
+
+    res.status(200).json({
+      success: true,
+      tags: tags || []
+    })
+  } catch (error) {
+    console.error('Error fetching version tags:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch version tags'
+    })
+  }
+})
+
+// Create a version tag
+router.post('/:id/versions/:versionId/tag', async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated'
+      })
+    }
+
+    const { tagName } = req.body
+
+    if (!tagName || !tagName.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Tag name is required'
+      })
+    }
+
+    // Verify version belongs to user's document
+    const { data: version, error: versionError } = await supabase
+      .from('document_versions')
+      .select(`
+        id,
+        documents!inner(user_id)
+      `)
+      .eq('id', req.params.versionId)
+      .eq('document_id', req.params.id)
+      .eq('documents.user_id', req.user.id)
+      .single()
+
+    if (versionError || !version) {
+      return res.status(404).json({
+        success: false,
+        error: 'Version not found'
+      })
+    }
+
+    // Create tag
+    const { data: tag, error } = await supabase
+      .from('document_version_tags')
+      .insert({
+        document_id: req.params.id,
+        version_id: req.params.versionId,
+        tag_name: tagName.trim(),
+        created_by: req.user.id
+      })
+      .select()
+      .single()
+
+    if (error) {
+      if (error.code === '23505') { // Unique constraint violation
+        return res.status(400).json({
+          success: false,
+          error: 'A tag with this name already exists for this document'
+        })
+      }
+      throw error
+    }
+
+    res.status(201).json({
+      success: true,
+      tag
+    })
+  } catch (error) {
+    console.error('Error creating version tag:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create version tag'
+    })
+  }
+})
+
+// Delete a version tag
+router.delete('/:id/version-tags/:tagId', async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated'
+      })
+    }
+
+    // Verify tag belongs to user's document
+    const { data: tag, error: tagError } = await supabase
+      .from('document_version_tags')
+      .select(`
+        id,
+        documents!inner(user_id)
+      `)
+      .eq('id', req.params.tagId)
+      .eq('document_id', req.params.id)
+      .eq('documents.user_id', req.user.id)
+      .single()
+
+    if (tagError || !tag) {
+      return res.status(404).json({
+        success: false,
+        error: 'Tag not found'
+      })
+    }
+
+    // Delete tag
+    const { error } = await supabase
+      .from('document_version_tags')
+      .delete()
+      .eq('id', req.params.tagId)
+
+    if (error) throw error
+
+    res.status(200).json({
+      success: true,
+      message: 'Tag deleted successfully'
+    })
+  } catch (error) {
+    console.error('Error deleting version tag:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete version tag'
+    })
+  }
+})
+
 // Upload a single document
 router.post('/upload', upload.single('file'), async (req: AuthenticatedRequest, res) => {
   try {

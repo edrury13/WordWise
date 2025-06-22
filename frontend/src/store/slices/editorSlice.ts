@@ -119,6 +119,23 @@ interface GradeLevelRewriteState {
   }>
 }
 
+// Version Control interfaces
+export interface VersionControlState {
+  showVersionHistory: boolean
+  showVersionComparison: boolean
+  versionComparisonIds: {
+    from: string | null
+    to: string | null
+  }
+  viewingVersionId: string | null
+  isCreatingVersion: boolean
+  lastVersionCreated: number | null
+  autoVersionEnabled: boolean
+  autoVersionInterval: number // minutes
+  lastAutoVersion: number | null
+  versionError: string | null
+}
+
 interface EditorState {
   editorInstance: Editor | null
   content: any[]
@@ -135,6 +152,8 @@ interface EditorState {
   rewriteHistory: RewriteHistoryItem[]
   maxHistoryItems: number
   currentHistoryIndex: number
+  // Version Control State
+  versionControl: VersionControlState
 }
 
 // Get initial dark mode from localStorage or system preference
@@ -174,7 +193,7 @@ const initialState: EditorState = {
     showGradeLevelPanel: false,
     targetGradeLevel: null,
     previewText: null,
-    selectedModel: 'gpt-4-turbo',
+    selectedModel: 'gpt-3.5-turbo',
     // Performance optimization defaults
     requestQueue: [],
     cache: [],
@@ -200,6 +219,22 @@ const initialState: EditorState = {
   rewriteHistory: [],
   maxHistoryItems: 20, // Keep last 20 operations for undo
   currentHistoryIndex: -1,
+  // Version Control
+  versionControl: {
+    showVersionHistory: false,
+    showVersionComparison: false,
+    versionComparisonIds: {
+      from: null,
+      to: null
+    },
+    viewingVersionId: null,
+    isCreatingVersion: false,
+    lastVersionCreated: null,
+    autoVersionEnabled: true,
+    autoVersionInterval: 5, // 5 minutes
+    lastAutoVersion: null,
+    versionError: null
+  }
 }
 
 // Utility functions for performance optimization
@@ -826,6 +861,46 @@ const editorSlice = createSlice({
     setAutoSave: (state, action: PayloadAction<boolean>) => {
       state.autoSaveEnabled = action.payload
     },
+    
+    // Version Control Actions
+    setShowVersionHistory: (state, action: PayloadAction<boolean>) => {
+      state.versionControl.showVersionHistory = action.payload
+      // Reset comparison view when closing history
+      if (!action.payload) {
+        state.versionControl.showVersionComparison = false
+        state.versionControl.versionComparisonIds = { from: null, to: null }
+      }
+    },
+    setShowVersionComparison: (state, action: PayloadAction<boolean>) => {
+      state.versionControl.showVersionComparison = action.payload
+    },
+    setVersionComparisonIds: (state, action: PayloadAction<{ from: string | null; to: string | null }>) => {
+      state.versionControl.versionComparisonIds = action.payload
+    },
+    setViewingVersionId: (state, action: PayloadAction<string | null>) => {
+      state.versionControl.viewingVersionId = action.payload
+    },
+    setIsCreatingVersion: (state, action: PayloadAction<boolean>) => {
+      state.versionControl.isCreatingVersion = action.payload
+    },
+    setLastVersionCreated: (state, action: PayloadAction<number | null>) => {
+      state.versionControl.lastVersionCreated = action.payload
+    },
+    setAutoVersionEnabled: (state, action: PayloadAction<boolean>) => {
+      state.versionControl.autoVersionEnabled = action.payload
+    },
+    setAutoVersionInterval: (state, action: PayloadAction<number>) => {
+      state.versionControl.autoVersionInterval = action.payload
+    },
+    setLastAutoVersion: (state, action: PayloadAction<number | null>) => {
+      state.versionControl.lastAutoVersion = action.payload
+    },
+    setVersionError: (state, action: PayloadAction<string | null>) => {
+      state.versionControl.versionError = action.payload
+    },
+    clearVersionError: (state) => {
+      state.versionControl.versionError = null
+    },
     setLastSaved: (state, action: PayloadAction<number>) => {
       state.lastSaved = action.payload
     },
@@ -931,6 +1006,18 @@ export const {
   undoRewrite,
   redoRewrite,
   clearRewriteHistory,
+  // Version Control Actions
+  setShowVersionHistory,
+  setShowVersionComparison,
+  setVersionComparisonIds,
+  setViewingVersionId,
+  setIsCreatingVersion,
+  setLastVersionCreated,
+  setAutoVersionEnabled,
+  setAutoVersionInterval,
+  setLastAutoVersion,
+  setVersionError,
+  clearVersionError,
   // Existing actions
   toggleDarkMode,
   setDarkMode,
@@ -983,5 +1070,18 @@ export const selectRewriteHistoryStats = (state: { editor: EditorState }) => ({
   canRedo: state.editor.currentHistoryIndex < state.editor.rewriteHistory.length - 1,
   lastAction: state.editor.rewriteHistory[state.editor.currentHistoryIndex]?.description || null
 })
+
+// Selectors for version control
+export const selectVersionControlState = (state: { editor: EditorState }) => state.editor.versionControl
+export const selectShowVersionHistory = (state: { editor: EditorState }) => state.editor.versionControl.showVersionHistory
+export const selectShowVersionComparison = (state: { editor: EditorState }) => state.editor.versionControl.showVersionComparison
+export const selectVersionComparisonIds = (state: { editor: EditorState }) => state.editor.versionControl.versionComparisonIds
+export const selectViewingVersionId = (state: { editor: EditorState }) => state.editor.versionControl.viewingVersionId
+export const selectIsCreatingVersion = (state: { editor: EditorState }) => state.editor.versionControl.isCreatingVersion
+export const selectLastVersionCreated = (state: { editor: EditorState }) => state.editor.versionControl.lastVersionCreated
+export const selectAutoVersionEnabled = (state: { editor: EditorState }) => state.editor.versionControl.autoVersionEnabled
+export const selectAutoVersionInterval = (state: { editor: EditorState }) => state.editor.versionControl.autoVersionInterval
+export const selectLastAutoVersion = (state: { editor: EditorState }) => state.editor.versionControl.lastAutoVersion
+export const selectVersionError = (state: { editor: EditorState }) => state.editor.versionControl.versionError
 
 export default editorSlice.reducer 

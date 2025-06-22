@@ -3,7 +3,20 @@ import { useSelector, useDispatch } from 'react-redux'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { RootState, AppDispatch } from '../store'
 import { fetchDocument, createDocument, updateDocument } from '../store/slices/documentSlice'
-import { setLastSaved } from '../store/slices/editorSlice'
+import { 
+  setLastSaved, 
+  setShowVersionHistory,
+  setShowVersionComparison,
+  setVersionComparisonIds,
+  setIsCreatingVersion,
+  setVersionError,
+  clearVersionError,
+  selectShowVersionHistory,
+  selectShowVersionComparison,
+  selectVersionComparisonIds,
+  selectIsCreatingVersion,
+  selectVersionError
+} from '../store/slices/editorSlice'
 import { 
   loadDocumentProfile, 
   associateProfileWithDocument, 
@@ -12,9 +25,12 @@ import {
   autoDetectProfile 
 } from '../store/slices/styleProfileSlice'
 import { userPreferencesService } from '../services/userPreferencesService'
+import { versionService } from '../services/versionService'
 import GrammarTextEditor from '../components/GrammarTextEditor'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Navigation from '../components/Navigation'
+import { VersionHistoryPanel } from '../components/VersionHistoryPanel'
+import { VersionComparisonView } from '../components/VersionComparisonView'
 import toast from 'react-hot-toast'
 
 const EditorPage: React.FC = () => {
@@ -39,6 +55,13 @@ const EditorPage: React.FC = () => {
   const profiles = useSelector(selectProfiles)
   const activeProfile = useSelector(selectActiveProfile)
   
+  // Version control selectors
+  const showVersionHistory = useSelector(selectShowVersionHistory)
+  const showVersionComparison = useSelector(selectShowVersionComparison)
+  const versionComparisonIds = useSelector(selectVersionComparisonIds)
+  const isCreatingVersion = useSelector(selectIsCreatingVersion)
+  const versionError = useSelector(selectVersionError)
+  
   const [documentTitle, setDocumentTitle] = useState('Untitled Document')
   const [isNewDocument, setIsNewDocument] = useState(!id)
   const [isCreatingDocument, setIsCreatingDocument] = useState(false)
@@ -46,6 +69,10 @@ const EditorPage: React.FC = () => {
   const [selectedProfileId, setSelectedProfileId] = useState<string>('')
   const [userPreferences, setUserPreferences] = useState<any>(null)
   const [hasDetectedProfile, setHasDetectedProfile] = useState(false)
+  const [showVersionCommitDialog, setShowVersionCommitDialog] = useState(false)
+  const [versionCommitMessage, setVersionCommitMessage] = useState('')
+  const [lastAutoSaveTime, setLastAutoSaveTime] = useState<number>(Date.now())
+  const autoSaveIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   // Load user preferences
   useEffect(() => {
@@ -55,6 +82,14 @@ const EditorPage: React.FC = () => {
       })
     }
   }, [user])
+
+  // Show version error if any
+  useEffect(() => {
+    if (versionError) {
+      toast.error(versionError)
+      dispatch(clearVersionError())
+    }
+  }, [versionError, dispatch])
 
   // Check if we need to prompt for style selection
   useEffect(() => {
@@ -147,6 +182,119 @@ const EditorPage: React.FC = () => {
     }
   }, [currentDocument, user, documentTitle])
 
+  // Auto-save version every 5 minutes
+  useEffect(() => {
+    const createAutoVersion = async () => {
+      if (!currentDocument || !documentTitle || isNewDocument) return
+
+      try {
+        // Save the document first
+        await handleSaveDocument()
+        
+        // Create automatic version
+        await versionService.createVersion({
+          documentId: currentDocument.id,
+          title: documentTitle,
+          content: currentDocument.content,
+          isAutomatic: true,
+          isMajorVersion: false
+        })
+        
+        setLastAutoSaveTime(Date.now())
+        console.log('Auto-save version created at', new Date().toLocaleTimeString())
+      } catch (error) {
+        console.error('Failed to create auto-save version:', error)
+      }
+    }
+
+    // Clear any existing interval
+    if (autoSaveIntervalRef.current) {
+      clearInterval(autoSaveIntervalRef.current)
+    }
+
+    // Set up new interval (5 minutes = 300000ms)
+    if (currentDocument && !isNewDocument) {
+      autoSaveIntervalRef.current = setInterval(createAutoVersion, 5 * 60 * 1000)
+    }
+
+    // Cleanup on unmount or when dependencies change
+    return () => {
+      if (autoSaveIntervalRef.current) {
+        clearInterval(autoSaveIntervalRef.current)
+        autoSaveIntervalRef.current = null
+      }
+    }
+  }, [currentDocument, documentTitle, isNewDocument, handleSaveDocument])
+
+  const handleShowVersionHistory = useCallback(() => {
+    dispatch(setShowVersionHistory(true))
+  }, [dispatch])
+
+  const handleCreateVersion = useCallback(() => {
+    setShowVersionCommitDialog(true)
+  }, [])
+
+  const handleConfirmCreateVersion = useCallback(async () => {
+    if (!currentDocument || !documentTitle) return
+
+    dispatch(setIsCreatingVersion(true))
+    
+    try {
+      await versionService.createVersion({
+        documentId: currentDocument.id,
+        title: documentTitle,
+        content: currentDocument.content,
+        commitMessage: versionCommitMessage || undefined,
+        isMajorVersion: true
+      })
+      
+      toast.success('Version created successfully')
+      setShowVersionCommitDialog(false)
+      setVersionCommitMessage('')
+      
+      // Save the document to ensure it's up to date
+      await handleSaveDocument()
+    } catch (error) {
+      console.error('Failed to create version:', error)
+      dispatch(setVersionError('Failed to create version'))
+    } finally {
+      dispatch(setIsCreatingVersion(false))
+    }
+  }, [currentDocument, documentTitle, versionCommitMessage, dispatch, handleSaveDocument])
+
+  const handleVersionRestore = useCallback(async (versionId: string) => {
+    // Refresh the document after version restore
+    if (id) {
+      await dispatch(fetchDocument(id))
+      toast.success('Version restored successfully')
+    }
+  }, [id, dispatch])
+
+  const handleVersionCompare = useCallback((versionFromId: string, versionToId: string) => {
+    dispatch(setShowVersionHistory(false))
+    dispatch(setShowVersionComparison(true))
+    dispatch(setVersionComparisonIds({ from: versionFromId, to: versionToId }))
+  }, [dispatch])
+
+  const handleVersionView = useCallback((versionId: string) => {
+    // For now, just open the version in comparison view with current
+    if (currentDocument) {
+      // Get the latest version ID (we'll need to fetch this)
+      versionService.getVersionHistory(currentDocument.id).then(versions => {
+        if (versions.length > 0) {
+          const latestVersionId = versions[0].id
+          handleVersionCompare(versionId, latestVersionId)
+        }
+      })
+    }
+  }, [currentDocument, handleVersionCompare])
+
+  const handleCloseVersionComparison = useCallback(() => {
+    dispatch(setShowVersionComparison(false))
+    dispatch(setShowVersionHistory(true))
+    dispatch(setVersionComparisonIds({ from: null, to: null }))
+  }, [dispatch])
+
   const handleProfileSelection = async () => {
     if (selectedProfileId && currentDocument?.id) {
       await dispatch(associateProfileWithDocument({
@@ -210,6 +358,9 @@ const EditorPage: React.FC = () => {
         isNewDocument={isNewDocument}
         suggestions={suggestions}
         documentId={currentDocument?.id}
+        onShowVersionHistory={handleShowVersionHistory}
+        onCreateVersion={handleCreateVersion}
+        hasUnsavedChanges={false} // TODO: Track unsaved changes
       />
 
       {/* Academic Editor Layout - Full Width */}
@@ -223,6 +374,105 @@ const EditorPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Version History Panel */}
+      {showVersionHistory && currentDocument && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Version History</h2>
+              <button
+                onClick={() => dispatch(setShowVersionHistory(false))}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <VersionHistoryPanel
+                documentId={currentDocument.id}
+                onVersionRestore={handleVersionRestore}
+                onVersionCompare={handleVersionCompare}
+                onVersionView={handleVersionView}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Version Comparison View */}
+      {showVersionComparison && versionComparisonIds.from && versionComparisonIds.to && currentDocument && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Version Comparison</h2>
+              <button
+                onClick={handleCloseVersionComparison}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <VersionComparisonView
+                documentId={currentDocument.id}
+                versionFromId={versionComparisonIds.from}
+                versionToId={versionComparisonIds.to}
+                onClose={handleCloseVersionComparison}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Version Dialog */}
+      {showVersionCommitDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">
+              Create New Version
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              Save a snapshot of your document at this point. You can always restore to this version later.
+            </p>
+            <div className="mb-6">
+              <label htmlFor="commit-message" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Version Description (optional)
+              </label>
+              <textarea
+                id="commit-message"
+                value={versionCommitMessage}
+                onChange={(e) => setVersionCommitMessage(e.target.value)}
+                placeholder="Describe what changed in this version..."
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                rows={3}
+              />
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowVersionCommitDialog(false)
+                  setVersionCommitMessage('')
+                }}
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmCreateVersion}
+                disabled={isCreatingVersion}
+                className="btn btn-primary btn-sm"
+              >
+                {isCreatingVersion ? 'Creating...' : 'Create Version'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Style Profile Selection Modal */}
       {showProfileSelector && (

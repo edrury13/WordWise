@@ -4,7 +4,7 @@ import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
 import { logoutUser } from '../store/slices/authSlice'
 import { toggleDarkMode } from '../store/slices/editorSlice'
-import { Moon, Sun, LogOut, Save, FileText, ChevronDown, User } from 'lucide-react'
+import { Moon, Sun, LogOut, Save, FileText, ChevronDown, User, History, GitBranch } from 'lucide-react'
 import toast from 'react-hot-toast'
 import DownloadMenu from './DownloadMenu'
 
@@ -26,6 +26,10 @@ interface NavigationProps {
     toneChecking: boolean
   }
   documentId?: string
+  // Version control props
+  onShowVersionHistory?: () => void
+  onCreateVersion?: () => void
+  hasUnsavedChanges?: boolean
 }
 
 const Navigation: React.FC<NavigationProps> = ({ 
@@ -44,7 +48,10 @@ const Navigation: React.FC<NavigationProps> = ({
     gradeLevelChecking: false,
     toneChecking: false
   },
-  documentId
+  documentId,
+  onShowVersionHistory,
+  onCreateVersion,
+  hasUnsavedChanges = false
 }) => {
   const dispatch = useDispatch<AppDispatch>()
   const location = useLocation()
@@ -115,7 +122,7 @@ const Navigation: React.FC<NavigationProps> = ({
                 type="text"
                 value={documentTitle}
                 onChange={handleTitleChange}
-                className="w-full text-xl font-bold academic-serif text-navy dark:text-blue-400 bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-navy dark:focus:ring-blue-600 focus:ring-opacity-20 rounded px-3 py-2 placeholder-academic-gray dark:placeholder-gray-400 text-center"
+                className="w-full text-2xl font-bold academic-serif text-navy dark:text-blue-400 bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-navy dark:focus:ring-blue-600 focus:ring-opacity-20 rounded px-3 py-2 placeholder-academic-gray dark:placeholder-gray-400 text-center"
                 placeholder="Document Title..."
               />
               
@@ -190,6 +197,35 @@ const Navigation: React.FC<NavigationProps> = ({
                 documentTitle={documentTitle || 'Untitled Document'}
                 buttonClassName="flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
               />
+            )}
+
+            {/* Version control buttons (only on editor pages with saved documents) */}
+            {isEditorPage && documentId && !isNewDocument && (
+              <>
+                {/* Create Version button */}
+                {onCreateVersion && (
+                  <button
+                    onClick={onCreateVersion}
+                    className="flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                    title="Create a new version"
+                  >
+                    <GitBranch className="h-4 w-4" />
+                    <span className="hidden lg:inline">Create Version</span>
+                  </button>
+                )}
+
+                {/* Version History button */}
+                {onShowVersionHistory && (
+                  <button
+                    onClick={onShowVersionHistory}
+                    className="flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                    title="View version history"
+                  >
+                    <History className="h-4 w-4" />
+                    <span className="hidden lg:inline">Version History</span>
+                  </button>
+                )}
+              </>
             )}
 
             {/* Documents link (only on non-editor pages) */}
