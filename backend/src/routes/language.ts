@@ -158,7 +158,7 @@ router.post('/check', async (req: AuthenticatedRequest, res) => {
       return res.status(401).json(errorResponse)
     }
 
-    const { text, language = 'en-US' } = req.body
+    const { text, language = 'en-US', changedRanges } = req.body
 
     // Enhanced validation
     validateTextInput(text)
@@ -166,25 +166,64 @@ router.post('/check', async (req: AuthenticatedRequest, res) => {
     console.log('🔍 Grammar check request:', {
       textLength: text.length,
       language,
-      userId: req.user.id
+      userId: req.user.id,
+      incremental: !!changedRanges,
+      changedRanges: changedRanges?.length || 0
     })
 
-    // Call LanguageTool API with retry logic
-    const ltResponse = await callLanguageToolAPI(text, language)
+    let allSuggestions: any[] = []
 
-    // Transform LanguageTool response to our format
-    const suggestions = ltResponse.matches.map((match: LanguageToolMatch, index: number) => ({
-      id: `${match.rule.id}-${match.offset}-${index}`,
-      type: getSuggestionType(match.rule.category.id, match.rule.issueType),
-      message: match.message,
-      replacements: improveReplacements(match.replacements.map(r => r.value), match.rule.id, match.context.text, match.offset, match.length),
-      offset: match.offset,
-      length: match.length,
-      context: match.context.text,
-      explanation: match.shortMessage || match.message,
-      category: match.rule.category.name,
-      severity: getSeverity(match.rule.issueType),
-    }))
+    if (changedRanges && changedRanges.length > 0) {
+      // Incremental check - only check changed ranges
+      console.log('📝 Performing incremental grammar check on changed paragraphs')
+      
+      for (const range of changedRanges) {
+        const rangeText = text.substring(range.start, range.end + 1)
+        
+        // Skip empty ranges
+        if (!rangeText.trim()) continue
+        
+        // Call LanguageTool API for this range
+        const ltResponse = await callLanguageToolAPI(rangeText, language)
+        
+        // Transform and adjust offsets
+        const rangeSuggestions = ltResponse.matches.map((match: LanguageToolMatch, index: number) => ({
+          id: `${match.rule.id}-${range.start + match.offset}-${index}`,
+          type: getSuggestionType(match.rule.category.id, match.rule.issueType),
+          message: match.message,
+          replacements: improveReplacements(match.replacements.map(r => r.value), match.rule.id, match.context.text, match.offset, match.length),
+          offset: range.start + match.offset, // Adjust offset to full document position
+          length: match.length,
+          context: match.context.text,
+          explanation: match.shortMessage || match.message,
+          category: match.rule.category.name,
+          severity: getSeverity(match.rule.issueType),
+        }))
+        
+        allSuggestions.push(...rangeSuggestions)
+      }
+      
+      console.log(`📊 Incremental check found ${allSuggestions.length} suggestions in ${changedRanges.length} ranges`)
+    } else {
+      // Full document check
+      const ltResponse = await callLanguageToolAPI(text, language)
+
+      // Transform LanguageTool response to our format
+      allSuggestions = ltResponse.matches.map((match: LanguageToolMatch, index: number) => ({
+        id: `${match.rule.id}-${match.offset}-${index}`,
+        type: getSuggestionType(match.rule.category.id, match.rule.issueType),
+        message: match.message,
+        replacements: improveReplacements(match.replacements.map(r => r.value), match.rule.id, match.context.text, match.offset, match.length),
+        offset: match.offset,
+        length: match.length,
+        context: match.context.text,
+        explanation: match.shortMessage || match.message,
+        category: match.rule.category.name,
+        severity: getSeverity(match.rule.issueType),
+      }))
+    }
+
+    const suggestions = allSuggestions
 
     const responseData = {
       suggestions,

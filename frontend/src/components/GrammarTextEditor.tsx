@@ -9,7 +9,8 @@ import {
   ignoreSuggestion,
   ignoreAllCurrentSuggestions,
   selectAICheckEnabled,
-  toggleAICheck
+  toggleAICheck,
+  updateSuggestionOffsets
 } from '../store/slices/suggestionSlice'
 import { setContent, setLastSaved, setAutoSave } from '../store/slices/editorSlice'
 import { updateDocument, updateCurrentDocumentContent } from '../store/slices/documentSlice'
@@ -62,6 +63,10 @@ const GrammarTextEditor: React.FC = () => {
   const [showToneRewritePanel, setShowToneRewritePanel] = useState(false)
   const [smartCorrections, setSmartCorrections] = useState<SmartCorrection[]>([])
   const [showIgnoredWordsManager, setShowIgnoredWordsManager] = useState(false)
+  
+  // Incremental checking state
+  const [paragraphCache, setParagraphCache] = useState<Map<number, string>>(new Map())
+  const [lastCheckText, setLastCheckText] = useState('')
   
   // Grade level rewrite panel state managed by Redux
   const showGradeLevelRewritePanel = useSelector(selectShowGradeLevelPanel)
@@ -200,6 +205,55 @@ const GrammarTextEditor: React.FC = () => {
       overlayRef.current.scrollLeft = editorRef.current.scrollLeft
     }
   }, [])
+  
+  // Get paragraphs with their positions in the text
+  const getParagraphsWithPositions = useCallback((text: string): Array<{ text: string; start: number; end: number; index: number }> => {
+    const paragraphs: Array<{ text: string; start: number; end: number; index: number }> = []
+    const lines = text.split('\n')
+    let currentPos = 0
+    let paragraphIndex = 0
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      const lineLength = line.length
+      
+      // If this line has content or is the last line, include it
+      if (line.trim() || i === lines.length - 1) {
+        paragraphs.push({
+          text: line,
+          start: currentPos,
+          end: currentPos + lineLength - 1,
+          index: paragraphIndex++
+        })
+      }
+      
+      // Add 1 for the newline character (except for last line)
+      currentPos += lineLength + (i < lines.length - 1 ? 1 : 0)
+    }
+    
+    return paragraphs
+  }, [])
+  
+  // Find changed paragraphs by comparing with cache
+  const findChangedParagraphs = useCallback((text: string): Array<{ text: string; start: number; end: number; index: number }> => {
+    const paragraphs = getParagraphsWithPositions(text)
+    const changed: Array<{ text: string; start: number; end: number; index: number }> = []
+    
+    for (const para of paragraphs) {
+      const cached = paragraphCache.get(para.index)
+      if (cached !== para.text) {
+        changed.push(para)
+      }
+    }
+    
+    // Also check if paragraphs were deleted (cache has more than current)
+    if (paragraphCache.size > paragraphs.length) {
+      // Force full check if paragraphs were deleted
+      return paragraphs
+    }
+    
+    return changed
+  }, [paragraphCache, getParagraphsWithPositions])
 
   // Helper function to check if we can make an API call based on recent activity
   // Commented out - only used for sentence structure feature
@@ -231,6 +285,18 @@ const GrammarTextEditor: React.FC = () => {
       // Continue with the check anyway
     }
     
+    // Clear paragraph cache for immediate checks to force a full recheck
+    setParagraphCache(new Map())
+    setLastCheckText(text)
+    
+    // Update paragraph cache with the new text
+    const paragraphs = getParagraphsWithPositions(text)
+    const newCache = new Map<number, string>()
+    for (const para of paragraphs) {
+      newCache.set(para.index, para.text)
+    }
+    setParagraphCache(newCache)
+    
     // Use AI-enhanced checking if enabled
     if (aiCheckEnabled) {
       dispatch(checkTextWithAI({ 
@@ -238,13 +304,14 @@ const GrammarTextEditor: React.FC = () => {
         documentType: (effectiveProfile && ['social', 'custom'].includes(effectiveProfile.profileType) ? 'general' : effectiveProfile?.profileType || 'general') as any,
         checkType: 'comprehensive',
         styleProfile: effectiveProfile
+        // No changedRanges for immediate check - always do full check
       }))
-      console.log('🚀 Triggered immediate AI-enhanced grammar recheck with profile:', effectiveProfile?.name)
+      console.log('🚀 Triggered immediate full AI-enhanced grammar recheck with profile:', effectiveProfile?.name)
     } else {
       dispatch(recheckText({ text }))
-      console.log('🚀 Triggered immediate grammar recheck')
+      console.log('🚀 Triggered immediate full grammar recheck')
     }
-  }, [dispatch, aiCheckEnabled, effectiveProfile])
+  }, [dispatch, aiCheckEnabled, effectiveProfile, getParagraphsWithPositions])
 
   // Debounced grammar check for typing
   const checkGrammarDebounced = useCallback((text: string) => {
@@ -253,20 +320,64 @@ const GrammarTextEditor: React.FC = () => {
     }
     
     debounceRef.current = setTimeout(() => {
+      // Don't check if text hasn't changed since last check
+      if (text === lastCheckText) {
+        console.log('⏭️ Skipping grammar check - text unchanged')
+        return
+      }
+      
+      // Get changed paragraphs for incremental checking
+      const changedParagraphs = findChangedParagraphs(text)
+      
+      // Update paragraph cache
+      const newCache = new Map<number, string>()
+      const allParagraphs = getParagraphsWithPositions(text)
+      for (const para of allParagraphs) {
+        newCache.set(para.index, para.text)
+      }
+      setParagraphCache(newCache)
+      setLastCheckText(text)
+      
+      // Log paragraph changes for debugging
+      if (changedParagraphs.length > 0 && changedParagraphs.length < allParagraphs.length) {
+        console.log('📝 Incremental check: Paragraph changes detected:', {
+          total: allParagraphs.length,
+          changed: changedParagraphs.length,
+          changedIndices: changedParagraphs.map(p => p.index),
+          changedText: changedParagraphs.map(p => ({
+            index: p.index,
+            preview: p.text.substring(0, 50) + (p.text.length > 50 ? '...' : '')
+          }))
+        })
+      }
+      
+      // Skip if no paragraphs changed
+      if (changedParagraphs.length === 0) {
+        console.log('⏭️ No paragraphs changed, skipping check')
+        return
+      }
+      
+      // Determine if incremental or full check
+      const isIncremental = changedParagraphs.length < allParagraphs.length
+      const changedRanges = isIncremental ? changedParagraphs.map(p => ({ start: p.start, end: p.end })) : undefined
+      
       if (aiCheckEnabled) {
         dispatch(checkTextWithAI({ 
           text,
           documentType: (effectiveProfile && ['social', 'custom'].includes(effectiveProfile.profileType) ? 'general' : effectiveProfile?.profileType || 'general') as any,
           checkType: 'comprehensive',
-          styleProfile: effectiveProfile
+          styleProfile: effectiveProfile,
+          changedRanges
         }))
-        console.log('⏱️ Triggered debounced AI-enhanced grammar check with profile:', effectiveProfile?.name)
+        console.log(`⏱️ Triggered ${isIncremental ? 'incremental' : 'full'} AI-enhanced grammar check with profile:`, effectiveProfile?.name)
       } else {
+        // For traditional grammar check, we'll still check the full text
+        // but in the future we could implement partial checking
         dispatch(checkText({ text }))
-        console.log('⏱️ Triggered debounced grammar check')
+        console.log(`⏱️ Triggered ${isIncremental ? 'full (incremental not supported)' : 'full'} traditional grammar check`)
       }
     }, 300)
-  }, [dispatch, aiCheckEnabled, effectiveProfile])
+  }, [dispatch, aiCheckEnabled, effectiveProfile, lastCheckText, findChangedParagraphs, getParagraphsWithPositions])
 
   // Debounced sentence analysis - much longer delay since it's less critical than grammar
   // Commented out - sentence structure feature disabled
@@ -437,6 +548,36 @@ const GrammarTextEditor: React.FC = () => {
   // Handle content changes
   const handleContentChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newContent = event.target.value
+    const oldContent = content
+    
+    // Calculate the change offset and delta
+    if (oldContent !== newContent) {
+      // Find where the change occurred
+      let changeOffset = 0
+      const minLength = Math.min(oldContent.length, newContent.length)
+      
+      // Find the first character that differs
+      while (changeOffset < minLength && oldContent[changeOffset] === newContent[changeOffset]) {
+        changeOffset++
+      }
+      
+      // Calculate the delta (positive for insertion, negative for deletion)
+      const delta = newContent.length - oldContent.length
+      
+      // Update suggestion offsets if there are suggestions and content changed
+      if (suggestions.length > 0 && delta !== 0) {
+        console.log('📝 Text change detected:', {
+          changeOffset,
+          delta,
+          oldLength: oldContent.length,
+          newLength: newContent.length,
+          changeType: delta > 0 ? 'insertion' : 'deletion'
+        })
+        
+        dispatch(updateSuggestionOffsets({ changeOffset, delta }))
+      }
+    }
+    
     setContentState(newContent)
     
     // Clear undo state when user manually edits (typing new content)
@@ -458,7 +599,7 @@ const GrammarTextEditor: React.FC = () => {
     checkGrammarDebounced(newContent)
     // checkSentenceStructure(newContent) // Disabled sentence structure check
     autoSave(newContent)
-  }, [dispatch, autoSave, lastAppliedSuggestion, checkGrammarDebounced]) // Removed checkSentenceStructure dependency
+  }, [content, suggestions, dispatch, autoSave, lastAppliedSuggestion, checkGrammarDebounced]) // Removed checkSentenceStructure dependency
 
   // Create highlighted text overlay
   const createHighlightedText = useCallback(() => {
@@ -498,20 +639,36 @@ const GrammarTextEditor: React.FC = () => {
     if (suggestions.length > 0) {
       console.log('📝 Adding regular grammar suggestions:', suggestions.length)
       suggestions.forEach((suggestion) => {
-        console.log('➕ Adding grammar highlight:', {
-          id: suggestion.id,
-          type: suggestion.type,
-          offset: suggestion.offset,
-          length: suggestion.length,
-          message: suggestion.message.substring(0, 50) + '...'
-        })
-        allHighlights.push({
-          offset: suggestion.offset,
-          length: suggestion.length,
-          type: suggestion.type,
-          id: suggestion.id,
-          className: getErrorClassName(suggestion.type)
-        })
+        // Validate suggestion bounds before adding
+        if (suggestion.offset >= 0 && 
+            suggestion.offset + suggestion.length <= content.length &&
+            suggestion.length > 0) {
+          console.log('➕ Adding grammar highlight:', {
+            id: suggestion.id,
+            type: suggestion.type,
+            offset: suggestion.offset,
+            length: suggestion.length,
+            message: suggestion.message.substring(0, 50) + '...'
+          })
+          allHighlights.push({
+            offset: suggestion.offset,
+            length: suggestion.length,
+            type: suggestion.type,
+            id: suggestion.id,
+            className: getErrorClassName(suggestion.type)
+          })
+        } else {
+          console.warn('🚨 Skipping invalid suggestion:', {
+            id: suggestion.id,
+            type: suggestion.type,
+            offset: suggestion.offset,
+            length: suggestion.length,
+            contentLength: content.length,
+            reason: suggestion.offset < 0 ? 'negative offset' : 
+                    suggestion.offset + suggestion.length > content.length ? 'exceeds content bounds' :
+                    'zero length'
+          })
+        }
       })
     }
 
@@ -1130,16 +1287,65 @@ const GrammarTextEditor: React.FC = () => {
       toast(newState ? '🤖 AI checking enabled' : '🤖 AI checking disabled', {
         duration: 2000,
       })
-    } else if (event.key === 'Tab' && showTooltip && activeSuggestion) {
-      // Quick accept with Tab key if it's a quick-accept suggestion
+    } else if (event.key === 'Tab') {
+      // Handle tab key to insert tab character instead of moving focus
       event.preventDefault()
-      const smartCorrection = getSmartCorrectionForSuggestion(activeSuggestion.id)
-      if (smartCorrection?.quickAccept && activeSuggestion.replacements && activeSuggestion.replacements.length > 0) {
-        handleApplySuggestion(activeSuggestion, activeSuggestion.replacements[0])
-        toast('⚡ Quick correction applied!', { duration: 1500 })
+      
+      const textarea = event.currentTarget
+      const start = textarea.selectionStart
+      const end = textarea.selectionEnd
+      const value = textarea.value
+      
+      let newValue: string
+      let newCursorPos: number
+      
+      if (event.shiftKey) {
+        // Shift+Tab: Remove tab or spaces at the beginning of the current line
+        const lineStart = value.lastIndexOf('\n', start - 1) + 1
+        const linePrefix = value.substring(lineStart, start)
+        
+        if (linePrefix.startsWith('\t')) {
+          // Remove tab
+          newValue = value.substring(0, lineStart) + value.substring(lineStart + 1)
+          newCursorPos = Math.max(lineStart, start - 1)
+        } else {
+          // Check for spaces at the beginning of the line
+          const spaceMatch = linePrefix.match(/^ {1,4}/)
+          if (spaceMatch) {
+            // Remove up to 4 spaces
+            const spacesToRemove = spaceMatch[0].length
+            newValue = value.substring(0, lineStart) + value.substring(lineStart + spacesToRemove)
+            newCursorPos = Math.max(lineStart, start - spacesToRemove)
+          } else {
+            // Nothing to remove
+            newValue = value
+            newCursorPos = start
+          }
+        }
+      } else {
+        // Regular Tab: Insert tab character at cursor position
+        newValue = value.substring(0, start) + '\t' + value.substring(end)
+        newCursorPos = start + 1
       }
+      
+      // Update the content
+      setContentState(newValue)
+      dispatch(setContent([{
+        type: 'paragraph',
+        children: [{ text: newValue }]
+      }]))
+      dispatch(updateCurrentDocumentContent(newValue))
+      
+      // Set cursor position after the operation
+      setTimeout(() => {
+        textarea.selectionStart = textarea.selectionEnd = newCursorPos
+      }, 0)
+      
+      // Trigger grammar check and auto-save
+      checkGrammarDebounced(newValue)
+      autoSave(newValue)
     }
-  }, [manualSave, undoLastSuggestion, canUndo, canRedo, dispatch, isSidebarCollapsed, aiCheckEnabled, showTooltip, activeSuggestion, getSmartCorrectionForSuggestion, handleApplySuggestion, handleSetSidebarCollapsed])
+  }, [manualSave, undoLastSuggestion, canUndo, canRedo, dispatch, isSidebarCollapsed, aiCheckEnabled, handleSetSidebarCollapsed, setContentState, checkGrammarDebounced, autoSave])
 
   // Accept all suggestions
   const handleAcceptAllSuggestions = useCallback(() => {
@@ -1360,6 +1566,10 @@ const GrammarTextEditor: React.FC = () => {
       
       // Clear old suggestions immediately when switching documents
       dispatch(clearSuggestions())
+      
+      // Clear paragraph cache for new document
+      setParagraphCache(new Map())
+      setLastCheckText('')
       
       // Set new content only when document actually changes
       setContentState(currentDocument.content)
@@ -1776,6 +1986,31 @@ const GrammarTextEditor: React.FC = () => {
               </button>
             </div>
           )}
+          
+          {/* Debug Button - Temporary */}
+          <button
+            onClick={async () => {
+              console.log('🔍 Debug: Testing grammar check directly...')
+              const testText = 'This are a test sentence with grammer errors.'
+              
+              try {
+                // Test the grammar check directly
+                const { checkGrammarAndSpelling } = await import('../services/languageService')
+                const result = await checkGrammarAndSpelling(testText, 'en-US', 3)
+                console.log('✅ Grammar check result:', result)
+                
+                // Also test if we can get the auth token
+                const { supabase } = await import('../config/supabase')
+                const { data: { session } } = await supabase.auth.getSession()
+                console.log('🔐 Auth session:', session ? 'Available' : 'Missing', session?.access_token?.substring(0, 20) + '...')
+              } catch (error) {
+                console.error('❌ Debug test failed:', error)
+              }
+            }}
+            className="px-3 py-1 bg-red-100 hover:bg-red-200 dark:bg-red-900 dark:hover:bg-red-800 text-red-800 dark:text-red-200 text-xs rounded transition-colors"
+          >
+            🔍 Debug Grammar
+          </button>
 
           {/* Undo Button for Suggestions */}
           {lastAppliedSuggestion && (

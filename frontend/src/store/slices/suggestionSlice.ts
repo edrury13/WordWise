@@ -188,8 +188,10 @@ export const checkTextWithAI = createAsyncThunk(
 
     // Try traditional grammar checking first
     try {
-      grammarResults = await checkGrammarAndSpelling(text, language)
-      console.log('✅ Grammar check completed:', grammarResults.suggestions.length, 'suggestions')
+      // For incremental checking with traditional API, we still pass the full text
+      // but also send changedRanges so the backend can optimize
+      grammarResults = await checkGrammarAndSpelling(text, language, 3, changedRanges)
+      console.log('✅ Grammar check completed:', grammarResults.suggestions.length, 'suggestions', changedRanges ? '(incremental)' : '(full)')
     } catch (grammarError) {
       console.warn('⚠️ Grammar check failed:', grammarError)
     }
@@ -484,6 +486,34 @@ const suggestionSlice = createSlice({
 
       state.activeSuggestion = null
     },
+    updateSuggestionOffsets: (state, action: PayloadAction<{ changeOffset: number; delta: number }>) => {
+      const { changeOffset, delta } = action.payload
+      
+      console.log('Updating suggestion offsets:', { changeOffset, delta, suggestionCount: state.suggestions.length })
+      
+      // Update offsets for all suggestions that come after the change point
+      state.suggestions = state.suggestions.map(suggestion => {
+        // If the suggestion is completely after the change point, adjust its offset
+        if (suggestion.offset >= changeOffset) {
+          return {
+            ...suggestion,
+            offset: suggestion.offset + delta
+          }
+        }
+        
+        // If the suggestion contains the change point, it's likely invalid now
+        // (the text it refers to has been modified)
+        const suggestionEnd = suggestion.offset + suggestion.length
+        if (suggestion.offset < changeOffset && suggestionEnd > changeOffset) {
+          // Mark for removal by returning null (will filter out below)
+          console.log(`Removing suggestion ${suggestion.id} that overlaps with text change`)
+          return null
+        }
+        
+        // Suggestion is before the change point, no adjustment needed
+        return suggestion
+      }).filter(Boolean) as Suggestion[] // Remove nulls
+    },
     ignoreSuggestion: (state, action: PayloadAction<{ suggestionId: string; originalText?: string }>) => {
       const { suggestionId, originalText } = typeof action.payload === 'string' 
         ? { suggestionId: action.payload, originalText: undefined }
@@ -763,6 +793,7 @@ export const selectStreamingStatus = (state: { suggestions: SuggestionState }) =
 export const {
   setActiveSuggestion,
   applySuggestion,
+  updateSuggestionOffsets,
   ignoreSuggestion,
   ignoreAllSuggestions,
   acceptAllSuggestions,

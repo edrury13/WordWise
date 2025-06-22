@@ -484,7 +484,8 @@ function handleAPIError(error: any, operation: string): APIError {
 export const checkGrammarAndSpelling = async (
   text: string,
   language: string = 'en-US',
-  priority: number = REQUEST_PRIORITY.NORMAL
+  priority: number = REQUEST_PRIORITY.NORMAL,
+  changedRanges?: Array<{ start: number; end: number }>
 ): Promise<{ suggestions: Suggestion[], apiStatus: 'api' | 'client-fallback' | 'mixed' }> => {
   const startTime = Date.now()
   
@@ -498,7 +499,9 @@ export const checkGrammarAndSpelling = async (
       language,
       priority,
       rateLimiterHealth: grammarRateLimiter.getHealth(),
-      isProd: import.meta.env.PROD
+      isProd: import.meta.env.PROD,
+      incremental: !!changedRanges,
+      changedRanges: changedRanges?.length || 0
     })
 
     // Check cache first
@@ -513,108 +516,105 @@ export const checkGrammarAndSpelling = async (
 
     let apiResult: { suggestions: Suggestion[], apiStatus: 'api' | 'client-fallback' | 'mixed' } | null = null
     let apiError: APIError | null = null
+    
+    // Define API URL outside try block for error handling
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')
+    const apiUrl = `${API_BASE_URL}/language/check`
 
-    // Try LanguageTool API first
+    // Try Backend API first
     try {
-      console.log('📡 Calling LanguageTool API...')
+      console.log('📡 Calling Backend Grammar API...')
       
-      const languageToolUrl = 'https://api.languagetool.org/v2'
-      const params = new URLSearchParams({
+      // Get auth token from Supabase
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError || !session?.access_token) {
+        console.warn('⚠️ No auth token available:', sessionError)
+        throw new APIError('Authentication required', 'AUTH_ERROR', 401, 'client')
+      }
+      
+      const requestData = {
         text,
         language,
-        enabledOnly: 'false',
-        level: 'picky',
-        enabledCategories: 'GRAMMAR,SENTENCE_WHITESPACE,MISC,COMPOUNDING,SEMANTICS,PUNCTUATION,CASING,TYPOS,CONFUSED_WORDS,LOGIC,TYPOGRAPHY,PRONOUN_AGREEMENT,SUBJECT_VERB_AGREEMENT,STYLE,COLLOQUIALISMS,REDUNDANCY,WORDINESS,CREATIVE_WRITING'
+        ...(changedRanges && { changedRanges })
+      }
+
+      console.log('📤 Request to backend:', { 
+        url: apiUrl, 
+        textLength: text.length,
+        language,
+        incremental: !!changedRanges,
+        hasAuth: !!session.access_token 
       })
 
-      const ltResponse = await axios.post(`${languageToolUrl}/check`, params, {
+      const ltResponse = await axios.post(apiUrl, requestData, {
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
         },
         timeout: 30000,
       })
 
-      const suggestions = ltResponse.data.matches?.map((match: any, index: number) => ({
-        id: `lt-${match.rule.id}-${match.offset}-${index}`,
-        type: getSuggestionType(match.rule.category.id, match.rule.issueType),
-        message: match.message,
-        replacements: match.replacements.map((r: any) => r.value),
-        offset: match.offset,
-        length: match.length,
-        context: match.context.text,
-        explanation: match.shortMessage || match.message,
-        category: match.rule.category.name,
-        severity: getSeverity(match.rule.issueType),
-      })) || []
+      // Parse backend response - handle different possible response formats
+      console.log('📡 Backend response:', ltResponse.data)
+      
+      let suggestions: Suggestion[] = []
+      
+      // Handle different response structures
+      if (ltResponse.data?.data?.suggestions) {
+        // Standard API response format
+        suggestions = ltResponse.data.data.suggestions
+      } else if (ltResponse.data?.suggestions) {
+        // Direct suggestions format
+        suggestions = ltResponse.data.suggestions
+      } else if (Array.isArray(ltResponse.data)) {
+        // Raw array of suggestions
+        suggestions = ltResponse.data
+      } else {
+        console.warn('⚠️ Unexpected response format:', ltResponse.data)
+      }
+      
+      console.log('📋 Parsed suggestions:', suggestions.length, 'items')
 
-      // Add centralized grammar engine suggestions with enhanced configuration
-      const grammarEngineResult = await grammarEngine.checkText(text, {
-        language: language,
-        minConfidence: priority >= REQUEST_PRIORITY.HIGH ? 60 : 70, // Lower threshold for high priority
-        maxSuggestions: priority >= REQUEST_PRIORITY.HIGH ? 35 : 25
-      })
+      // TEMPORARILY DISABLED: Client-side grammar engine to isolate backend issues
+      const clientSideSuggestions: Suggestion[] = []
+      console.log('⚠️ Client-side grammar engine temporarily disabled for debugging')
       
-      const clientSideSuggestions = grammarEngineResult.suggestions.map((gs: GrammarSuggestion): Suggestion => ({
-        id: gs.id,
-        type: mapGrammarTypeToSuggestionType(gs.type),
-        message: gs.message,
-        replacements: gs.replacements,
-        offset: gs.offset,
-        length: gs.length,
-        context: gs.context,
-        explanation: gs.explanation,
-        category: gs.category,
-        severity: mapGrammarSeverityToSuggestionSeverity(gs.severity)
-      }))
-      
-      // Enhanced duplicate detection with overlap analysis
+      // Just use backend suggestions for now
       const mergedSuggestions = [...suggestions]
-      
-      clientSideSuggestions.forEach((clientSuggestion: Suggestion) => {
-        const hasOverlappingSuggestion = suggestions.some((apiSuggestion: Suggestion) => {
-          const clientStart = clientSuggestion.offset
-          const clientEnd = clientSuggestion.offset + clientSuggestion.length
-          const apiStart = apiSuggestion.offset
-          const apiEnd = apiSuggestion.offset + apiSuggestion.length
-          
-          // More sophisticated overlap detection
-          const overlapLength = Math.max(0, Math.min(clientEnd, apiEnd) - Math.max(clientStart, apiStart))
-          const overlapPercentage = overlapLength / Math.min(clientSuggestion.length, apiSuggestion.length)
-          
-          return overlapPercentage > 0.5 // 50% overlap threshold
-        })
-        
-        if (!hasOverlappingSuggestion) {
-          mergedSuggestions.push(clientSuggestion)
-        }
-      })
 
       apiResult = { suggestions: mergedSuggestions, apiStatus: 'api' }
       
       const responseTime = Date.now() - startTime
       grammarRateLimiter.onSuccess(responseTime)
 
-      console.log('✅ LanguageTool API success:', {
+      console.log('✅ Backend Grammar API success:', {
         fromAPI: suggestions.length,
         fromEngine: clientSideSuggestions.length,
         total: mergedSuggestions.length,
         duration: responseTime,
+        incremental: !!changedRanges,
         rateLimiterStats: grammarRateLimiter.getStats()
       })
 
     } catch (error) {
-      apiError = handleAPIError(error, 'LanguageTool API')
+      // Log the raw error for debugging
+      console.error('🚨 Raw API error:', error)
+      
+      apiError = handleAPIError(error, 'Backend Grammar API')
       
       // Determine if this is a server error for circuit breaker
       const isServerError = apiError.status >= 500 || apiError.code === 'TIMEOUT' || apiError.code === 'RATE_LIMIT'
       grammarRateLimiter.onFailure(isServerError)
       
-      console.warn('🔄 LanguageTool API failed:', {
+      console.warn('🔄 Backend Grammar API failed:', {
         error: apiError.message,
         code: apiError.code,
         status: apiError.status,
         isServerError,
-        rateLimiterStats: grammarRateLimiter.getStats()
+        rateLimiterStats: grammarRateLimiter.getStats(),
+        // Add more debugging info
+        url: apiUrl,
+        requestData: { textLength: text.length, language, hasChangedRanges: !!changedRanges }
       })
     }
 

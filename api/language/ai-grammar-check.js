@@ -102,25 +102,29 @@ export default async function handler(req, res) {
     
     // Prepare the system prompt based on check type
     let systemPrompt = `You are an expert writing assistant specializing in grammar, spelling, and style checking. 
-    Analyze the provided text and return a JSON array of suggestions.
+    Analyze the provided text and return a JSON object with a "suggestions" array.
     
     Each suggestion should have:
     - type: "grammar", "spelling", "style", "clarity", "conciseness", or "tone"
     - severity: "high" (errors), "medium" (likely issues), or "low" (style suggestions)
     - message: Brief description of the issue
     - explanation: Detailed explanation of why this is an issue
-    - originalText: The exact text that has the issue
+    - originalText: The EXACT text that has the issue (including any surrounding punctuation)
+    - context: A unique phrase of 10-20 words that includes the error (to help locate it precisely)
     - suggestions: Array of 1-3 suggested replacements
     - confidence: 0-100 score indicating confidence in the suggestion
     
     Important guidelines:
+    - For originalText, include the exact error and immediate context (e.g., "dog are" not just "are")
+    - For context, include enough surrounding text to make the location unambiguous
     - Only flag actual errors or improvements, not stylistic preferences unless they impact clarity
     - Consider the document type: ${documentType}
     - Preserve the author's voice while improving clarity and correctness
     - For grammar/spelling errors, confidence should be 90-100
     - For style suggestions, confidence should be 60-85
     - Be especially careful with technical terms, proper nouns, and domain-specific language
-    - If the text seems intentionally informal or creative, adjust expectations accordingly`
+    - If the text seems intentionally informal or creative, adjust expectations accordingly
+    - Return a JSON object (not array) with a "suggestions" array property`
 
     // Add style profile specific instructions
     if (styleProfile) {
@@ -153,9 +157,26 @@ export default async function handler(req, res) {
     
     // Process and format suggestions
     const suggestions = (aiResponse.suggestions || []).map((suggestion, index) => {
-      // Find the position of the original text in the content
-      const offset = text.indexOf(suggestion.originalText)
-      const length = suggestion.originalText ? suggestion.originalText.length : 0
+      // Better offset calculation that handles context
+      let offset = -1
+      let length = 0
+      
+      if (suggestion.originalText) {
+        length = suggestion.originalText.length
+        
+        // Use the best occurrence finder with context
+        offset = findBestOccurrence(text, suggestion.originalText, suggestion.context)
+      }
+      
+      // Log for debugging
+      const occurrenceCount = suggestion.originalText ? findAllOccurrences(text, suggestion.originalText).length : 0
+      console.log(`AI suggestion #${index}:`, {
+        originalText: suggestion.originalText,
+        foundAt: offset,
+        hasContext: !!suggestion.context,
+        occurrences: occurrenceCount,
+        type: suggestion.type
+      })
       
       return {
         id: `ai-${Date.now()}-${index}`,
@@ -251,6 +272,61 @@ function getContextSnippet(text, offset, length) {
   if (end < text.length) snippet = snippet + '...'
   
   return snippet
+}
+
+// Find all occurrences of a substring in text
+function findAllOccurrences(text, searchStr) {
+  const occurrences = []
+  let index = text.indexOf(searchStr)
+  
+  while (index !== -1) {
+    occurrences.push(index)
+    index = text.indexOf(searchStr, index + 1)
+  }
+  
+  return occurrences
+}
+
+// Find the best matching occurrence based on context
+function findBestOccurrence(text, searchStr, context) {
+  if (!context) {
+    return text.indexOf(searchStr)
+  }
+  
+  // Find all occurrences
+  const occurrences = findAllOccurrences(text, searchStr)
+  
+  if (occurrences.length === 0) return -1
+  if (occurrences.length === 1) return occurrences[0]
+  
+  // Score each occurrence based on context match
+  let bestScore = -1
+  let bestIndex = occurrences[0]
+  
+  for (const occurrence of occurrences) {
+    // Get surrounding context for this occurrence
+    const contextStart = Math.max(0, occurrence - 50)
+    const contextEnd = Math.min(text.length, occurrence + searchStr.length + 50)
+    const occurrenceContext = text.substring(contextStart, contextEnd)
+    
+    // Calculate similarity score (simple word overlap)
+    const contextWords = context.toLowerCase().split(/\s+/)
+    const occurrenceWords = occurrenceContext.toLowerCase().split(/\s+/)
+    
+    let score = 0
+    for (const word of contextWords) {
+      if (occurrenceWords.includes(word)) {
+        score++
+      }
+    }
+    
+    if (score > bestScore) {
+      bestScore = score
+      bestIndex = occurrence
+    }
+  }
+  
+  return bestIndex
 }
 
 function mapTypeToCategory(type) {
