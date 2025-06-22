@@ -398,6 +398,8 @@ class StyleProfileService {
           user_id: user.id,
           profile_id: profileId,
           last_used_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,profile_id'
         });
 
       if (error) console.error('Error updating profile usage:', error);
