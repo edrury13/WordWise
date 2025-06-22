@@ -695,39 +695,7 @@ export const checkGrammarAndSpelling = async (
   }
 }
 
-// Helper functions for LanguageTool API response processing
-function getSuggestionType(categoryId: string, issueType: string): Suggestion['type'] {
-  if (categoryId.includes('TYPOS') || issueType === 'misspelling') {
-    return 'spelling'
-  }
-  if (categoryId.includes('GRAMMAR') || issueType === 'grammar') {
-    return 'grammar'
-  }
-  if (categoryId.includes('STYLE') || issueType === 'style') {
-    return 'style'
-  }
-  if (categoryId.includes('CLARITY')) {
-    return 'clarity'
-  }
-  if (categoryId.includes('ENGAGEMENT')) {
-    return 'engagement'
-  }
-  if (categoryId.includes('DELIVERY')) {
-    return 'delivery'
-  }
-  return 'style'
-}
-
-function getSeverity(issueType: string): Suggestion['severity'] {
-  if (issueType === 'misspelling' || issueType === 'grammar') {
-    return 'high'
-  }
-  if (issueType === 'style') {
-    return 'medium'
-  }
-  return 'low'
-}
-
+// Helper functions for Grammar Engine mapping
 function mapGrammarSeverityToSuggestionSeverity(grammarSeverity: SuggestionSeverity): 'low' | 'medium' | 'high' {
   switch (grammarSeverity) {
     case 'high':

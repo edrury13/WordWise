@@ -1986,31 +1986,6 @@ const GrammarTextEditor: React.FC = () => {
               </button>
             </div>
           )}
-          
-          {/* Debug Button - Temporary */}
-          <button
-            onClick={async () => {
-              console.log('🔍 Debug: Testing grammar check directly...')
-              const testText = 'This are a test sentence with grammer errors.'
-              
-              try {
-                // Test the grammar check directly
-                const { checkGrammarAndSpelling } = await import('../services/languageService')
-                const result = await checkGrammarAndSpelling(testText, 'en-US', 3)
-                console.log('✅ Grammar check result:', result)
-                
-                // Also test if we can get the auth token
-                const { supabase } = await import('../config/supabase')
-                const { data: { session } } = await supabase.auth.getSession()
-                console.log('🔐 Auth session:', session ? 'Available' : 'Missing', session?.access_token?.substring(0, 20) + '...')
-              } catch (error) {
-                console.error('❌ Debug test failed:', error)
-              }
-            }}
-            className="px-3 py-1 bg-red-100 hover:bg-red-200 dark:bg-red-900 dark:hover:bg-red-800 text-red-800 dark:text-red-200 text-xs rounded transition-colors"
-          >
-            🔍 Debug Grammar
-          </button>
 
           {/* Undo Button for Suggestions */}
           {lastAppliedSuggestion && (
