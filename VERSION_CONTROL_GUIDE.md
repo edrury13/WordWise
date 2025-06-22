@@ -18,6 +18,13 @@ To enable version control, run the following SQL script in your Supabase SQL edi
 -- Located at: database/document_versions.sql
 ```
 
+**Important:** If you already have version control set up and are getting an error about the `is_automatic` column not found, run this migration:
+
+```sql
+-- Run the migration to add auto-save support
+-- Located at: database/add_is_automatic_column.sql
+```
+
 This will create:
 - `document_versions` table - Stores all document versions
 - `version_comparisons` table - Caches comparison data for performance
