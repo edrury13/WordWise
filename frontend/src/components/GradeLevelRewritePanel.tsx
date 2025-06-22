@@ -55,12 +55,7 @@ const GradeLevelRewritePanel: React.FC<GradeLevelRewritePanelProps> = ({ text, o
   const [showTooltip, setShowTooltip] = useState<string | null>(null)
 
   // Component state
-  const [showPerformanceMetrics, setShowPerformanceMetrics] = useState(false)
-  const [rewriteProgress, setRewriteProgress] = useState<{
-    currentIteration: number
-    maxIterations: number
-    status: string
-  } | null>(null)
+  // TODO: Implement progress tracking to show iteration progress during rewrites
 
   // Use Redux state for selected grade level
   const selectedGradeLevel = targetGradeLevel || ''
@@ -654,11 +649,6 @@ const GradeLevelRewritePanel: React.FC<GradeLevelRewritePanelProps> = ({ text, o
               <>
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                 <span>Rewriting for {selectedGradeLevel?.replace('-', ' ')} level with {selectedModel === 'gpt-4-turbo' ? 'GPT-4' : 'GPT-3.5'}...</span>
-                {rewriteProgress && (
-                  <span className="text-sm opacity-80">
-                    (Iteration {rewriteProgress.currentIteration}/{rewriteProgress.maxIterations})
-                  </span>
-                )}
               </>
             ) : (
               <>
