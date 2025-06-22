@@ -58,6 +58,8 @@ interface SuggestionState {
     suggestionsReceived: number
     message?: string
   }
+  streamingBuffer: Suggestion[] // Buffer for suggestions during streaming
+  hasSpellingError: boolean // Flag to track if spelling error was found
 }
 
 const initialState: SuggestionState = {
@@ -79,7 +81,9 @@ const initialState: SuggestionState = {
     isStreaming: false,
     suggestionsReceived: 0,
     message: undefined
-  }
+  },
+  streamingBuffer: [], // Initialize buffer
+  hasSpellingError: false // Initialize flag
 }
 
 // Async thunks
@@ -645,6 +649,8 @@ const suggestionSlice = createSlice({
     clearSuggestions: (state) => {
       state.suggestions = []
       state.activeSuggestion = null
+      state.streamingBuffer = []
+      state.hasSpellingError = false
     },
     clearError: (state) => {
       state.error = null
@@ -713,6 +719,8 @@ const suggestionSlice = createSlice({
       }
       state.loading = true
       state.error = null
+      state.streamingBuffer = [] // Clear buffer when starting new stream
+      state.hasSpellingError = false // Reset spelling error flag
     },
     addStreamingSuggestion: (state, action: PayloadAction<{ suggestion: Suggestion; count: number; currentText?: string }>) => {
       const { suggestion, count, currentText } = action.payload
@@ -729,36 +737,69 @@ const suggestionSlice = createSlice({
         return
       }
       
-      // Check if this suggestion already exists
-      const existingIndex = state.suggestions.findIndex(s => 
+      // Check if this is a spelling error
+      if (suggestion.type === 'spelling') {
+        console.log('🚨 Spelling error detected during streaming:', suggestion)
+        state.hasSpellingError = true
+        
+        // Clear any existing suggestions and buffer
+        state.suggestions = []
+        state.streamingBuffer = []
+        
+        // Add only the spelling error
+        state.suggestions.push(suggestion)
+        
+        // Update streaming status to indicate we found a spelling error
+        state.streamingStatus.message = 'Spelling error found'
+        return
+      }
+      
+      // If we already have a spelling error, ignore other suggestions
+      if (state.hasSpellingError) {
+        console.log('Ignoring non-spelling suggestion due to existing spelling error')
+        return
+      }
+      
+      // Otherwise, add to buffer instead of directly to suggestions
+      const existingIndex = state.streamingBuffer.findIndex(s => 
         s.offset === suggestion.offset && s.length === suggestion.length
       )
       
       if (existingIndex >= 0) {
-        // Replace existing suggestion
-        state.suggestions[existingIndex] = suggestion
+        // Replace existing suggestion in buffer
+        state.streamingBuffer[existingIndex] = suggestion
       } else {
-        // Add new suggestion
-        state.suggestions.push(suggestion)
+        // Add new suggestion to buffer
+        state.streamingBuffer.push(suggestion)
       }
       
       // Update streaming status
       state.streamingStatus.suggestionsReceived = count
-      state.streamingStatus.message = `Found ${count} issue${count !== 1 ? 's' : ''}...`
-      
-      // Sort suggestions by offset
-      state.suggestions.sort((a, b) => a.offset - b.offset)
+      state.streamingStatus.message = `Analyzing... Found ${count} potential issue${count !== 1 ? 's' : ''}...`
     },
     completeStreaming: (state, action: PayloadAction<{ stats: any; metadata: any }>) => {
+      // If we don't have a spelling error, apply all buffered suggestions
+      if (!state.hasSpellingError && state.streamingBuffer.length > 0) {
+        // Sort buffered suggestions by offset
+        state.streamingBuffer.sort((a, b) => a.offset - b.offset)
+        
+        // Apply all buffered suggestions at once
+        state.suggestions = [...state.streamingBuffer]
+        console.log(`✅ Streaming complete: applying ${state.streamingBuffer.length} buffered suggestions`)
+      }
+      
       state.streamingStatus = {
         isStreaming: false,
         suggestionsReceived: state.suggestions.length,
-        message: 'Analysis complete'
+        message: state.hasSpellingError ? 'Spelling error found' : 'Analysis complete'
       }
       state.loading = false
       state.aiStats = action.payload.stats
       state.apiStatus = 'ai-enhanced'
       state.lastCheckTime = Date.now()
+      
+      // Clear buffer
+      state.streamingBuffer = []
     },
     streamingError: (state, action: PayloadAction<string>) => {
       state.streamingStatus = {
@@ -768,6 +809,8 @@ const suggestionSlice = createSlice({
       }
       state.loading = false
       state.error = action.payload
+      state.streamingBuffer = [] // Clear buffer on error
+      state.hasSpellingError = false
     },
   },
   extraReducers: (builder) => {
@@ -878,6 +921,7 @@ export const selectApiStatus = (state: { suggestions: SuggestionState }) => stat
 export const selectAICheckEnabled = (state: { suggestions: SuggestionState }) => state.suggestions.aiCheckEnabled
 export const selectAIStats = (state: { suggestions: SuggestionState }) => state.suggestions.aiStats
 export const selectStreamingStatus = (state: { suggestions: SuggestionState }) => state.suggestions.streamingStatus
+export const selectHasSpellingError = (state: { suggestions: SuggestionState }) => state.suggestions.hasSpellingError
 
 export const {
   setActiveSuggestion,

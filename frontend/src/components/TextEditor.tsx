@@ -8,16 +8,17 @@ import {
   clearSuggestions, 
   selectAICheckEnabled,
   selectStreamingStatus,
+  selectHasSpellingError,
   startStreaming,
   addStreamingSuggestion,
   completeStreaming,
   streamingError,
   applySuggestion,
-  validateSuggestions
+  validateSuggestions,
+  Suggestion
 } from '../store/slices/suggestionSlice'
 import { setContent, setLastSaved } from '../store/slices/editorSlice'
 import { updateDocument } from '../store/slices/documentSlice'
-import { Suggestion } from '../store/slices/suggestionSlice'
 import { checkGrammarWithAIStream } from '../services/aiGrammarService'
 import { smartCorrectionService } from '../services/smartCorrectionService'
 
@@ -42,6 +43,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
   const { autoSaveEnabled } = useSelector((state: RootState) => state.editor)
   const aiCheckEnabled = useSelector(selectAICheckEnabled)
   const streamingStatus = useSelector(selectStreamingStatus)
+  const hasSpellingError = useSelector(selectHasSpellingError)
   
   const [content, setContentState] = useState(initialContent || '')
   const [, setSelectionRange] = useState<{ start: number; end: number } | null>(null)
@@ -77,6 +79,15 @@ const TextEditor: React.FC<TextEditorProps> = ({
   
   // Create a unique key for localStorage based on document ID
   const localStorageKey = `wordwise_editor_content_${documentId || 'default'}`
+
+  // Effect to abort stream when spelling error is detected
+  useEffect(() => {
+    if (hasSpellingError && streamAbortRef.current && streamingStatus.isStreaming) {
+      console.log('🚨 Spelling error detected, aborting grammar check stream')
+      streamAbortRef.current()
+      streamAbortRef.current = null
+    }
+  }, [hasSpellingError, streamingStatus.isStreaming])
 
   // Normalize text to ensure consistent line break handling
   const normalizeText = useCallback((text: string): string => {
