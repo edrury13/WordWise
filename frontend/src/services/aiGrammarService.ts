@@ -106,11 +106,13 @@ export async function checkGrammarWithAI(options: AIGrammarCheckOptions): Promis
       isDemo: options.isDemo
     })
 
-    // For demo mode, skip authentication check
+    // For demo mode, skip authentication check entirely
     let session: any = null
     
-    if (!options.isDemo) {
-      // Get current session
+    if (options.isDemo) {
+      console.log('🎯 Running in demo mode - skipping authentication')
+    } else {
+      // Get current session for non-demo mode
       const { data: { session: authSession }, error: sessionError } = await supabase.auth.getSession()
       
       if (sessionError || !authSession) {
@@ -134,8 +136,6 @@ export async function checkGrammarWithAI(options: AIGrammarCheckOptions): Promis
 
       session = authSession
       console.log('🔐 AI Auth successful, user:', session.user.email)
-    } else {
-      console.log('🎯 Running in demo mode - skipping authentication')
     }
 
     // Rate limiting
@@ -177,9 +177,8 @@ export async function checkGrammarWithAI(options: AIGrammarCheckOptions): Promis
     }
 
     // Make API call
-    const apiUrl = process.env.NODE_ENV === 'production' 
-      ? '/api/language/ai-grammar-check'
-      : 'http://localhost:5000/api/language/ai-grammar-check'
+    // Always use the Vercel function for AI grammar checks (has demo mode support)
+    const apiUrl = '/api/language/ai-grammar-check'
 
     console.log('🌐 AI API URL:', apiUrl)
     console.log('🚀 Making AI API request...')
@@ -551,9 +550,7 @@ export async function checkGrammarWithAIStream(
     }
 
     // Make API call
-    const apiUrl = process.env.NODE_ENV === 'production' 
-      ? '/api/language/ai-grammar-check-stream'
-      : 'http://localhost:5000/api/language/ai-grammar-check-stream'
+    const apiUrl = '/api/language/ai-grammar-check-stream'
 
     console.log('🌐 AI Streaming API URL:', apiUrl)
     

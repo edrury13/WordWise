@@ -663,7 +663,7 @@ const GrammarTextEditor: React.FC<GrammarTextEditorProps> = ({ isDemo = false })
           }))
           
           // Run partial check on just the sentence
-          runPartialGrammarCheck(newContent, explicitRanges[0], aiCheckEnabled)
+          runPartialGrammarCheck(newContent, explicitRanges[0], aiCheckEnabled, isDemo)
             .then(partial => {
               // Replace suggestions for the sentence
               dispatch(replaceSuggestionsInRange({
@@ -684,7 +684,7 @@ const GrammarTextEditor: React.FC<GrammarTextEditorProps> = ({ isDemo = false })
     }
     
     autoSave(newContent)
-  }, [content, suggestions, dispatch, autoSave, lastAppliedSuggestion, checkGrammarDebounced, aiCheckEnabled])
+  }, [content, suggestions, dispatch, autoSave, lastAppliedSuggestion, checkGrammarDebounced, aiCheckEnabled, isDemo])
 
   // Create highlighted text overlay
   const createHighlightedText = useCallback(() => {
@@ -1122,7 +1122,8 @@ const GrammarTextEditor: React.FC<GrammarTextEditorProps> = ({ isDemo = false })
             start: sentenceInfo.contextStart, 
             end: sentenceInfo.contextStart + sentenceInfo.contextText.length 
           },
-          aiCheckEnabled
+          aiCheckEnabled,
+          isDemo
         )
         
         // Filter suggestions to only those within the actual sentence (not the context)
@@ -1175,7 +1176,7 @@ const GrammarTextEditor: React.FC<GrammarTextEditorProps> = ({ isDemo = false })
       replacement,
       offset: suggestion.offset
     })
-  }, [content, dispatch, autoSave, aiCheckEnabled]) // Added aiCheckEnabled dependency
+  }, [content, dispatch, autoSave, aiCheckEnabled, isDemo]) // Added aiCheckEnabled and isDemo dependencies
 
   // Ignore suggestion
   const handleIgnoreSuggestion = useCallback(async (suggestionId: string) => {

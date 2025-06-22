@@ -40,23 +40,36 @@ export default async function handler(req, res) {
     const { method, body, headers } = req
     const authHeader = headers.authorization
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // Check if it's a demo request - allow without authentication
+    const isDemo = body?.isDemo || false
+    
+    if (!isDemo && (!authHeader || !authHeader.startsWith('Bearer '))) {
       return res.status(401).json({
         success: false,
         error: 'Authentication required'
       })
     }
 
-    const token = authHeader.substring(7)
-    
-    // Validate user with Supabase
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+    // For demo requests, we skip the Supabase authentication
+    let user = null
+    if (!isDemo) {
+      const token = authHeader.substring(7)
+      
+      // Validate user with Supabase
+      const { data: { user: authUser }, error: userError } = await supabase.auth.getUser(token)
 
-    if (userError || !user) {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid authentication token'
-      })
+      if (userError || !authUser) {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid authentication token'
+        })
+      }
+      
+      user = authUser
+    } else {
+      // For demo mode, create a dummy user object
+      user = { id: 'demo-user' }
+      console.log('🎯 Running in demo mode - authentication bypassed')
     }
 
     if (method !== 'POST') {
@@ -81,10 +94,13 @@ export default async function handler(req, res) {
       })
     }
 
-    if (text.length > 10000) {
+    // Apply stricter limits for demo mode
+    const maxTextLength = isDemo ? 1000 : 10000
+    
+    if (text.length > maxTextLength) {
       return res.status(400).json({
         success: false,
-        error: 'Text is too long (maximum 10,000 characters for AI analysis)'
+        error: `Text is too long (maximum ${maxTextLength} characters${isDemo ? ' for demo mode' : ' for AI analysis'})`
       })
     }
 

@@ -10,7 +10,8 @@ import { extractSentenceWithContext } from './sentenceExtraction'
 export async function runPartialGrammarCheck(
   fullText: string,
   range: { start: number; end: number },
-  useAI: boolean
+  useAI: boolean,
+  isDemo: boolean = false
 ): Promise<Suggestion[]> {
   // Instead of fixed context, extract the sentence containing the change
   // Use the middle of the range to find the sentence
@@ -20,7 +21,7 @@ export async function runPartialGrammarCheck(
   if (!sentenceInfo) {
     // Fallback to just the range if sentence extraction fails
     const snippet = fullText.slice(range.start, range.end)
-    const suggestions = await checkSnippet(snippet, useAI)
+    const suggestions = await checkSnippet(snippet, useAI, isDemo)
     return suggestions.map(s => ({
       ...s,
       offset: s.offset + range.start
@@ -32,7 +33,7 @@ export async function runPartialGrammarCheck(
   const snippetStart = sentenceInfo.contextStart
   
   // Check the snippet
-  const suggestions = await checkSnippet(snippet, useAI)
+  const suggestions = await checkSnippet(snippet, useAI, isDemo)
   
   // Shift snippet-relative offsets to match global text
   // and filter to only suggestions within the actual sentence (not the context)
@@ -50,13 +51,14 @@ export async function runPartialGrammarCheck(
     })
 }
 
-async function checkSnippet(snippet: string, useAI: boolean): Promise<Suggestion[]> {
+async function checkSnippet(snippet: string, useAI: boolean, isDemo: boolean): Promise<Suggestion[]> {
   if (useAI) {
     const res: any = await checkGrammarWithAI({
       text: snippet,
       documentType: 'general',
       checkType: 'comprehensive',
-      enableAI: true
+      enableAI: true,
+      isDemo: isDemo
     } as any)
     return res.suggestions || []
   } else {
