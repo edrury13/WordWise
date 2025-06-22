@@ -38,8 +38,6 @@ const Dashboard: React.FC = () => {
   const isBackendAvailable = import.meta.env.VITE_API_BASE_URL && 
     !import.meta.env.VITE_API_BASE_URL.includes('localhost')
 
-  const autoSaveIntervalRef = useRef<NodeJS.Timeout | null>(null)
-
   useEffect(() => {
     if (user) {
       dispatch(fetchDocuments(user.id))
