@@ -63,10 +63,6 @@ const Navigation: React.FC<NavigationProps> = ({
   const userMenuRef = useRef<HTMLDivElement>(null)
   const saveMenuRef = useRef<HTMLDivElement>(null)
 
-  // Check if backend API is available
-  const isBackendAvailable = import.meta.env.VITE_API_BASE_URL && 
-    !import.meta.env.VITE_API_BASE_URL.includes('localhost')
-
   const handleLogout = async () => {
     try {
       await dispatch(logoutUser())
@@ -213,18 +209,16 @@ const Navigation: React.FC<NavigationProps> = ({
                           <Save className="h-4 w-4" />
                           <span>Save</span>
                         </button>
-                        {isBackendAvailable && (
-                          <button
-                            onClick={() => {
-                              onSaveAsCopy?.()
-                              setShowSaveMenu(false)
-                            }}
-                            className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center space-x-2"
-                          >
-                            <Copy className="h-4 w-4" />
-                            <span>Save as Copy</span>
-                          </button>
-                        )}
+                        <button
+                          onClick={() => {
+                            onSaveAsCopy?.()
+                            setShowSaveMenu(false)
+                          }}
+                          className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center space-x-2"
+                        >
+                          <Copy className="h-4 w-4" />
+                          <span>Save as Copy</span>
+                        </button>
                       </div>
                     )}
                   </>

@@ -258,12 +258,6 @@ export const documentService = {
 
   async copyDocument(documentId: string, customTitle?: string) {
     try {
-      // Check if we're in production without a backend
-      const apiUrl = import.meta.env.VITE_API_BASE_URL
-      if (!apiUrl || apiUrl.includes('localhost')) {
-        throw new Error('Copy feature is not available in demo mode. Backend API required.')
-      }
-
       // Get the current user
       const { data: { user } } = await supabase.auth.getUser()
       
@@ -271,34 +265,45 @@ export const documentService = {
         throw new Error('User not authenticated')
       }
 
-      // Get the access token
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        throw new Error('No active session')
+      // Get the original document from Supabase
+      const { data: originalDoc, error: fetchError } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('id', documentId)
+        .eq('user_id', user.id)
+        .single()
+
+      if (fetchError || !originalDoc) {
+        throw new Error('Document not found')
       }
 
-      // Call the backend API to copy the document
-      const response = await fetch(`${apiUrl}/documents/${documentId}/copy`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({
-          title: customTitle
-        })
-      })
-
-      if (!response.ok) {
-        if (response.status === 405 || response.status === 404) {
-          throw new Error('Copy feature requires backend API to be running')
-        }
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to copy document')
+      // Create a copy with a new title
+      const now = new Date().toISOString()
+      const copyTitle = customTitle || `${originalDoc.title} (Copy)`
+      
+      const documentData = {
+        title: copyTitle,
+        content: originalDoc.content,
+        user_id: user.id,
+        created_at: now,
+        updated_at: now,
+        word_count: originalDoc.word_count || 0,
+        character_count: originalDoc.character_count || 0
       }
 
-      const data = await response.json()
-      return data
+      const { data, error } = await supabase
+        .from('documents')
+        .insert([documentData])
+        .select()
+        .single()
+
+      if (error) throw error
+
+      return {
+        success: true,
+        document: data,
+        message: 'Document copied successfully'
+      }
     } catch (error) {
       console.error('Error copying document:', error)
       throw error

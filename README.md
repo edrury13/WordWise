@@ -6,8 +6,6 @@ WordWise is a sophisticated text editor designed specifically for academic and p
 
 Visit the live application: [WordWise Editor](https://word-wise-pi.vercel.app)
 
-**Note**: Some features like document copying require the backend API to be deployed. See [Backend Deployment Guide](BACKEND_DEPLOYMENT.md) for instructions.
-
 ## ✨ Key Features
 
 - **Real-time Grammar & Spell Checking**: Powered by LanguageTool API

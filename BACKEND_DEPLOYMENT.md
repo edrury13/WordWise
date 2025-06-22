@@ -1,6 +1,13 @@
 # Backend Deployment Guide
 
-The WordWise backend needs to be deployed separately from the frontend. Here's how to deploy it to popular platforms:
+The WordWise backend provides additional features beyond the core functionality. While the application works without the backend deployed, you'll need it for:
+
+- **Advanced language checking** (grammar, readability, tone analysis)
+- **PDF and DOCX export** formats
+- **Document upload** from various file formats
+- **AI-powered features** (if configured with OpenAI)
+
+**Note**: Core features like creating, editing, copying, and downloading documents (TXT/Markdown) work directly through Supabase without the backend.
 
 ## Prerequisites
 - Backend code in the `backend` folder

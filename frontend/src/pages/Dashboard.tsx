@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
 import { Plus, FileText, Edit, Trash2, Calendar, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Command, Download, Upload, Search, Grid, List, Table, Clock, X, Sparkles, Copy } from 'lucide-react'
@@ -33,10 +33,6 @@ const Dashboard: React.FC = () => {
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false)
   const [showOnboardingReminder, setShowOnboardingReminder] = useState(false)
   const [userPreferences, setUserPreferences] = useState<any>(null)
-
-  // Check if backend API is available
-  const isBackendAvailable = import.meta.env.VITE_API_BASE_URL && 
-    !import.meta.env.VITE_API_BASE_URL.includes('localhost')
 
   useEffect(() => {
     if (user) {
@@ -598,15 +594,13 @@ const Dashboard: React.FC = () => {
                           >
                             <Edit className="h-4 w-4" />
                           </button>
-                          {isBackendAvailable && (
-                            <button
-                              onClick={() => handleCopyDocument(document.id)}
-                              className="p-2 text-academic-gray dark:text-gray-400 hover:text-navy dark:hover:text-blue-400 transition-colors"
-                              title="Make a copy"
-                            >
-                              <Copy className="h-4 w-4" />
-                            </button>
-                          )}
+                          <button
+                            onClick={() => handleCopyDocument(document.id)}
+                            className="p-2 text-academic-gray dark:text-gray-400 hover:text-navy dark:hover:text-blue-400 transition-colors"
+                            title="Make a copy"
+                          >
+                            <Copy className="h-4 w-4" />
+                          </button>
                           <DownloadMenu
                             documentId={document.id}
                             documentTitle={document.title}
@@ -640,18 +634,16 @@ const Dashboard: React.FC = () => {
                           <FileText className="h-5 w-5 text-white" />
                         </div>
                         <div className="flex items-center space-x-1">
-                          {isBackendAvailable && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleCopyDocument(document.id)
-                              }}
-                              className="p-1 text-academic-gray dark:text-gray-400 hover:text-navy dark:hover:text-blue-400 transition-colors"
-                              title="Make a copy"
-                            >
-                              <Copy className="h-3 w-3" />
-                            </button>
-                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleCopyDocument(document.id)
+                            }}
+                            className="p-1 text-academic-gray dark:text-gray-400 hover:text-navy dark:hover:text-blue-400 transition-colors"
+                            title="Make a copy"
+                          >
+                            <Copy className="h-3 w-3" />
+                          </button>
                           <DownloadMenu
                             documentId={document.id}
                             documentTitle={document.title}
@@ -770,15 +762,13 @@ const Dashboard: React.FC = () => {
                               >
                                 <Edit className="h-4 w-4" />
                               </button>
-                              {isBackendAvailable && (
-                                <button
-                                  onClick={() => handleCopyDocument(document.id)}
-                                  className="p-1 text-academic-gray dark:text-gray-400 hover:text-navy dark:hover:text-blue-400 transition-colors"
-                                  title="Make a copy"
-                                >
-                                  <Copy className="h-4 w-4" />
-                                </button>
-                              )}
+                              <button
+                                onClick={() => handleCopyDocument(document.id)}
+                                className="p-1 text-academic-gray dark:text-gray-400 hover:text-navy dark:hover:text-blue-400 transition-colors"
+                                title="Make a copy"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </button>
                               <DownloadMenu
                                 documentId={document.id}
                                 documentTitle={document.title}
