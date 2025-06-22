@@ -1358,7 +1358,7 @@ class GradeLevelRewriteOptimizer {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          timeout: 90000 // 90 seconds timeout for GPT-4 calls
+          timeout: 55000 // 55 seconds timeout (slightly less than Vercel's 60s limit)
         }
       )
 

@@ -13,7 +13,7 @@ const supabase = createClient(
 
 // Vercel edge function configuration
 export const config = {
-  maxDuration: 90, // 90 seconds timeout for OpenAI operations with GPT-4
+  maxDuration: 60, // Maximum allowed on Vercel hobby plan
 }
 
 export default async function handler(req, res) {
