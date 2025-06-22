@@ -6,10 +6,12 @@ import {
   applyGradeLevelRewrite,
   setShowGradeLevelPanel,
   setTargetGradeLevel,
+  setSelectedModel,
   selectIsRewriting,
   selectLastRewriteResult,
   selectRewriteError,
   selectTargetGradeLevel,
+  selectSelectedModel,
   selectCanUndo,
   selectCanRedo,
   undoRewrite,
@@ -36,6 +38,7 @@ const GradeLevelRewritePanel: React.FC<GradeLevelRewritePanelProps> = ({ text, o
   const lastRewriteResult = useSelector(selectLastRewriteResult)
   const rewriteError = useSelector(selectRewriteError)
   const targetGradeLevel = useSelector(selectTargetGradeLevel)
+  const selectedModel = useSelector(selectSelectedModel)
   const canUndo = useSelector(selectCanUndo)
   const canRedo = useSelector(selectCanRedo)
   const historyStats = useSelector(selectRewriteHistoryStats)
@@ -51,10 +54,18 @@ const GradeLevelRewritePanel: React.FC<GradeLevelRewritePanelProps> = ({ text, o
   const [estimatedReadability, setEstimatedReadability] = useState<ReadabilityScore | null>(null)
   const [showTooltip, setShowTooltip] = useState<string | null>(null)
 
-  // Sync local state with Redux state
-  const selectedGradeLevel = targetGradeLevel || 'elementary'
-  const rewrittenText = lastRewriteResult?.rewrittenText || ''
+  // Component state
+  const [showPerformanceMetrics, setShowPerformanceMetrics] = useState(false)
+  const [rewriteProgress, setRewriteProgress] = useState<{
+    currentIteration: number
+    maxIterations: number
+    status: string
+  } | null>(null)
+
+  // Use Redux state for selected grade level
+  const selectedGradeLevel = targetGradeLevel || ''
   const loading = isRewriting
+  const rewrittenText = lastRewriteResult?.rewrittenText || ''
   const error = rewriteError
   
   // Create readabilityData from lastRewriteResult
@@ -454,7 +465,7 @@ const GradeLevelRewritePanel: React.FC<GradeLevelRewritePanelProps> = ({ text, o
                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-200 dark:ring-blue-800'
                       : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                 }`}
-              >
+                >
                 <input
                   type="radio"
                   name="gradeLevel"
@@ -541,6 +552,97 @@ const GradeLevelRewritePanel: React.FC<GradeLevelRewritePanelProps> = ({ text, o
           </div>
         )}
 
+        {/* Model Selection */}
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center">
+            <span className="mr-2">🤖</span>
+            Choose AI Model
+          </h3>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <label
+              className={`flex items-start p-4 border rounded-lg cursor-pointer transition-all duration-200 ${
+                selectedModel === 'gpt-3.5-turbo'
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-200 dark:ring-blue-800'
+                  : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+              }`}
+            >
+              <input
+                type="radio"
+                name="model"
+                value="gpt-3.5-turbo"
+                checked={selectedModel === 'gpt-3.5-turbo'}
+                onChange={(e) => dispatch(setSelectedModel(e.target.value as 'gpt-3.5-turbo' | 'gpt-4-turbo'))}
+                className="mt-1 mr-3 text-blue-600 focus:ring-blue-500"
+              />
+              <div className="flex-1">
+                <div className="font-medium text-gray-900 dark:text-white mb-1">
+                  GPT-3.5 Turbo
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  Fast and efficient
+                </div>
+                <div className="flex items-center space-x-2 mb-2">
+                  <div className="text-xs text-blue-600 dark:text-blue-400 font-mono bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded">
+                    Good accuracy
+                  </div>
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-500">
+                  Best for quick edits and when you need fast results. Handles most grade level adjustments well.
+                </div>
+              </div>
+            </label>
+
+            <label
+              className={`flex items-start p-4 border rounded-lg cursor-pointer transition-all duration-200 ${
+                selectedModel === 'gpt-4-turbo'
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-200 dark:ring-blue-800'
+                  : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+              }`}
+            >
+              <input
+                type="radio"
+                name="model"
+                value="gpt-4-turbo"
+                checked={selectedModel === 'gpt-4-turbo'}
+                onChange={(e) => dispatch(setSelectedModel(e.target.value as 'gpt-3.5-turbo' | 'gpt-4-turbo'))}
+                className="mt-1 mr-3 text-blue-600 focus:ring-blue-500"
+              />
+              <div className="flex-1">
+                <div className="font-medium text-gray-900 dark:text-white mb-1 flex items-center">
+                  GPT-4 Turbo
+                  <span className="ml-2 text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full">
+                    Recommended
+                  </span>
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  Most accurate and nuanced
+                </div>
+                <div className="flex items-center space-x-2 mb-2">
+                  <div className="text-xs text-green-600 dark:text-green-400 font-mono bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded">
+                    Excellent accuracy
+                  </div>
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-500">
+                  Best for important documents. Preserves meaning perfectly while achieving precise grade level targets.
+                </div>
+              </div>
+            </label>
+          </div>
+          
+          {/* Model Info Alert */}
+          <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+            <div className="flex items-start space-x-2">
+              <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+              <div className="text-xs text-yellow-700 dark:text-yellow-300">
+                <p className="font-medium mb-1">Model Information:</p>
+                <p>GPT-4 provides more accurate grade level adjustments. Processing time varies based on text length and complexity. The system will make up to 3 refinement attempts to achieve the target reading level.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Rewrite Button */}
         <div className="mb-6">
           <button
@@ -551,7 +653,12 @@ const GradeLevelRewritePanel: React.FC<GradeLevelRewritePanelProps> = ({ text, o
             {loading ? (
               <>
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                <span>Rewriting for {selectedGradeLevel?.replace('-', ' ')} level...</span>
+                <span>Rewriting for {selectedGradeLevel?.replace('-', ' ')} level with {selectedModel === 'gpt-4-turbo' ? 'GPT-4' : 'GPT-3.5'}...</span>
+                {rewriteProgress && (
+                  <span className="text-sm opacity-80">
+                    (Iteration {rewriteProgress.currentIteration}/{rewriteProgress.maxIterations})
+                  </span>
+                )}
               </>
             ) : (
               <>
@@ -764,7 +871,7 @@ const GradeLevelRewritePanel: React.FC<GradeLevelRewritePanelProps> = ({ text, o
               <span className="mr-2">✨</span>
               Rewritten Text
               <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
-                ({selectedGradeLevel?.replace('-', ' ')} level - {rewrittenText.split(/\s+/).filter(w => w.trim().length > 0).length} words)
+                ({selectedGradeLevel?.replace('-', ' ')} level - {rewrittenText.split(/\s+/).filter(w => w.trim().length > 0).length} words{lastRewriteResult?.iterationsUsed ? ` - ${lastRewriteResult.iterationsUsed} iteration${lastRewriteResult.iterationsUsed > 1 ? 's' : ''}` : ''})
               </span>
             </h3>
             <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 border border-green-200 dark:border-green-800 p-6 rounded-lg">

@@ -1683,7 +1683,7 @@ router.post('/rewrite-grade-level', async (req: AuthenticatedRequest, res) => {
       })
     }
 
-    const { text, gradeLevel } = req.body
+    const { text, gradeLevel, model = 'gpt-4-turbo' } = req.body
 
     if (!text || typeof text !== 'string') {
       return res.status(400).json({
@@ -1708,6 +1708,15 @@ router.post('/rewrite-grade-level', async (req: AuthenticatedRequest, res) => {
       })
     }
 
+    // Validate model options
+    const validModels = ['gpt-3.5-turbo', 'gpt-4-turbo']
+    if (!validModels.includes(model)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid model. Must be one of: ${validModels.join(', ')}`
+      })
+    }
+
     console.log('🎓📝 GRADE LEVEL REWRITE API v1.0 - Backend Implementation!')
     
     // Check if OpenAI API key is configured
@@ -1721,7 +1730,7 @@ router.post('/rewrite-grade-level', async (req: AuthenticatedRequest, res) => {
     // Calculate original readability before rewriting
     const originalReadability = calculateReadability(text)
 
-    const rewrittenText = await rewriteGradeLevelWithOpenAI(text, gradeLevel.toLowerCase())
+    const { rewrittenText, iterationsUsed } = await rewriteGradeLevelWithOpenAI(text, gradeLevel.toLowerCase(), model)
 
     // Calculate new readability after rewriting
     const newReadability = calculateReadability(rewrittenText)
@@ -1746,6 +1755,8 @@ router.post('/rewrite-grade-level', async (req: AuthenticatedRequest, res) => {
       changes: hasChanges ? [`Text rewritten for ${gradeLevel} grade level`] : ['No changes needed'],
       hasChanges,
       method: 'openai',
+      model,
+      iterationsUsed,
       version: 'Grade Level Rewrite API v1.0',
       timestamp: new Date().toISOString()
     })
@@ -1982,7 +1993,7 @@ Your rewrite should demonstrate this level of transformation. Be bold and make s
   }
 }
 
-async function rewriteGradeLevelWithOpenAI(text: string, gradeLevel: string): Promise<string> {
+async function rewriteGradeLevelWithOpenAI(text: string, gradeLevel: string, model: string = 'gpt-4-turbo'): Promise<{ rewrittenText: string; iterationsUsed: number }> {
   const gradeLevelInstructions: Record<string, { 
     instruction: string; 
     detailedGuidelines: {
@@ -2281,6 +2292,7 @@ async function rewriteGradeLevelWithOpenAI(text: string, gradeLevel: string): Pr
   // Calculate original readability to understand starting point
   const originalReadability = calculateReadability(text)
   console.log('📊 Original text readability:', {
+    model,
     fleschKincaid: originalReadability.fleschKincaid,
     fleschReadingEase: originalReadability.fleschReadingEase,
     level: originalReadability.readabilityLevel
@@ -2328,7 +2340,7 @@ async function rewriteGradeLevelWithOpenAI(text: string, gradeLevel: string): Pr
         console.log(`   FK: ${currentFK.toFixed(1)} ✅ (target: ${selectedLevel.targetFKRange.min}-${selectedLevel.targetFKRange.max})`)
         console.log(`   RE: ${currentRE.toFixed(1)} ✅ (target: ${selectedLevel.targetRERange.min}-${selectedLevel.targetRERange.max})`)
         console.log(`   Early termination with optimal result.`)
-        return currentText
+        return { rewrittenText: currentText, iterationsUsed: iteration }
       }
 
       // Enhanced distance calculation with weighted accuracy
@@ -2361,80 +2373,103 @@ async function rewriteGradeLevelWithOpenAI(text: string, gradeLevel: string): Pr
       // Generate enhanced adaptive prompt with mathematical precision
       const adaptivePrompt = generateAdaptivePrompt(currentFK, currentRE, selectedLevel, iteration)
 
-      const systemPrompt = `You are an elite linguistic engineer and educational content architect with advanced expertise in mathematical readability optimization. Your mission is to achieve PRECISE grade-level compliance through data-driven text transformation.
+      let systemPrompt = ''
+      let userPrompt = ''
 
-🎯 MATHEMATICAL MISSION PARAMETERS:
-- TARGET GRADE LEVEL: ${gradeLevel.toUpperCase()}
-- MATHEMATICAL FK TARGET: ${selectedLevel.targetFKRange.min}-${selectedLevel.targetFKRange.max} (MUST achieve exactly ${targetFKCenter.toFixed(1)})
-- MATHEMATICAL RE TARGET: ${selectedLevel.targetRERange.min}-${selectedLevel.targetRERange.max} (MUST achieve exactly ${targetRECenter.toFixed(1)})
-- REQUIRED ACCURACY: 95%+ mathematical compliance
-- SEMANTIC PRESERVATION: 100% meaning retention mandatory
+      if (iteration === 1) {
+        // First iteration - cleaner, more focused prompt
+        systemPrompt = `You are an expert educational content rewriter specializing in adapting text for specific grade levels.
 
-📊 CURRENT MATHEMATICAL STATUS:
-ITERATION: ${iteration}/${maxIterations}
-CURRENT FK: ${currentFK.toFixed(1)} (target: ${selectedLevel.targetFKRange.min}-${selectedLevel.targetFKRange.max})
-CURRENT RE: ${currentRE.toFixed(1)} (target: ${selectedLevel.targetRERange.min}-${selectedLevel.targetRERange.max})
-ACCURACY: ${validation ? validation.accuracy : 0}%
+TASK: Rewrite for ${gradeLevel.toUpperCase()} level readers
 
-⚠️ CRITICAL DIRECTIVE: Your output MUST mathematically achieve a Flesch-Kincaid score between ${selectedLevel.targetFKRange.min} and ${selectedLevel.targetFKRange.max}. This is NOT optional. Use the mathematical formulas:
-- FK = 0.39 × (words/sentence) + 11.8 × (syllables/word) - 15.59
-- RE = 206.835 - 1.015 × (words/sentence) - 84.6 × (syllables/word)
+KEY METRICS TO ACHIEVE:
+• Flesch-Kincaid Grade Level: ${selectedLevel.targetFK}
+• Reading Ease Score: ${selectedLevel.targetReadingEase}
 
-${adaptivePrompt}
-
-🔬 PRECISION LINGUISTIC SPECIFICATIONS:
-📏 SENTENCE ARCHITECTURE: ${selectedLevel.detailedGuidelines.sentenceLength}
-   → Target: ${selectedLevel.targetFKRange.min < 6 ? '8' : selectedLevel.targetFKRange.min < 9 ? '14' : selectedLevel.targetFKRange.min < 13 ? '20' : '25'} words per sentence EXACTLY
-📚 LEXICAL COMPLEXITY: ${selectedLevel.detailedGuidelines.vocabularyComplexity}
-   → Target: ${selectedLevel.targetFKRange.min < 6 ? '1.3' : selectedLevel.targetFKRange.min < 9 ? '1.5' : selectedLevel.targetFKRange.min < 13 ? '1.7' : '1.9'} syllables per word EXACTLY
-🔤 SYLLABIC TARGETING: ${selectedLevel.detailedGuidelines.syllableCount}
-🧠 COGNITIVE DEPTH: ${selectedLevel.detailedGuidelines.conceptDepth}
-⚙️ SYNTACTIC ENGINEERING: ${selectedLevel.detailedGuidelines.syntaxComplexity}
-🔗 CONNECTIVE SOPHISTICATION: ${selectedLevel.detailedGuidelines.connectors}
-👥 PRONOMINAL COMPLEXITY: ${selectedLevel.detailedGuidelines.pronouns}
-
-🎯 CORE TRANSFORMATION DIRECTIVE:
+WRITING GUIDELINES FOR ${gradeLevel.toUpperCase()}:
 ${selectedLevel.instruction}
 
-⚡ MANDATORY IMPLEMENTATION PROTOCOLS:
-${selectedLevel.specificInstructions.map(instruction => `• ${instruction}`).join('\n')}
+SPECIFIC TECHNIQUES:
+${selectedLevel.specificInstructions.slice(0, 5).map(instruction => `• ${instruction}`).join('\n')}
 
-🔧 REQUIRED TRANSFORMATIONAL CHANGES:
-${selectedLevel.changes.map(change => `• ${change}`).join('\n')}
+SENTENCE STRUCTURE:
+• ${selectedLevel.detailedGuidelines.sentenceLength}
+• ${selectedLevel.detailedGuidelines.syntaxComplexity}
 
-📖 TRANSFORMATION EXAMPLES FOR ${gradeLevel.toUpperCase()}:
-Example 1:
-Input: "${selectedLevel.examples.before}"
-Output: "${selectedLevel.examples.after}"
+VOCABULARY:
+• ${selectedLevel.detailedGuidelines.vocabularyComplexity}
+• ${selectedLevel.detailedGuidelines.syllableCount}
 
-Example 2:
-Input: "The ramifications of this decision will reverberate throughout the organization."
-Output: ${gradeLevel === 'elementary' ? '"This choice will affect everyone in our group."' : 
-         gradeLevel === 'middle-school' ? '"This decision will have effects that spread through the whole organization."' :
-         gradeLevel === 'high-school' ? '"The consequences of this decision will impact the entire organization significantly."' :
-         gradeLevel === 'college' ? '"The ramifications of this decision will propagate throughout the organizational structure, affecting multiple stakeholders."' :
-         '"The multifaceted ramifications of this strategic decision will reverberate throughout the organizational ecosystem, necessitating comprehensive stakeholder analysis."'}
+EXAMPLES:
+1. Before: "${selectedLevel.examples.before}"
+   After: "${selectedLevel.examples.after}"
 
-Example 3:
-Input: "We need to fix this problem quickly."
-Output: ${gradeLevel === 'elementary' ? '"We must fix this now."' : 
-         gradeLevel === 'middle-school' ? '"We need to solve this problem as soon as possible."' :
-         gradeLevel === 'high-school' ? '"We must address this issue with urgency and develop an effective solution."' :
-         gradeLevel === 'college' ? '"We must expeditiously remediate this problematic situation through systematic intervention."' :
-         '"The exigent nature of this problematic paradigm necessitates immediate remediation through comprehensive strategic intervention protocols."'}
+${selectedLevel.additionalExamples && selectedLevel.additionalExamples.length > 0 ? 
+`2. Before: "${selectedLevel.additionalExamples[0].before}"
+   After: "${selectedLevel.additionalExamples[0].after}"` : ''}
 
-🎯 MATHEMATICAL COMPLIANCE VERIFICATION:
-✓ EVERY sentence MUST average ${selectedLevel.targetFKRange.min < 6 ? '8±2' : selectedLevel.targetFKRange.min < 9 ? '14±2' : selectedLevel.targetFKRange.min < 13 ? '20±3' : '25±4'} words
-✓ EVERY word MUST average ${selectedLevel.targetFKRange.min < 6 ? '1.3±0.1' : selectedLevel.targetFKRange.min < 9 ? '1.5±0.1' : selectedLevel.targetFKRange.min < 13 ? '1.7±0.1' : '1.9±0.2'} syllables
-✓ The FINAL output MUST score FK: ${selectedLevel.targetFKRange.min}-${selectedLevel.targetFKRange.max}
-✓ The FINAL output MUST score RE: ${selectedLevel.targetRERange.min}-${selectedLevel.targetRERange.max}
-✓ You MUST preserve 100% of the original meaning
-✓ You MUST make the text flow naturally at the target level
+CRITICAL RULES:
+1. Preserve ALL original meaning and information
+2. Maintain natural flow and readability
+3. Match the cognitive level of ${gradeLevel} readers
+4. Use appropriate transitions: ${selectedLevel.detailedGuidelines.connectors}
 
-REMEMBER: This is a MATHEMATICAL optimization problem. Your output will be measured and must achieve the exact targets specified.`
+Focus on creating text that feels natural for ${gradeLevel} readers while hitting the target metrics.`
+
+        userPrompt = `Please rewrite the following text for ${gradeLevel} readers:
+
+"${currentText}"
+
+Remember to:
+- Aim for ${selectedLevel.targetFK} grade level
+- Keep sentences around ${selectedLevel.targetFKRange.min < 6 ? '8' : selectedLevel.targetFKRange.min < 9 ? '14' : selectedLevel.targetFKRange.min < 13 ? '20' : '25'} words
+- Use vocabulary appropriate for ${gradeLevel} students
+- Preserve all the original meaning
+
+Rewritten text:`
+
+      } else {
+        // Subsequent iterations - focused refinement
+        const fkDiff = currentFK - targetFKCenter
+        let adjustmentNeeded = ''
+        
+        if (fkDiff > 2) {
+          adjustmentNeeded = 'The text is currently too complex. Please simplify it by using shorter sentences and simpler words.'
+        } else if (fkDiff < -2) {
+          adjustmentNeeded = 'The text is currently too simple. Please increase complexity by using more sophisticated vocabulary and longer sentences.'
+        } else {
+          adjustmentNeeded = 'The text is close to the target. Make minor adjustments to fine-tune the reading level.'
+        }
+
+        systemPrompt = `You are refining text to precisely match ${gradeLevel} reading level.
+
+CURRENT STATUS (Iteration ${iteration}):
+• Current Grade Level: ${currentFK.toFixed(1)} (Target: ${selectedLevel.targetFK})
+• Current Reading Ease: ${currentRE.toFixed(1)} (Target: ${selectedLevel.targetReadingEase})
+
+ADJUSTMENT NEEDED:
+${adjustmentNeeded}
+
+SPECIFIC ACTIONS:
+${currentReadability.averageWordsPerSentence > 25 ? '• Break up long sentences into shorter ones\n' : ''}${currentReadability.averageWordsPerSentence < 8 ? '• Combine short sentences for better flow\n' : ''}${currentReadability.averageSyllablesPerWord > 2.0 ? '• Replace complex words with simpler alternatives\n' : ''}${currentReadability.averageSyllablesPerWord < 1.3 ? '• Use slightly more sophisticated vocabulary\n' : ''}• Maintain all original meaning
+• Keep the text natural and readable
+
+Target: ${gradeLevel} readers with sentences around ${selectedLevel.targetFKRange.min < 6 ? '8' : selectedLevel.targetFKRange.min < 9 ? '14' : selectedLevel.targetFKRange.min < 13 ? '20' : '25'} words.`
+
+        userPrompt = `Please refine this text to better match ${gradeLevel} reading level:
+
+"${currentText}"
+
+Current: Grade ${currentFK.toFixed(1)}, Reading Ease ${currentRE.toFixed(1)}
+Target: Grade ${selectedLevel.targetFK}, Reading Ease ${selectedLevel.targetReadingEase}
+
+${adjustmentNeeded}
+
+Refined text:`
+      }
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: model,
       messages: [
         {
           role: "system",
@@ -2442,18 +2477,7 @@ REMEMBER: This is a MATHEMATICAL optimization problem. Your output will be measu
         },
         {
           role: "user",
-            content: `Transform this text to EXACTLY ${gradeLevel} grade level (FK MUST be ${selectedLevel.targetFKRange.min}-${selectedLevel.targetFKRange.max}, RE MUST be ${selectedLevel.targetRERange.min}-${selectedLevel.targetRERange.max}):
-
-"${currentText}"
-
-CRITICAL REQUIREMENTS:
-1. Average sentence length MUST be ${selectedLevel.targetFKRange.min < 6 ? '8' : selectedLevel.targetFKRange.min < 9 ? '14' : selectedLevel.targetFKRange.min < 13 ? '20' : '25'} words (±20%)
-2. Average syllables per word MUST be ${selectedLevel.targetFKRange.min < 6 ? '1.3' : selectedLevel.targetFKRange.min < 9 ? '1.5' : selectedLevel.targetFKRange.min < 13 ? '1.7' : '1.9'} (±0.2)
-3. The output MUST mathematically achieve FK: ${selectedLevel.targetFKRange.min}-${selectedLevel.targetFKRange.max}
-4. Every transformation must move the metrics toward the target
-5. Preserve ALL original meaning
-
-Begin your transformation now:`
+          content: userPrompt
         }
       ],
       max_tokens: maxTokens,
@@ -2523,7 +2547,7 @@ Begin your transformation now:`
     console.log('\n✅ ENHANCED ITERATIVE REFINEMENT COMPLETED')
     console.log(`🎯 FINAL RESULT: ${finalValidation.isValid ? 'TARGET ACHIEVED' : 'BEST EFFORT ACHIEVED'} with ${finalValidation.accuracy}% accuracy`)
 
-    return bestRewrite
+    return { rewrittenText: bestRewrite, iterationsUsed: iteration }
 
   } catch (error) {
     console.error('Grade Level OpenAI API call failed:', {
@@ -2546,200 +2570,42 @@ function generateAdaptivePrompt(currentFK: number, currentRE: number, selectedLe
   const fkDiff = currentFK - targetFKCenter
   const reDiff = currentRE - targetRECenter
   
-  // Calculate precision requirements based on iteration
-  const precisionLevel = iteration === 1 ? 'major' : iteration === 2 ? 'moderate' : 'precise'
-  
-  let adaptiveInstructions = []
-  let mathematicalTargets = []
-  let strategicAdjustments = []
-  let specificActions = []
-  
-  // MATHEMATICAL TARGET SPECIFICATION WITH PRECISION BANDS
-  mathematicalTargets.push(`🎯 MATHEMATICAL TARGETS (PRECISION REQUIRED):`)
-  mathematicalTargets.push(`• Target Flesch-Kincaid: ${selectedLevel.targetFKRange.min}-${selectedLevel.targetFKRange.max} (current: ${currentFK.toFixed(2)})`)
-  mathematicalTargets.push(`• Target Reading Ease: ${selectedLevel.targetRERange.min}-${selectedLevel.targetRERange.max} (current: ${currentRE.toFixed(2)})`)
-  mathematicalTargets.push(`• FK Distance: ${Math.abs(fkDiff).toFixed(2)} points (${fkDiff > 0 ? 'REDUCE' : 'INCREASE'})`)
-  mathematicalTargets.push(`• RE Distance: ${Math.abs(reDiff).toFixed(2)} points (${reDiff > 0 ? 'INCREASE' : 'DECREASE'})`)
-  
-  // Calculate required changes with mathematical precision
-  const requiredSentenceLengthChange = Math.round(fkDiff * 2.56) // Based on FK formula coefficient
-  const requiredSyllableChange = Math.round(fkDiff * 0.085 * 100) / 100 // Based on FK formula
-  
-  mathematicalTargets.push(`• Required Sentence Length Adjustment: ${Math.abs(requiredSentenceLengthChange)} words per sentence`)
-  mathematicalTargets.push(`• Required Syllable Complexity Change: ${Math.abs(requiredSyllableChange)} syllables per word`)
-  
-  // PRECISION-BASED FLESCH-KINCAID ADJUSTMENTS
-  if (Math.abs(fkDiff) > 0.25) { // Even smaller threshold for precision
-    if (fkDiff > 3) {
-      adaptiveInstructions.push('🔻 CRITICAL FK REDUCTION: Text severely exceeds target complexity')
-      specificActions.push(`• IMMEDIATE: Reduce EVERY sentence by 8-12 words`)
-      specificActions.push(`• IMMEDIATE: Replace ALL words >3 syllables with 1-2 syllable alternatives`)
-      specificActions.push(`• IMMEDIATE: Convert ALL compound/complex sentences to simple sentences`)
-      specificActions.push(`• TARGET: Average sentence length must be ${Math.max(8, Math.round(targetFKCenter * 2.5))} words`)
-    } else if (fkDiff > 2) {
-      adaptiveInstructions.push('📉 MAJOR FK REDUCTION: Substantial simplification required')
-      specificActions.push(`• Reduce sentence length by ${Math.abs(requiredSentenceLengthChange)} words on average`)
-      specificActions.push(`• Replace 60%+ of polysyllabic words with simpler alternatives`)
-      specificActions.push(`• Target sentence length: ${Math.round(targetFKCenter * 2.5)} words average`)
-      specificActions.push(`• Target syllable average: ${(1.2 + targetFKCenter * 0.05).toFixed(2)} per word`)
-    } else if (fkDiff > 1) {
-      adaptiveInstructions.push('📊 MODERATE FK REDUCTION: Fine-tune complexity downward')
-      specificActions.push(`• Reduce sentence length by ${Math.abs(requiredSentenceLengthChange)} words on average`)
-      specificActions.push(`• Replace 30%+ of complex words with simpler alternatives`)
-      specificActions.push(`• Eliminate unnecessary prepositional phrases`)
-      specificActions.push(`• Use active voice instead of passive voice`)
-    } else if (fkDiff > 0.5) {
-      adaptiveInstructions.push('🔧 MINOR FK REDUCTION: Small adjustments needed')
-      specificActions.push(`• Reduce sentence length by 2-3 words on average`)
-      specificActions.push(`• Replace 15%+ of complex words`)
-      specificActions.push(`• Simplify 2-3 complex sentences`)
-    } else if (fkDiff < -3) {
-      adaptiveInstructions.push('🔺 CRITICAL FK INCREASE: Text severely below target complexity')
-      specificActions.push(`• IMMEDIATE: Increase EVERY sentence by 8-12 words`)
-      specificActions.push(`• IMMEDIATE: Add sophisticated, polysyllabic vocabulary`)
-      specificActions.push(`• IMMEDIATE: Combine simple sentences into complex structures`)
-      specificActions.push(`• TARGET: Average sentence length must be ${Math.round(targetFKCenter * 2.5)} words`)
-    } else if (fkDiff < -2) {
-      adaptiveInstructions.push('📈 MAJOR FK INCREASE: Substantial complexity boost needed')
-      specificActions.push(`• Increase sentence length by ${Math.abs(requiredSentenceLengthChange)} words on average`)
-      specificActions.push(`• Add advanced vocabulary (3+ syllables)`)
-      specificActions.push(`• Combine sentences with subordinate clauses`)
-      specificActions.push(`• Target sentence length: ${Math.round(targetFKCenter * 2.5)} words average`)
-    } else if (fkDiff < -1) {
-      adaptiveInstructions.push('📊 MODERATE FK INCREASE: Fine-tune complexity upward')
-      specificActions.push(`• Increase sentence length by ${Math.abs(requiredSentenceLengthChange)} words on average`)
-      specificActions.push(`• Add sophisticated terminology`)
-      specificActions.push(`• Use more complex sentence structures`)
-    } else if (fkDiff < -0.5) {
-      adaptiveInstructions.push('🔧 MINOR FK INCREASE: Small adjustments needed')
-      specificActions.push(`• Increase sentence length by 2-3 words on average`)
-      specificActions.push(`• Add some advanced vocabulary`)
-      specificActions.push(`• Combine 2-3 short sentences`)
-    }
-  }
-  
-  // PRECISION-BASED READING EASE ADJUSTMENTS
-  if (Math.abs(reDiff) > 2.5) { // Smaller threshold for precision
-    if (reDiff < -15) {
-      adaptiveInstructions.push('🔻 CRITICAL RE INCREASE: Text extremely difficult to read')
-      specificActions.push(`• EMERGENCY: Break ALL sentences >15 words into 2+ sentences`)
-      specificActions.push(`• EMERGENCY: Replace 80%+ of difficult words with common alternatives`)
-      specificActions.push(`• EMERGENCY: Use only the 1000 most common English words`)
-    } else if (reDiff < -10) {
-      adaptiveInstructions.push('📉 MAJOR RE INCREASE: Significant readability improvement needed')
-      specificActions.push(`• Target maximum sentence length: 15 words`)
-      specificActions.push(`• Replace 60%+ of difficult words`)
-      specificActions.push(`• Use simple, direct language patterns`)
-    } else if (reDiff < -5) {
-      adaptiveInstructions.push('📊 MODERATE RE INCREASE: Improve readability')
-      specificActions.push(`• Reduce average sentence length by 20%`)
-      specificActions.push(`• Replace 40%+ of difficult words`)
-      specificActions.push(`• Simplify complex constructions`)
-    } else if (reDiff > 15) {
-      adaptiveInstructions.push('🔺 CRITICAL RE DECREASE: Text too easy to read')
-      specificActions.push(`• IMMEDIATE: Increase sentence length by 40%+`)
-      specificActions.push(`• IMMEDIATE: Add challenging terminology`)
-      specificActions.push(`• IMMEDIATE: Use complex sentence structures`)
-    } else if (reDiff > 10) {
-      adaptiveInstructions.push('📈 MAJOR RE DECREASE: Add significant complexity')
-      specificActions.push(`• Increase average sentence length by 30%`)
-      specificActions.push(`• Add sophisticated vocabulary`)
-      specificActions.push(`• Use embedded clauses and phrases`)
-    } else if (reDiff > 5) {
-      adaptiveInstructions.push('📊 MODERATE RE DECREASE: Add appropriate complexity')
-      specificActions.push(`• Increase sentence length by 20%`)
-      specificActions.push(`• Use more precise terminology`)
-      specificActions.push(`• Add transitional complexity`)
-    }
-  }
-  
-  // MATHEMATICAL VALIDATION REQUIREMENTS
-  let validationInstructions = []
-  validationInstructions.push(`🎯 MATHEMATICAL VALIDATION REQUIREMENTS:`)
-  
-  // Precise FK validation
-  if (currentFK < selectedLevel.targetFKRange.min) {
-    const deficit = selectedLevel.targetFKRange.min - currentFK
-    validationInstructions.push(`• FK DEFICIT: Must increase by exactly ${deficit.toFixed(2)} points`)
-    validationInstructions.push(`• SENTENCE ACTION: Add ${Math.ceil(deficit * 2.5)} words per sentence OR`)
-    validationInstructions.push(`• SYLLABLE ACTION: Increase complexity by ${(deficit * 0.085).toFixed(2)} syllables per word`)
-  } else if (currentFK > selectedLevel.targetFKRange.max) {
-    const excess = currentFK - selectedLevel.targetFKRange.max
-    validationInstructions.push(`• FK EXCESS: Must decrease by exactly ${excess.toFixed(2)} points`)
-    validationInstructions.push(`• SENTENCE ACTION: Remove ${Math.ceil(excess * 2.5)} words per sentence OR`)
-    validationInstructions.push(`• SYLLABLE ACTION: Reduce complexity by ${(excess * 0.085).toFixed(2)} syllables per word`)
-  } else {
-    validationInstructions.push(`• FK STATUS: ✅ Within target range (${currentFK.toFixed(2)})`)
-  }
-  
-  // Precise RE validation
-  if (currentRE < selectedLevel.targetRERange.min) {
-    const deficit = selectedLevel.targetRERange.min - currentRE
-    validationInstructions.push(`• RE DEFICIT: Must increase by exactly ${deficit.toFixed(2)} points`)
-    validationInstructions.push(`• READABILITY ACTION: Simplify ${Math.ceil(deficit / 3)} words per sentence`)
-  } else if (currentRE > selectedLevel.targetRERange.max) {
-    const excess = currentRE - selectedLevel.targetRERange.max
-    validationInstructions.push(`• RE EXCESS: Must decrease by exactly ${excess.toFixed(2)} points`)
-    validationInstructions.push(`• COMPLEXITY ACTION: Add difficulty to ${Math.ceil(excess / 3)} words per sentence`)
-  } else {
-    validationInstructions.push(`• RE STATUS: ✅ Within target range (${currentRE.toFixed(2)})`)
-  }
-  
-  // ITERATION-SPECIFIC PRECISION STRATEGY
-  let iterationStrategy = []
+  // For iteration 1, return empty since we use a different approach
   if (iteration === 1) {
-    iterationStrategy.push('🎯 ITERATION 1: FOUNDATIONAL MATHEMATICAL RESTRUCTURING')
-    iterationStrategy.push('• Focus on achieving 80% of target accuracy through major structural changes')
-    iterationStrategy.push('• Prioritize sentence length adjustments for immediate FK impact')
-    iterationStrategy.push('• Make vocabulary changes for immediate RE impact')
-    iterationStrategy.push('• Aim to get within 1.0 points of target ranges')
-  } else if (iteration === 2) {
-    iterationStrategy.push('🎯 ITERATION 2: PRECISION MATHEMATICAL REFINEMENT')
-    iterationStrategy.push('• Focus on achieving 95% of target accuracy through targeted adjustments')
-    iterationStrategy.push('• Fine-tune specific words and sentence structures')
-    iterationStrategy.push('• Address remaining mathematical gaps with surgical precision')
-    iterationStrategy.push('• Aim to get within 0.5 points of target ranges')
-  } else {
-    iterationStrategy.push('🎯 ITERATION 3: SURGICAL MATHEMATICAL OPTIMIZATION')
-    iterationStrategy.push('• Focus on achieving 99%+ target accuracy through minimal changes')
-    iterationStrategy.push('• Make word-level and phrase-level micro-adjustments')
-    iterationStrategy.push('• Perfect mathematical compliance while preserving meaning')
-    iterationStrategy.push('• Aim to hit exact center of target ranges')
+    return ''
   }
   
-  // MANDATORY MATHEMATICAL COMPLIANCE
-  let complianceChecklist = []
-  complianceChecklist.push('📋 MANDATORY MATHEMATICAL COMPLIANCE VERIFICATION:')
-  complianceChecklist.push('• VERIFY: Every sentence length change moves FK toward target')
-  complianceChecklist.push('• VERIFY: Every vocabulary change moves RE toward target')
-  complianceChecklist.push('• VERIFY: Final FK must be within 0.25 points of target range')
-  complianceChecklist.push('• VERIFY: Final RE must be within 2.5 points of target range')
-  complianceChecklist.push('• VERIFY: 100% semantic preservation maintained')
-  complianceChecklist.push('• VERIFY: Text flows naturally despite mathematical constraints')
+  // For iterations 2+, provide simple, focused guidance
+  let guidance = []
   
-  // Combine all sections with clear separation
-  let fullPrompt = []
-  fullPrompt.push(...mathematicalTargets)
-  fullPrompt.push('')
-  
-  if (adaptiveInstructions.length > 0) {
-    fullPrompt.push(...adaptiveInstructions)
-    fullPrompt.push('')
+  // Simple FK guidance
+  if (Math.abs(fkDiff) > 0.5) {
+    if (fkDiff > 0) {
+      guidance.push(`• Grade level is ${fkDiff.toFixed(1)} points too high`)
+      guidance.push(`• Shorten sentences and use simpler words`)
+    } else {
+      guidance.push(`• Grade level is ${Math.abs(fkDiff).toFixed(1)} points too low`)
+      guidance.push(`• Lengthen sentences and use more sophisticated vocabulary`)
+    }
   }
   
-  if (specificActions.length > 0) {
-    fullPrompt.push('⚡ SPECIFIC MATHEMATICAL ACTIONS REQUIRED:')
-    fullPrompt.push(...specificActions)
-    fullPrompt.push('')
+  // Simple RE guidance
+  if (Math.abs(reDiff) > 5) {
+    if (reDiff < 0) {
+      guidance.push(`• Text is too difficult to read`)
+      guidance.push(`• Simplify vocabulary and sentence structure`)
+    } else {
+      guidance.push(`• Text is too easy to read`)
+      guidance.push(`• Add complexity to match target level`)
+    }
   }
   
-  fullPrompt.push(...validationInstructions)
-  fullPrompt.push('')
-  fullPrompt.push(...iterationStrategy)
-  fullPrompt.push('')
-  fullPrompt.push(...complianceChecklist)
+  if (guidance.length === 0) {
+    guidance.push(`• Text is very close to target`)
+    guidance.push(`• Make minor adjustments only`)
+  }
   
-  return fullPrompt.join('\n')
+  return guidance.join('\n')
 }
 
 // Advanced target range validation with enhanced precision and statistical analysis

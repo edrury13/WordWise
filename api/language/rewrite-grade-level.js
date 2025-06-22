@@ -13,7 +13,7 @@ const supabase = createClient(
 
 // Vercel edge function configuration
 export const config = {
-  maxDuration: 30, // 30 seconds timeout for OpenAI operations
+  maxDuration: 90, // 90 seconds timeout for OpenAI operations with GPT-4
 }
 
 export default async function handler(req, res) {
@@ -57,7 +57,7 @@ export default async function handler(req, res) {
       })
     }
 
-    const { text, gradeLevel } = req.body
+    const { text, gradeLevel, model = 'gpt-4-turbo' } = req.body
 
     if (!text || typeof text !== 'string') {
       return res.status(400).json({
@@ -82,6 +82,15 @@ export default async function handler(req, res) {
       })
     }
 
+    // Validate model options
+    const validModels = ['gpt-3.5-turbo', 'gpt-4-turbo']
+    if (!validModels.includes(model)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid model. Must be one of: ${validModels.join(', ')}`
+      })
+    }
+
     if (!process.env.OPENAI_API_KEY) {
       return res.status(500).json({
         success: false,
@@ -92,7 +101,7 @@ export default async function handler(req, res) {
     // Calculate original readability
     const originalReadability = calculateReadability(text)
 
-    const rewrittenText = await rewriteGradeLevelWithOpenAI(text, gradeLevel.toLowerCase())
+    const { rewrittenText, iterationsUsed } = await rewriteGradeLevelWithOpenAI(text, gradeLevel.toLowerCase(), model)
 
     // Calculate new readability
     const newReadability = calculateReadability(rewrittenText)
@@ -117,6 +126,8 @@ export default async function handler(req, res) {
       changes: hasChanges ? [`Text rewritten for ${gradeLevel} grade level`] : ['No changes needed'],
       hasChanges,
       method: 'openai',
+      model,
+      iterationsUsed,
       version: 'Grade Level Rewrite Edge Function v1.0',
       timestamp: new Date().toISOString()
     })
@@ -130,7 +141,7 @@ export default async function handler(req, res) {
   }
 }
 
-async function rewriteGradeLevelWithOpenAI(text, gradeLevel) {
+async function rewriteGradeLevelWithOpenAI(text, gradeLevel, model = 'gpt-4-turbo') {
   const gradeLevelInstructions = {
     'elementary': {
       instruction: 'Rewrite this text for elementary school students (grades 1-5). Use very simple words, short sentences, and basic concepts that young children can understand.',
@@ -337,6 +348,7 @@ async function rewriteGradeLevelWithOpenAI(text, gradeLevel) {
 
   console.log('🎓 Grade Level OpenAI request details:', {
     gradeLevel,
+    model,
     targetFK: selectedLevel.targetFK,
     targetReadingEase: selectedLevel.targetReadingEase,
     textLength: text.length,
@@ -364,106 +376,96 @@ async function rewriteGradeLevelWithOpenAI(text, gradeLevel) {
 
       if (iteration === 1) {
         // First iteration - standard prompt
-        systemPrompt = `You are an expert educational content specialist and linguistic engineer who rewrites text for specific grade levels. Your expertise includes psycholinguistics, readability science, and educational content design.
+        systemPrompt = `You are an expert educational content rewriter specializing in adapting text for specific grade levels.
 
-CRITICAL REQUIREMENTS:
-- You MUST rewrite for ${gradeLevel.toUpperCase()} level (Flesch-Kincaid Grade Level: ${selectedLevel.targetFK})
-- Target Reading Ease Score: ${selectedLevel.targetReadingEase}
-- The rewritten version should be significantly different from the original
-- You MUST preserve all the original meaning and information
-- Never lose important details or concepts
-- Always aim for the exact target reading level while maintaining accuracy
+TASK: Rewrite for ${gradeLevel.toUpperCase()} level readers
 
-GRADE LEVEL: ${gradeLevel.toUpperCase()}
-TARGET FLESCH-KINCAID: ${selectedLevel.targetFK}
-TARGET READING EASE: ${selectedLevel.targetReadingEase}
+KEY METRICS TO ACHIEVE:
+• Flesch-Kincaid Grade Level: ${selectedLevel.targetFK}
+• Reading Ease Score: ${selectedLevel.targetReadingEase}
 
-SPECIFIC LINGUISTIC GUIDELINES:
-📏 SENTENCE LENGTH: ${selectedLevel.detailedGuidelines.sentenceLength}
-📚 VOCABULARY COMPLEXITY: ${selectedLevel.detailedGuidelines.vocabularyComplexity}
-🔤 SYLLABLE COUNT: ${selectedLevel.detailedGuidelines.syllableCount}
-🧠 CONCEPT DEPTH: ${selectedLevel.detailedGuidelines.conceptDepth}
-⚙️ SYNTAX COMPLEXITY: ${selectedLevel.detailedGuidelines.syntaxComplexity}
-🔗 CONNECTORS: ${selectedLevel.detailedGuidelines.connectors}
-👥 PRONOUNS: ${selectedLevel.detailedGuidelines.pronouns}
+WRITING GUIDELINES FOR ${gradeLevel.toUpperCase()}:
+${selectedLevel.instruction}
 
-INSTRUCTION: ${selectedLevel.instruction}
+SPECIFIC TECHNIQUES:
+${selectedLevel.specificInstructions.slice(0, 5).map(instruction => `• ${instruction}`).join('\n')}
 
-SPECIFIC IMPLEMENTATION REQUIREMENTS:
-${selectedLevel.specificInstructions.map(instruction => `• ${instruction}`).join('\n')}
+SENTENCE STRUCTURE:
+• ${selectedLevel.detailedGuidelines.sentenceLength}
+• ${selectedLevel.detailedGuidelines.syntaxComplexity}
 
-MANDATORY CHANGES:
-${selectedLevel.changes.map(change => `• ${change}`).join('\n')}
+VOCABULARY:
+• ${selectedLevel.detailedGuidelines.vocabularyComplexity}
+• ${selectedLevel.detailedGuidelines.syllableCount}
 
 EXAMPLE TRANSFORMATION:
-Original: "${selectedLevel.examples.before}"
-Target Level: "${selectedLevel.examples.after}"
+Before: "${selectedLevel.examples.before}"
+After: "${selectedLevel.examples.after}"
 
-QUALITY ASSURANCE CHECKLIST:
-✓ Sentence length matches target range
-✓ Vocabulary complexity appropriate for grade level
-✓ Syllable count per word within target range
-✓ Concept explanation depth matches audience
-✓ Syntax complexity appropriate for readers
-✓ Transitional words/phrases match sophistication level
-✓ All original meaning preserved
-✓ Target Flesch-Kincaid grade level achieved
-✓ Target Reading Ease score achieved
+CRITICAL RULES:
+1. Preserve ALL original meaning and information
+2. Maintain natural flow and readability
+3. Match the cognitive level of ${gradeLevel} readers
+4. Use appropriate transitions: ${selectedLevel.detailedGuidelines.connectors}
 
-Your rewrite should demonstrate this level of transformation while meeting all linguistic specifications and targeting the exact grade level metrics.`
+Focus on creating text that feels natural for ${gradeLevel} readers while hitting the target metrics.`
 
-        userPrompt = `Rewrite this text for ${gradeLevel} grade level (target FK: ${selectedLevel.targetFK}, target Reading Ease: ${selectedLevel.targetReadingEase}):\n\n"${currentText}"\n\nRemember to follow all linguistic guidelines for sentence length, vocabulary complexity, syllable count, and concept depth specified for this grade level.`
+        userPrompt = `Please rewrite the following text for ${gradeLevel} readers:
+
+"${currentText}"
+
+Remember to:
+- Aim for ${selectedLevel.targetFK} grade level
+- Keep sentences around ${selectedLevel.targetFKMin < 6 ? '8' : selectedLevel.targetFKMin < 9 ? '14' : selectedLevel.targetFKMin < 13 ? '20' : '25'} words
+- Use vocabulary appropriate for ${gradeLevel} students
+- Preserve all the original meaning
+
+Rewritten text:`
       } else {
         // Subsequent iterations - refinement prompts with feedback
         const currentMetrics = calculateReadability(currentText)
         const fkDiff = currentMetrics.fleschKincaid - ((selectedLevel.targetFKMin + selectedLevel.targetFKMax) / 2)
         const easeDiff = currentMetrics.fleschReadingEase - ((selectedLevel.targetEaseMin + selectedLevel.targetEaseMax) / 2)
 
-        systemPrompt = `You are an expert educational content specialist performing iterative refinement of text readability. You must adjust the text to precisely hit the target reading metrics.
+        // Create focused adjustment instructions
+        let adjustmentNeeded = ''
+        if (fkDiff > 2) {
+          adjustmentNeeded = 'The text is currently too complex. Please simplify it by using shorter sentences and simpler words.'
+        } else if (fkDiff < -2) {
+          adjustmentNeeded = 'The text is currently too simple. Please increase complexity by using more sophisticated vocabulary and longer sentences.'
+        } else {
+          adjustmentNeeded = 'The text is close to the target. Make minor adjustments to fine-tune the reading level.'
+        }
 
-CURRENT SITUATION:
-- This is iteration ${iteration} of refining the text
-- Current Flesch-Kincaid: ${currentMetrics.fleschKincaid.toFixed(1)} (Target: ${selectedLevel.targetFK})
-- Current Reading Ease: ${currentMetrics.fleschReadingEase.toFixed(1)} (Target: ${selectedLevel.targetReadingEase})
-- FK Difference: ${fkDiff > 0 ? '+' : ''}${fkDiff.toFixed(1)}
-- Ease Difference: ${easeDiff > 0 ? '+' : ''}${easeDiff.toFixed(1)}
+        systemPrompt = `You are refining text to precisely match ${gradeLevel} reading level.
 
-REFINEMENT INSTRUCTIONS:
-${fkDiff > 2 ? '- Text is TOO COMPLEX: Simplify vocabulary, shorten sentences, reduce syllables per word' : ''}
-${fkDiff < -2 ? '- Text is TOO SIMPLE: Use more sophisticated vocabulary, lengthen sentences, increase complexity' : ''}
-${Math.abs(fkDiff) <= 2 ? '- FK level is close but needs fine-tuning' : ''}
+CURRENT STATUS (Iteration ${iteration}):
+• Current Grade Level: ${currentMetrics.fleschKincaid.toFixed(1)} (Target: ${selectedLevel.targetFK})
+• Current Reading Ease: ${currentMetrics.fleschReadingEase.toFixed(1)} (Target: ${selectedLevel.targetReadingEase})
 
-${easeDiff < -10 ? '- Reading Ease is TOO LOW (too difficult): Use simpler words, shorter sentences' : ''}
-${easeDiff > 10 ? '- Reading Ease is TOO HIGH (too easy): Use more complex vocabulary and sentence structures' : ''}
+ADJUSTMENT NEEDED:
+${adjustmentNeeded}
 
-SPECIFIC ADJUSTMENTS NEEDED:
-${currentMetrics.averageWordsPerSentence > 25 ? '- REDUCE sentence length significantly' : ''}
-${currentMetrics.averageWordsPerSentence < 8 ? '- INCREASE sentence length by combining short sentences' : ''}
-${currentMetrics.averageSyllablesPerWord > 2.0 ? '- Replace polysyllabic words with simpler alternatives' : ''}
-${currentMetrics.averageSyllablesPerWord < 1.3 ? '- Use more sophisticated vocabulary where appropriate' : ''}
+SPECIFIC ACTIONS:
+${currentMetrics.averageWordsPerSentence > 25 ? '• Break up long sentences into shorter ones\n' : ''}${currentMetrics.averageWordsPerSentence < 8 ? '• Combine short sentences for better flow\n' : ''}${currentMetrics.averageSyllablesPerWord > 2.0 ? '• Replace complex words with simpler alternatives\n' : ''}${currentMetrics.averageSyllablesPerWord < 1.3 ? '• Use slightly more sophisticated vocabulary\n' : ''}• Maintain all original meaning
+• Keep the text natural and readable
 
-TARGET METRICS:
-- Flesch-Kincaid: ${selectedLevel.targetFKMin} to ${selectedLevel.targetFKMax}
-- Reading Ease: ${selectedLevel.targetEaseMin} to ${selectedLevel.targetEaseMax}
-- Average words/sentence: ${selectedLevel.targetFKMin < 6 ? '8-12' : selectedLevel.targetFKMin < 9 ? '12-16' : selectedLevel.targetFKMin < 13 ? '18-22' : '22-30'}
-- Average syllables/word: ${selectedLevel.targetFKMin < 6 ? '1.2-1.4' : selectedLevel.targetFKMin < 9 ? '1.4-1.6' : selectedLevel.targetFKMin < 13 ? '1.6-1.8' : '1.8-2.2'}
+Target: ${gradeLevel} readers with sentences around ${selectedLevel.targetFKMin < 6 ? '8' : selectedLevel.targetFKMin < 9 ? '14' : selectedLevel.targetFKMin < 13 ? '20' : '25'} words.`
 
-Make targeted adjustments to bring the metrics within the acceptable range while preserving all meaning.`
+        userPrompt = `Please refine this text to better match ${gradeLevel} reading level:
 
-        userPrompt = `Refine this text to achieve ${gradeLevel} grade level metrics (FK: ${selectedLevel.targetFK}, Reading Ease: ${selectedLevel.targetReadingEase}).
-
-Current metrics:
-- FK: ${currentMetrics.fleschKincaid.toFixed(1)} (needs to be ${selectedLevel.targetFKMin}-${selectedLevel.targetFKMax})
-- Reading Ease: ${currentMetrics.fleschReadingEase.toFixed(1)} (needs to be ${selectedLevel.targetEaseMin}-${selectedLevel.targetEaseMax})
-
-Text to refine:
 "${currentText}"
 
-Make specific adjustments to hit the target metrics precisely.`
+Current: Grade ${currentMetrics.fleschKincaid.toFixed(1)}, Reading Ease ${currentMetrics.fleschReadingEase.toFixed(1)}
+Target: Grade ${selectedLevel.targetFK}, Reading Ease ${selectedLevel.targetReadingEase}
+
+${adjustmentNeeded}
+
+Refined text:`
       }
 
       const completion = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
+        model: model,
         messages: [
           {
             role: "system",
@@ -545,7 +547,10 @@ Make specific adjustments to hit the target metrics precisely.`
                bestMetrics.fleschKincaid <= selectedLevel.targetFKMax
     })
 
-    return bestRewrite
+    return {
+      rewrittenText: bestRewrite,
+      iterationsUsed: iteration
+    }
 
   } catch (error) {
     console.error('Grade Level OpenAI API call failed:', {
@@ -560,7 +565,10 @@ Make specific adjustments to hit the target metrics precisely.`
     // If we have a best rewrite from previous iterations, return it
     if (bestRewrite && bestRewrite !== text) {
       console.log('Returning best rewrite from completed iterations')
-      return bestRewrite
+      return {
+        rewrittenText: bestRewrite,
+        iterationsUsed: iteration
+      }
     }
     
     throw error
@@ -617,8 +625,6 @@ function calculateReadability(text) {
     longSentences
   }
 }
-
-
 
 function getReadabilityLevel(score) {
   if (score <= 5) return 'Elementary School'

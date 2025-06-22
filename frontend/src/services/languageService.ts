@@ -1263,8 +1263,8 @@ class GradeLevelRewriteOptimizer {
     return `${gradeLevel}:${encodedSample.slice(0, 15)}`
   }
   
-  async optimizedRewrite(text: string, gradeLevel: string): Promise<any> {
-    const requestKey = this.generateRequestKey(text, gradeLevel)
+  async optimizedRewrite(text: string, gradeLevel: string, model: string = 'gpt-4-turbo'): Promise<any> {
+    const requestKey = this.generateRequestKey(text, gradeLevel + ':' + model)
     
     return new Promise((resolve, reject) => {
       // Check if there's already a pending request for the same text/grade level
@@ -1296,7 +1296,7 @@ class GradeLevelRewriteOptimizer {
       this.pendingRequests.set(requestKey, [newRequest])
       
       // Execute the actual API call
-      this.executeRewrite(text, gradeLevel)
+      this.executeRewrite(text, gradeLevel, model)
         .then(result => {
           // Resolve all pending requests with the same result
           const allRequests = this.pendingRequests.get(requestKey) || []
@@ -1316,7 +1316,7 @@ class GradeLevelRewriteOptimizer {
     })
   }
   
-  private async executeRewrite(text: string, gradeLevel: string): Promise<any> {
+  private async executeRewrite(text: string, gradeLevel: string, model: string = 'gpt-4-turbo'): Promise<any> {
     // Implement the actual API call here
     try {
       // Use backend API with OpenAI integration
@@ -1336,6 +1336,7 @@ class GradeLevelRewriteOptimizer {
       console.log('🎓 OpenAI Grade Level rewrite request with iterative refinement:', {
         textLength: text.length,
         gradeLevel,
+        model,
         hasToken: !!token,
         sessionError: sessionError?.message,
         usingVercelAPI: true,
@@ -1351,13 +1352,13 @@ class GradeLevelRewriteOptimizer {
 
       const response = await axios.post(
         `${API_BASE_URL}/language/rewrite-grade-level`,
-        { text, gradeLevel },
+        { text, gradeLevel, model },
         {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          timeout: 45000 // Increased timeout for OpenAI calls
+          timeout: 90000 // 90 seconds timeout for GPT-4 calls
         }
       )
 
@@ -1439,13 +1440,13 @@ setInterval(() => {
 }, 60000) // Every minute
 
 // Original function for backward compatibility
-export const rewriteGradeLevelWithOpenAI = async (text: string, gradeLevel: string) => {
-  return gradeLevelOptimizer.optimizedRewrite(text, gradeLevel)
+export const rewriteGradeLevelWithOpenAI = async (text: string, gradeLevel: string, model: string = 'gpt-4-turbo') => {
+  return gradeLevelOptimizer.optimizedRewrite(text, gradeLevel, model)
 }
 
 // Enhanced rewrite function with optimization (same as above, different name for clarity)
-export const rewriteGradeLevelWithOptimization = async (text: string, gradeLevel: string) => {
-  return gradeLevelOptimizer.optimizedRewrite(text, gradeLevel)
+export const rewriteGradeLevelWithOptimization = async (text: string, gradeLevel: string, model: string = 'gpt-4-turbo') => {
+  return gradeLevelOptimizer.optimizedRewrite(text, gradeLevel, model)
 }
 
 // Export optimizer stats for monitoring

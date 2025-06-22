@@ -21,6 +21,8 @@ export interface GradeLevelRewriteResult {
   }
   hasChanges: boolean
   method: string
+  iterationsUsed?: number
+  model?: string
 }
 
 // Performance optimization interfaces
@@ -90,6 +92,7 @@ interface GradeLevelRewriteState {
   showGradeLevelPanel: boolean
   targetGradeLevel: string | null
   previewText: string | null
+  selectedModel: 'gpt-3.5-turbo' | 'gpt-4-turbo'
   // Performance optimization state
   requestQueue: Array<{
     id: string
@@ -171,6 +174,7 @@ const initialState: EditorState = {
     showGradeLevelPanel: false,
     targetGradeLevel: null,
     previewText: null,
+    selectedModel: 'gpt-4-turbo',
     // Performance optimization defaults
     requestQueue: [],
     cache: [],
@@ -199,14 +203,14 @@ const initialState: EditorState = {
 }
 
 // Utility functions for performance optimization
-const generateCacheKey = (text: string, gradeLevel: string): string => {
-  // Create a hash-like key from text and grade level
+const generateCacheKey = (text: string, gradeLevel: string, model: string = 'gpt-4-turbo'): string => {
+  // Create a hash-like key from text, grade level, and model
   const textHash = text.slice(0, 100) + text.slice(-50) + text.length
   // Use Unicode-safe base64 encoding to handle special characters
   const encodedHash = btoa(encodeURIComponent(textHash).replace(/%([0-9A-F]{2})/g, (_match, p1) => {
     return String.fromCharCode(parseInt(p1, 16))
   }))
-  return `${gradeLevel}:${encodedHash.slice(0, 20)}`
+  return `${gradeLevel}:${model}:${encodedHash.slice(0, 20)}`
 }
 
 const isRateLimited = (rateLimitWindow: number[], maxRequests: number): boolean => {
@@ -246,11 +250,12 @@ export const performGradeLevelRewriteOptimized = createAsyncThunk(
   }, { getState, dispatch, rejectWithValue }) => {
     const state = getState() as { editor: EditorState }
     const rewriteState = state.editor.gradeLevelRewrite
+    const model = rewriteState.selectedModel
     const startTime = Date.now()
     
     try {
       // Generate cache key
-      const cacheKey = generateCacheKey(text, gradeLevel)
+      const cacheKey = generateCacheKey(text, gradeLevel, model)
       
       // Check cache first
       const cachedResult = rewriteState.cache.find(item => item.key === cacheKey)
@@ -304,7 +309,7 @@ export const performGradeLevelRewriteOptimized = createAsyncThunk(
       dispatch(updateRateLimitWindow())
       
       // Perform the actual rewrite
-      const result = await rewriteGradeLevelWithOpenAI(text, gradeLevel)
+      const result = await rewriteGradeLevelWithOpenAI(text, gradeLevel, model)
       
       if (!result.success) {
         throw new Error(result.error || 'Grade level rewrite failed')
@@ -328,7 +333,9 @@ export const performGradeLevelRewriteOptimized = createAsyncThunk(
           level: 'Unknown'
         },
         hasChanges: result.hasChanges || false,
-        method: result.method || 'openai'
+        method: result.method || 'openai',
+        iterationsUsed: result.iterationsUsed,
+        model: result.model || model
       }
 
       // Cache the result
@@ -478,6 +485,9 @@ const editorSlice = createSlice({
     setPreviewText: (state, action: PayloadAction<string | null>) => {
       state.gradeLevelRewrite.previewText = action.payload
     },
+    setSelectedModel: (state, action: PayloadAction<'gpt-3.5-turbo' | 'gpt-4-turbo'>) => {
+      state.gradeLevelRewrite.selectedModel = action.payload
+    },
     clearGradeLevelRewriteError: (state) => {
       state.gradeLevelRewrite.rewriteError = null
     },
@@ -492,7 +502,8 @@ const editorSlice = createSlice({
         // Preserve cache and performance metrics
         cache: state.gradeLevelRewrite.cache,
         performanceMetrics: state.gradeLevelRewrite.performanceMetrics,
-        rateLimitWindow: state.gradeLevelRewrite.rateLimitWindow
+        rateLimitWindow: state.gradeLevelRewrite.rateLimitWindow,
+        selectedModel: state.gradeLevelRewrite.selectedModel
       }
     },
     
@@ -901,6 +912,7 @@ export const {
   setShowGradeLevelPanel,
   setTargetGradeLevel,
   setPreviewText,
+  setSelectedModel,
   clearGradeLevelRewriteError,
   resetGradeLevelRewriteState,
   applyGradeLevelRewrite,
@@ -938,6 +950,7 @@ export const selectRewriteError = (state: { editor: EditorState }) => state.edit
 export const selectShowGradeLevelPanel = (state: { editor: EditorState }) => state.editor.gradeLevelRewrite.showGradeLevelPanel
 export const selectTargetGradeLevel = (state: { editor: EditorState }) => state.editor.gradeLevelRewrite.targetGradeLevel
 export const selectCurrentGradeLevel = (state: { editor: EditorState }) => state.editor.gradeLevelRewrite.currentGradeLevel
+export const selectSelectedModel = (state: { editor: EditorState }) => state.editor.gradeLevelRewrite.selectedModel
 
 // Performance optimization selectors
 export const selectRewriteCache = (state: { editor: EditorState }) => state.editor.gradeLevelRewrite.cache
