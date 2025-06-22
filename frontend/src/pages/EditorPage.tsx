@@ -235,7 +235,7 @@ const EditorPage: React.FC = () => {
       }
     }
 
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+    const handleBeforeUnload = () => {
       if (currentDocument && !isNewDocument) {
         // Try to save before page unload
         handleSaveDocument()
