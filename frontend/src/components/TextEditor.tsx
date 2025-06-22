@@ -15,6 +15,7 @@ import {
   streamingError,
   applySuggestion,
   validateSuggestions,
+  clearNonSpellingSuggestions,
   Suggestion
 } from '../store/slices/suggestionSlice'
 import { setContent, setLastSaved } from '../store/slices/editorSlice'
@@ -374,7 +375,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
             if (streamingEnabled) {
               // Use streaming mode
               console.log(`Starting streaming ${isIncremental ? 'incremental' : 'full'} check`)
-              dispatch(clearSuggestions()) // Clear existing suggestions for streaming
+              // Don't clear existing suggestions - we'll add to them or replace based on what we find
               dispatch(startStreaming({ message: 'Analyzing text...' }))
               
               checkGrammarWithAIStream({
@@ -447,7 +448,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
         }
       }, delay)
     },
-    [dispatch, aiCheckEnabled, normalizeText, findChangedParagraphs, getParagraphsWithPositions, streamingEnabled, calculateSmartDelay, typingSpeed]
+    [dispatch, aiCheckEnabled, normalizeText, findChangedParagraphs, getParagraphsWithPositions, streamingEnabled, calculateSmartDelay, typingSpeed, hasSpellingError]
   )
 
   // Auto-save functionality
@@ -513,7 +514,12 @@ const TextEditor: React.FC<TextEditorProps> = ({
         // Clear suggestions if text has changed significantly to avoid offset issues
         // This helps prevent stale highlights when user manually edits text
         if (Math.abs(newContent.length - content.length) > 1 || editPattern.isHeavyEditing) {
-          dispatch(clearSuggestions())
+          // If we have a spelling error, preserve it
+          if (hasSpellingError) {
+            dispatch(clearNonSpellingSuggestions())
+          } else {
+            dispatch(clearSuggestions())
+          }
         } else {
           // For minor changes, just validate existing suggestions
           dispatch(validateSuggestions({ currentText: newContent }))
@@ -551,7 +557,7 @@ const TextEditor: React.FC<TextEditorProps> = ({
         autoSave(newContent)
       }
     },
-    [content, onContentChange, checkGrammar, autoSave, dispatch, normalizeText, updateTypingSpeed, analyzeEditPattern, typingSpeed]
+    [content, onContentChange, checkGrammar, autoSave, dispatch, normalizeText, updateTypingSpeed, analyzeEditPattern, typingSpeed, hasSpellingError]
   )
 
   // Handle text selection for cursor position
