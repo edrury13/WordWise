@@ -620,27 +620,8 @@ export const checkGrammarAndSpelling = async (
 
     // If API failed, use centralized grammar engine as fallback
     if (!apiResult) {
-      console.log('🔄 Using centralized grammar engine as fallback')
-      const fallbackResult = await grammarEngine.checkText(text, {
-        language: language,
-        minConfidence: 50, // Lower threshold for fallback
-        maxSuggestions: 50
-      })
-      
-      const fallbackSuggestions = fallbackResult.suggestions.map((gs: GrammarSuggestion): Suggestion => ({
-        id: gs.id,
-        type: mapGrammarTypeToSuggestionType(gs.type),
-        message: gs.message,
-        replacements: gs.replacements,
-        offset: gs.offset,
-        length: gs.length,
-        context: gs.context,
-        explanation: gs.explanation,
-        category: gs.category,
-        severity: mapGrammarSeverityToSuggestionSeverity(gs.severity)
-      }))
-      
-      apiResult = { suggestions: fallbackSuggestions, apiStatus: 'client-fallback' }
+      console.log('🔄 Backend Grammar API failed, not using fallback.')
+      apiResult = { suggestions: [], apiStatus: 'client-fallback' }
     }
 
     // Cache the result
@@ -667,31 +648,7 @@ export const checkGrammarAndSpelling = async (
     console.error('❌ Grammar check failed:', apiError)
     
     // Final fallback to centralized grammar engine with minimal settings
-    try {
-      const fallbackResult = await grammarEngine.checkText(text, {
-        language: language,
-        minConfidence: 40, // Very low threshold for emergency fallback
-        maxSuggestions: 30
-      })
-      
-      const fallbackSuggestions = fallbackResult.suggestions.map((gs: GrammarSuggestion): Suggestion => ({
-        id: gs.id,
-        type: mapGrammarTypeToSuggestionType(gs.type),
-        message: gs.message,
-        replacements: gs.replacements,
-        offset: gs.offset,
-        length: gs.length,
-        context: gs.context,
-        explanation: gs.explanation,
-        category: gs.category,
-        severity: mapGrammarSeverityToSuggestionSeverity(gs.severity)
-      }))
-      
-      return { suggestions: fallbackSuggestions, apiStatus: 'client-fallback' }
-    } catch (fallbackError) {
-      console.error('❌ All grammar check methods failed:', fallbackError)
-      return { suggestions: [], apiStatus: 'client-fallback' }
-    }
+    return { suggestions: [], apiStatus: 'client-fallback' }
   }
 }
 

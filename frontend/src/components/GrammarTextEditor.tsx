@@ -106,7 +106,6 @@ const GrammarTextEditor: React.FC = () => {
     return saved ? JSON.parse(saved) : {
       styleProfile: false,
       smartCorrections: false,
-      aiAssistant: false,
       criticalSuggestions: false,
       styleSuggestions: false,
       readability: false,
