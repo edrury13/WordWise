@@ -262,7 +262,7 @@ class StyleProfileService {
         .select('id')
         .eq('document_id', documentId)
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (existing) {
         // Update existing association
@@ -307,9 +307,14 @@ class StyleProfileService {
         .from('document_profile_associations')
         .select('profile_id')
         .eq('document_id', documentId)
-        .single();
+        .maybeSingle(); // Use maybeSingle() instead of single() to handle no results
 
-      if (error || !data) return null;
+      if (error) {
+        console.error('Error fetching document profile:', error);
+        return null;
+      }
+      
+      if (!data) return null; // No association exists, which is fine
 
       this.documentAssociations.set(documentId, data.profile_id);
       return this.getProfile(data.profile_id);
