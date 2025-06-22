@@ -10,7 +10,9 @@ import {
   ignoreAllCurrentSuggestions,
   selectAICheckEnabled,
   toggleAICheck,
-  updateSuggestionOffsets
+  updateSuggestionOffsets,
+  applySuggestion,
+  acceptAllSuggestions
 } from '../store/slices/suggestionSlice'
 import { setContent, setLastSaved, setAutoSave } from '../store/slices/editorSlice'
 import { updateDocument, updateCurrentDocumentContent } from '../store/slices/documentSlice'
@@ -314,7 +316,7 @@ const GrammarTextEditor: React.FC = () => {
   }, [dispatch, aiCheckEnabled, effectiveProfile, getParagraphsWithPositions])
 
   // Debounced grammar check for typing
-  const checkGrammarDebounced = useCallback((text: string) => {
+  const checkGrammarDebounced = useCallback((text: string, ranges?: Array<{ start: number; end: number }>) => {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current)
     }
@@ -326,56 +328,61 @@ const GrammarTextEditor: React.FC = () => {
         return
       }
       
-      // Get changed paragraphs for incremental checking
-      const changedParagraphs = findChangedParagraphs(text)
-      
-      // Update paragraph cache
+      // Determine changed ranges.
+      let effectiveRanges = ranges
+
+      if (!effectiveRanges) {
+        // Fallback to paragraph diff when explicit ranges not provided.
+        const changedParagraphs = findChangedParagraphs(text)
+        if (changedParagraphs.length === 0) {
+          console.log('⏭️ No paragraphs changed, skipping check')
+          return
+        }
+        effectiveRanges = changedParagraphs.map(p => ({ start: p.start, end: p.end }))
+      }
+
+      // Update cache/state for next diff round
       const newCache = new Map<number, string>()
-      const allParagraphs = getParagraphsWithPositions(text)
-      for (const para of allParagraphs) {
+      for (const para of getParagraphsWithPositions(text)) {
         newCache.set(para.index, para.text)
       }
       setParagraphCache(newCache)
       setLastCheckText(text)
       
       // Log paragraph changes for debugging
-      if (changedParagraphs.length > 0 && changedParagraphs.length < allParagraphs.length) {
+      if (effectiveRanges.length > 0 && effectiveRanges.length < getParagraphsWithPositions(text).length) {
         console.log('📝 Incremental check: Paragraph changes detected:', {
-          total: allParagraphs.length,
-          changed: changedParagraphs.length,
-          changedIndices: changedParagraphs.map(p => p.index),
-          changedText: changedParagraphs.map(p => ({
-            index: p.index,
-            preview: p.text.substring(0, 50) + (p.text.length > 50 ? '...' : '')
+          total: getParagraphsWithPositions(text).length,
+          changed: effectiveRanges.length,
+          changedIndices: effectiveRanges.map(r => `${r.start}-${r.end}`),
+          changedText: effectiveRanges.map(r => ({
+            range: `${r.start}-${r.end}`,
+            preview: text.substring(r.start, r.end).substring(0, 50) + (text.substring(r.start, r.end).length > 50 ? '...' : '')
           }))
         })
       }
       
       // Skip if no paragraphs changed
-      if (changedParagraphs.length === 0) {
+      if (effectiveRanges.length === 0) {
         console.log('⏭️ No paragraphs changed, skipping check')
         return
       }
       
       // Determine if incremental or full check
-      const isIncremental = changedParagraphs.length < allParagraphs.length
-      const changedRanges = isIncremental ? changedParagraphs.map(p => ({ start: p.start, end: p.end })) : undefined
+      const isIncremental = effectiveRanges.length < getParagraphsWithPositions(text).length
+      const changedRanges = isIncremental ? effectiveRanges : undefined
       
-      if (aiCheckEnabled) {
-        dispatch(checkTextWithAI({ 
-          text,
-          documentType: (effectiveProfile && ['social', 'custom'].includes(effectiveProfile.profileType) ? 'general' : effectiveProfile?.profileType || 'general') as any,
-          checkType: 'comprehensive',
-          styleProfile: effectiveProfile,
-          changedRanges
-        }))
-        console.log(`⏱️ Triggered ${isIncremental ? 'incremental' : 'full'} AI-enhanced grammar check with profile:`, effectiveProfile?.name)
-      } else {
-        // For traditional grammar check, we'll still check the full text
-        // but in the future we could implement partial checking
-        dispatch(checkText({ text }))
-        console.log(`⏱️ Triggered ${isIncremental ? 'full (incremental not supported)' : 'full'} traditional grammar check`)
-      }
+      // Always use the same thunk so we can pass changedRanges for incremental checks.
+      // The enableAI flag tells the thunk whether to include the AI-specific pass.
+      dispatch(checkTextWithAI({ 
+        text,
+        documentType: (effectiveProfile && ['social', 'custom'].includes(effectiveProfile.profileType) ? 'general' : effectiveProfile?.profileType || 'general') as any,
+        checkType: 'comprehensive',
+        styleProfile: effectiveProfile,
+        changedRanges,
+        enableAI: aiCheckEnabled
+      }))
+      console.log('⏱️ Triggered grammar check on ranges:', effectiveRanges?.map(r=>`${r.start}-${r.end}`).join(','))
     }, 300)
   }, [dispatch, aiCheckEnabled, effectiveProfile, lastCheckText, findChangedParagraphs, getParagraphsWithPositions])
 
@@ -550,6 +557,9 @@ const GrammarTextEditor: React.FC = () => {
     const newContent = event.target.value
     const oldContent = content
     
+    // Holder for fine-grained changed ranges
+    let explicitRanges: Array<{ start: number; end: number }> | undefined
+
     // Calculate the change offset and delta
     if (oldContent !== newContent) {
       // Find where the change occurred using prefix/suffix matching for accuracy
@@ -575,6 +585,11 @@ const GrammarTextEditor: React.FC = () => {
       // The end of the change in the *old* content
       const changeEndOld = oldContent.length - commonSuffix;
 
+      // Prepare explicit range for inserted text
+      if (addedLength > 0) {
+        explicitRanges = [{ start: changeOffset, end: changeOffset + addedLength }]
+      }
+
       // Update suggestion offsets if there are suggestions and content changed
       if (suggestions.length > 0 && (removedLength > 0 || addedLength > 0)) {
         console.log('📝 Text change detected:', {
@@ -594,10 +609,7 @@ const GrammarTextEditor: React.FC = () => {
     setContentState(newContent)
     
     // Clear undo state when user manually edits (typing new content)
-    if (lastAppliedSuggestion) {
-      setLastAppliedSuggestion(null)
-      console.log('🔄 Cleared undo state due to manual content change')
-    }
+    setLastAppliedSuggestion(null)
     
     // Update Redux state for editor
     dispatch(setContent([{
@@ -609,7 +621,7 @@ const GrammarTextEditor: React.FC = () => {
     dispatch(updateCurrentDocumentContent(newContent))
     
     // Trigger debounced grammar check for normal typing
-    checkGrammarDebounced(newContent)
+    checkGrammarDebounced(newContent, explicitRanges)
     // checkSentenceStructure(newContent) // Disabled sentence structure check
     autoSave(newContent)
   }, [content, suggestions, dispatch, autoSave, lastAppliedSuggestion, checkGrammarDebounced]) // Removed checkSentenceStructure dependency
@@ -1018,23 +1030,30 @@ const GrammarTextEditor: React.FC = () => {
       content
     ).catch(console.error)
     
-    // Clear all existing suggestions to prevent stale highlights
-    dispatch(clearSuggestions())
-    setSentenceAnalysis(null)
-    // Don't manually refresh overlay - it will be updated automatically by useEffect when suggestions change
-    
-    // Update Redux editor content
+    // Update suggestion list – remove the applied suggestion and shift the remaining offsets
+    dispatch(applySuggestion({
+      suggestionId: suggestion.id,
+      replacement,
+      offset: suggestion.offset,
+      length: suggestion.length,
+    }))
+
+    // We no longer trigger a full grammar re-check here. The incremental logic and
+    // updated offsets keep the remaining highlights in sync with the edited text.
+
+    // Keep any existing sentence-analysis data; it will be refreshed by the next
+    // scheduled grammar pass.
+
+    // Update Redux editor content so other parts of the UI receive the new text
     dispatch(setContent([{ 
       type: 'paragraph',
       children: [{ text: newContent }]
     }]))
-    
+
     // Update current document content
     dispatch(updateCurrentDocumentContent(newContent))
-    
-    // Trigger immediate grammar check after applying suggestion
-    checkGrammarImmediate(newContent)
-    // checkSentenceStructure(newContent) // Disabled sentence structure check
+
+    // Persist change without kicking off another grammar call
     autoSave(newContent)
     setShowTooltip(null)
     
@@ -1043,7 +1062,7 @@ const GrammarTextEditor: React.FC = () => {
       replacement,
       offset: suggestion.offset
     })
-  }, [content, dispatch, autoSave, checkGrammarImmediate]) // Removed checkSentenceStructure dependency
+  }, [content, dispatch, autoSave]) // Removed checkSentenceStructure dependency
 
   // Ignore suggestion
   const handleIgnoreSuggestion = useCallback(async (suggestionId: string) => {
@@ -1354,9 +1373,8 @@ const GrammarTextEditor: React.FC = () => {
         textarea.selectionStart = textarea.selectionEnd = newCursorPos
       }, 0)
       
-      // Trigger grammar check and auto-save
-      checkGrammarDebounced(newValue)
-      autoSave(newValue)
+      // Trigger grammar check and auto-save – range is the inserted tab char
+      checkGrammarDebounced(newValue, [{ start, end: start + 1 }])
     }
   }, [manualSave, undoLastSuggestion, canUndo, canRedo, dispatch, isSidebarCollapsed, aiCheckEnabled, handleSetSidebarCollapsed, setContentState, checkGrammarDebounced, autoSave])
 
@@ -1404,19 +1422,16 @@ const GrammarTextEditor: React.FC = () => {
     // Update current document content
     dispatch(updateCurrentDocumentContent(newContent))
     
-    // Clear suggestions; they'll be regenerated by fresh grammar check
-    dispatch(clearSuggestions())
-    setSentenceAnalysis(null)
-    // Don't manually refresh overlay - it will be updated automatically by useEffect when suggestions change
+    // Update the suggestion store so that the accepted ones are removed without
+    // forcing a new grammar pass.
+    dispatch(acceptAllSuggestions({ acceptedSuggestions }))
     
-    // Trigger immediate grammar check after accepting all suggestions
-    checkGrammarImmediate(newContent)
-    // checkSentenceStructure(newContent) // Disabled sentence structure check
+    // Persist change without triggering a new grammar check.
     autoSave(newContent)
     setShowTooltip(null)
     
     console.log('📝 Applied all suggestions - undo available for bulk action')
-  }, [suggestions, content, dispatch, autoSave, checkGrammarImmediate]) // Removed checkSentenceStructure dependency
+  }, [suggestions, content, dispatch, autoSave]) // Removed checkSentenceStructure dependency
 
   // Ignore all suggestions
   const handleIgnoreAllSuggestions = useCallback(() => {

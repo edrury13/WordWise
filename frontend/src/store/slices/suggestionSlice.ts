@@ -494,23 +494,28 @@ const suggestionSlice = createSlice({
       state.suggestions = state.suggestions.map(suggestion => {
         const suggestionEnd = suggestion.offset + suggestion.length
 
-        // Case 1: Suggestion is completely after the change. Adjust its offset.
+        // Determine if this edit was an insertion (delta > 0 and no characters were removed)
+        const isInsertion = delta > 0 && changeEndOld === changeOffset
+
+        // CASE A – Suggestion overlaps with the edited range (including pure insertions that land inside the suggestion)
+        const overlapsRemoval = suggestion.offset < changeEndOld && suggestionEnd > changeOffset
+        const insertionHitsSuggestion = isInsertion && (
+          suggestion.offset <= changeOffset && suggestionEnd >= changeOffset
+        )
+        if (overlapsRemoval || insertionHitsSuggestion) {
+          console.log(`Removing suggestion ${suggestion.id} that overlaps with edit; start ${suggestion.offset}, end ${suggestionEnd}`)
+          return null
+        }
+
+        // CASE B – Suggestion is completely after the edit. Adjust its offset by delta.
         if (suggestion.offset >= changeEndOld) {
           return {
             ...suggestion,
             offset: suggestion.offset + delta
           }
         }
-        
-        // Case 2: Suggestion overlaps with the change. Remove it.
-        // Overlap occurs if the suggestion's range intersects with [changeOffset, changeEndOld)
-        const overlaps = suggestion.offset < changeEndOld && suggestionEnd > changeOffset;
-        if (overlaps) {
-          console.log(`Removing suggestion ${suggestion.id} that overlaps with text change at offset ${suggestion.offset}`)
-          return null
-        }
-        
-        // Case 3: Suggestion is completely before the change. No adjustment needed.
+
+        // CASE C – Suggestion completely before the edit. No change.
         return suggestion
       }).filter(Boolean) as Suggestion[] // Remove nulls
     },
