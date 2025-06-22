@@ -7,6 +7,7 @@ import { toggleDarkMode } from '../store/slices/editorSlice'
 import { Moon, Sun, LogOut, Save, FileText, ChevronDown, User, History, GitBranch, Copy } from 'lucide-react'
 import toast from 'react-hot-toast'
 import DownloadMenu from './DownloadMenu'
+import { Settings as SettingsIcon } from 'lucide-react'
 
 interface NavigationProps {
   onSave?: () => void
@@ -315,6 +316,14 @@ const Navigation: React.FC<NavigationProps> = ({
                   <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
                     <p className="text-sm font-semibold text-navy dark:text-blue-400">{user?.email}</p>
                   </div>
+                  <Link
+                    to="/preferences"
+                    onClick={() => setShowUserMenu(false)}
+                    className="w-full px-4 py-2 text-left text-sm text-academic-gray dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center space-x-2"
+                  >
+                    <SettingsIcon className="h-4 w-4" />
+                    <span>Preferences</span>
+                  </Link>
                   <button
                     onClick={handleLogout}
                     className="w-full px-4 py-2 text-left text-sm text-academic-gray dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center space-x-2"

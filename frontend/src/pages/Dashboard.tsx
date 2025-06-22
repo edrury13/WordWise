@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Edit, Trash2, Calendar, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Command, Download, Upload, Search, Grid, List, Table, Clock, X, Sparkles, Copy } from 'lucide-react'
+import { Plus, FileText, Edit, Trash2, Calendar, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Command, Download, Upload, Search, Grid, List, Table, Clock, X, Sparkles, Copy, Settings as SettingsIcon } from 'lucide-react'
 import { AppDispatch, RootState } from '../store'
 import { fetchDocuments, deleteDocument, createDocument } from '../store/slices/documentSlice'
 import { selectActiveProfile, associateProfileWithDocument } from '../store/slices/styleProfileSlice'
@@ -286,6 +286,13 @@ const Dashboard: React.FC = () => {
                       <span>Start Personalization</span>
                     </button>
                     <button
+                      onClick={() => navigate('/preferences')}
+                      className="btn btn-secondary btn-sm flex items-center space-x-2"
+                    >
+                      <SettingsIcon className="h-4 w-4" />
+                      <span>Go to Preferences</span>
+                    </button>
+                    <button
                       onClick={() => setShowOnboardingReminder(false)}
                       className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                     >
@@ -385,6 +392,15 @@ const Dashboard: React.FC = () => {
                 </div>
                 
                 <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+                  <button
+                    onClick={() => navigate('/preferences')}
+                    className="btn btn-outline flex items-center justify-center space-x-2 academic-sans font-semibold"
+                    title="Manage your preferences"
+                  >
+                    <SettingsIcon className="h-4 w-4" />
+                    <span className="hidden sm:inline">Preferences</span>
+                  </button>
+                  
                   <button
                     onClick={() => setShowUploadModal(true)}
                     className="btn btn-secondary flex items-center justify-center space-x-2 academic-sans font-semibold"

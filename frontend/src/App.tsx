@@ -20,6 +20,7 @@ import LoadingSpinner from './components/LoadingSpinner'
 import ProtectedRoute from './components/ProtectedRoute'
 import GrammarTestPanel from './components/GrammarTestPanel'
 import AuthDebug from './components/AuthDebug'
+import PreferencesPage from './pages/PreferencesPage'
 
 function App() {
   const dispatch = useDispatch<AppDispatch>()
@@ -119,6 +120,14 @@ function App() {
           element={
             <ProtectedRoute>
               <TutorialPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/preferences" 
+          element={
+            <ProtectedRoute>
+              <PreferencesPage />
             </ProtectedRoute>
           } 
         />
