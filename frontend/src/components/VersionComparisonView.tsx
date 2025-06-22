@@ -11,7 +11,6 @@ interface VersionComparisonViewProps {
 }
 
 export const VersionComparisonView: React.FC<VersionComparisonViewProps> = ({
-  documentId,
   versionFromId,
   versionToId,
   onClose

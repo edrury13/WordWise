@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Clock, Tag, GitBranch, Download, RotateCcw, Eye, GitCompare } from 'lucide-react'
+import { Clock, Tag, RotateCcw, Eye, GitCompare } from 'lucide-react'
 import { versionService, DocumentVersion, VersionTag } from '../services/versionService'
 import LoadingSpinner from './LoadingSpinner'
 
@@ -86,17 +86,7 @@ export const VersionHistoryPanel: React.FC<VersionHistoryPanelProps> = ({
     }
   }
 
-  const handleRemoveTag = async (tagId: string) => {
-    if (!confirm('Remove this tag?')) return
 
-    try {
-      await versionService.removeTag(tagId)
-      await loadVersionHistory()
-    } catch (err) {
-      console.error('Error removing tag:', err)
-      alert('Failed to remove tag')
-    }
-  }
 
   const toggleVersionSelection = (versionId: string) => {
     setSelectedVersions(prev => {

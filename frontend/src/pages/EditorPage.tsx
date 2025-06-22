@@ -71,7 +71,7 @@ const EditorPage: React.FC = () => {
   const [hasDetectedProfile, setHasDetectedProfile] = useState(false)
   const [showVersionCommitDialog, setShowVersionCommitDialog] = useState(false)
   const [versionCommitMessage, setVersionCommitMessage] = useState('')
-  const [lastAutoSaveTime, setLastAutoSaveTime] = useState<number>(Date.now())
+
   const autoSaveIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   // Load user preferences
@@ -200,7 +200,6 @@ const EditorPage: React.FC = () => {
           isMajorVersion: false
         })
         
-        setLastAutoSaveTime(Date.now())
         console.log('Auto-save version created at', new Date().toLocaleTimeString())
       } catch (error) {
         console.error('Failed to create auto-save version:', error)
@@ -225,6 +224,32 @@ const EditorPage: React.FC = () => {
       }
     }
   }, [currentDocument, documentTitle, isNewDocument, handleSaveDocument])
+
+  // Auto-save when user switches tabs or closes window
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && currentDocument && !isNewDocument) {
+        // Save the document when user switches tabs
+        handleSaveDocument()
+        console.log('Auto-saved document due to tab switch')
+      }
+    }
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (currentDocument && !isNewDocument) {
+        // Try to save before page unload
+        handleSaveDocument()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [currentDocument, isNewDocument, handleSaveDocument])
 
   const handleShowVersionHistory = useCallback(() => {
     dispatch(setShowVersionHistory(true))
@@ -262,7 +287,7 @@ const EditorPage: React.FC = () => {
     }
   }, [currentDocument, documentTitle, versionCommitMessage, dispatch, handleSaveDocument])
 
-  const handleVersionRestore = useCallback(async (versionId: string) => {
+  const handleVersionRestore = useCallback(async () => {
     // Refresh the document after version restore
     if (id) {
       await dispatch(fetchDocument(id))

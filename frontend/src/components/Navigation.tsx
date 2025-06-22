@@ -50,8 +50,7 @@ const Navigation: React.FC<NavigationProps> = ({
   },
   documentId,
   onShowVersionHistory,
-  onCreateVersion,
-  hasUnsavedChanges = false
+  onCreateVersion
 }) => {
   const dispatch = useDispatch<AppDispatch>()
   const location = useLocation()
