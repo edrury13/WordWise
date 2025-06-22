@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Edit, Trash2, Calendar, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Command, Download, Upload, Search, Grid, List, Table, Clock, X, Sparkles } from 'lucide-react'
+import { Plus, FileText, Edit, Trash2, Calendar, ArrowUpDown, ArrowUp, ArrowDown, Keyboard, Command, Download, Upload, Search, Grid, List, Table, Clock, X, Sparkles, Copy } from 'lucide-react'
 import { AppDispatch, RootState } from '../store'
 import { fetchDocuments, deleteDocument, createDocument } from '../store/slices/documentSlice'
 import { selectActiveProfile, associateProfileWithDocument } from '../store/slices/styleProfileSlice'
@@ -119,6 +119,22 @@ const Dashboard: React.FC = () => {
       } catch (error) {
         toast.error('Failed to delete document')
       }
+    }
+  }
+
+  const handleCopyDocument = async (documentId: string) => {
+    try {
+      const response = await documentService.copyDocument(documentId)
+      if (response.success) {
+        toast.success('Document copied successfully!')
+        // Refresh the documents list to show the new copy
+        if (user) {
+          dispatch(fetchDocuments(user.id))
+        }
+      }
+    } catch (error) {
+      toast.error('Failed to copy document')
+      console.error('Error copying document:', error)
     }
   }
 
@@ -578,6 +594,13 @@ const Dashboard: React.FC = () => {
                           >
                             <Edit className="h-4 w-4" />
                           </button>
+                          <button
+                            onClick={() => handleCopyDocument(document.id)}
+                            className="p-2 text-academic-gray dark:text-gray-400 hover:text-navy dark:hover:text-blue-400 transition-colors"
+                            title="Make a copy"
+                          >
+                            <Copy className="h-4 w-4" />
+                          </button>
                           <DownloadMenu
                             documentId={document.id}
                             documentTitle={document.title}
@@ -611,6 +634,16 @@ const Dashboard: React.FC = () => {
                           <FileText className="h-5 w-5 text-white" />
                         </div>
                         <div className="flex items-center space-x-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleCopyDocument(document.id)
+                            }}
+                            className="p-1 text-academic-gray dark:text-gray-400 hover:text-navy dark:hover:text-blue-400 transition-colors"
+                            title="Make a copy"
+                          >
+                            <Copy className="h-3 w-3" />
+                          </button>
                           <DownloadMenu
                             documentId={document.id}
                             documentTitle={document.title}
@@ -728,6 +761,13 @@ const Dashboard: React.FC = () => {
                                 title="Edit document"
                               >
                                 <Edit className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleCopyDocument(document.id)}
+                                className="p-1 text-academic-gray dark:text-gray-400 hover:text-navy dark:hover:text-blue-400 transition-colors"
+                                title="Make a copy"
+                              >
+                                <Copy className="h-4 w-4" />
                               </button>
                               <DownloadMenu
                                 documentId={document.id}

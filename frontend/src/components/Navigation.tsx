@@ -4,12 +4,13 @@ import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../store'
 import { logoutUser } from '../store/slices/authSlice'
 import { toggleDarkMode } from '../store/slices/editorSlice'
-import { Moon, Sun, LogOut, Save, FileText, ChevronDown, User, History, GitBranch } from 'lucide-react'
+import { Moon, Sun, LogOut, Save, FileText, ChevronDown, User, History, GitBranch, Copy } from 'lucide-react'
 import toast from 'react-hot-toast'
 import DownloadMenu from './DownloadMenu'
 
 interface NavigationProps {
   onSave?: () => void
+  onSaveAsCopy?: () => void
   isSaving?: boolean
   showSaveButton?: boolean
   // Editor-specific props
@@ -34,6 +35,7 @@ interface NavigationProps {
 
 const Navigation: React.FC<NavigationProps> = ({ 
   onSave, 
+  onSaveAsCopy,
   isSaving = false, 
   showSaveButton = false,
   documentTitle,
@@ -57,7 +59,9 @@ const Navigation: React.FC<NavigationProps> = ({
   const { user } = useSelector((state: RootState) => state.auth)
   const { isDarkMode } = useSelector((state: RootState) => state.editor)
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const [showSaveMenu, setShowSaveMenu] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
+  const saveMenuRef = useRef<HTMLDivElement>(null)
 
   const handleLogout = async () => {
     try {
@@ -175,18 +179,65 @@ const Navigation: React.FC<NavigationProps> = ({
 
             {/* Save button (only on editor pages) */}
             {showSaveButton && (
-              <button
-                onClick={onSave}
-                disabled={isSaving}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  isSaving 
-                    ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
-                    : 'bg-navy text-white hover:bg-burgundy dark:bg-blue-600 dark:hover:bg-blue-700'
-                }`}
-              >
-                <Save className="h-4 w-4" />
-                <span>{isSaving ? 'Saving...' : 'Save'}</span>
-              </button>
+              <div className="relative" ref={saveMenuRef}>
+                {documentId && !isNewDocument ? (
+                  // Show dropdown menu for existing documents
+                  <>
+                    <button
+                      onClick={() => setShowSaveMenu(!showSaveMenu)}
+                      disabled={isSaving}
+                      className={`flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                        isSaving 
+                          ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                          : 'bg-navy text-white hover:bg-burgundy dark:bg-blue-600 dark:hover:bg-blue-700'
+                      }`}
+                    >
+                      <Save className="h-4 w-4" />
+                      <span>{isSaving ? 'Saving...' : 'Save'}</span>
+                      <ChevronDown className="h-3 w-3" />
+                    </button>
+                    
+                    {showSaveMenu && (
+                      <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50">
+                        <button
+                          onClick={() => {
+                            onSave?.()
+                            setShowSaveMenu(false)
+                          }}
+                          className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center space-x-2"
+                        >
+                          <Save className="h-4 w-4" />
+                          <span>Save</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            onSaveAsCopy?.()
+                            setShowSaveMenu(false)
+                          }}
+                          className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center space-x-2"
+                        >
+                          <Copy className="h-4 w-4" />
+                          <span>Save as Copy</span>
+                        </button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  // Simple save button for new documents
+                  <button
+                    onClick={onSave}
+                    disabled={isSaving}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                      isSaving 
+                        ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                        : 'bg-navy text-white hover:bg-burgundy dark:bg-blue-600 dark:hover:bg-blue-700'
+                    }`}
+                  >
+                    <Save className="h-4 w-4" />
+                    <span>{isSaving ? 'Saving...' : 'Save'}</span>
+                  </button>
+                )}
+              </div>
             )}
 
             {/* Download button (only on editor pages with saved documents) */}

@@ -237,6 +237,69 @@ router.delete('/:id', async (req: AuthenticatedRequest, res) => {
   }
 })
 
+// Copy a document
+router.post('/:id/copy', async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated'
+      })
+    }
+
+    // Get the original document
+    const { data: originalDoc, error: fetchError } = await supabase
+      .from('documents')
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id) // Ensure user owns the document
+      .single()
+
+    if (fetchError || !originalDoc) {
+      return res.status(404).json({
+        success: false,
+        error: 'Document not found'
+      })
+    }
+
+    // Create a copy with a new title
+    const now = new Date().toISOString()
+    const copyTitle = req.body.title || `${originalDoc.title} (Copy)`
+    
+    const documentData = {
+      title: copyTitle,
+      content: originalDoc.content,
+      user_id: req.user.id,
+      created_at: now,
+      updated_at: now,
+      word_count: originalDoc.word_count,
+      character_count: originalDoc.character_count
+    }
+
+    const { data, error } = await supabase
+      .from('documents')
+      .insert([documentData])
+      .select()
+      .single()
+
+    if (error) {
+      throw error
+    }
+
+    res.status(201).json({
+      success: true,
+      document: data,
+      message: 'Document copied successfully'
+    })
+  } catch (error) {
+    console.error('Error copying document:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Failed to copy document'
+    })
+  }
+})
+
 // Download document as text file
 router.get('/:id/download/txt', async (req: AuthenticatedRequest, res) => {
   try {

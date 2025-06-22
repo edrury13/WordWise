@@ -26,6 +26,7 @@ import {
 } from '../store/slices/styleProfileSlice'
 import { userPreferencesService } from '../services/userPreferencesService'
 import { versionService } from '../services/versionService'
+import { documentService } from '../services/documentService'
 import GrammarTextEditor from '../components/GrammarTextEditor'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Navigation from '../components/Navigation'
@@ -71,6 +72,8 @@ const EditorPage: React.FC = () => {
   const [hasDetectedProfile, setHasDetectedProfile] = useState(false)
   const [showVersionCommitDialog, setShowVersionCommitDialog] = useState(false)
   const [versionCommitMessage, setVersionCommitMessage] = useState('')
+  const [showCopyDialog, setShowCopyDialog] = useState(false)
+  const [copyTitle, setCopyTitle] = useState('')
 
   const autoSaveIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -181,6 +184,31 @@ const EditorPage: React.FC = () => {
        })
     }
   }, [currentDocument, user, documentTitle])
+
+  const handleSaveAsCopy = useCallback(() => {
+    if (currentDocument) {
+      setCopyTitle(`${documentTitle} (Copy)`)
+      setShowCopyDialog(true)
+    }
+  }, [currentDocument, documentTitle])
+
+  const handleConfirmSaveAsCopy = useCallback(async () => {
+    if (!currentDocument || !copyTitle.trim()) return
+
+    try {
+      const response = await documentService.copyDocument(currentDocument.id, copyTitle)
+      if (response.success) {
+        toast.success('Document copied successfully!')
+        setShowCopyDialog(false)
+        setCopyTitle('')
+        // Navigate to the new document
+        navigateRef.current(`/editor/${response.document.id}`)
+      }
+    } catch (error) {
+      toast.error('Failed to copy document')
+      console.error('Error copying document:', error)
+    }
+  }, [currentDocument, copyTitle])
 
   // Auto-save version every 5 minutes
   useEffect(() => {
@@ -375,6 +403,7 @@ const EditorPage: React.FC = () => {
       {/* Navigation with save functionality and document info */}
       <Navigation 
         onSave={handleSaveDocument}
+        onSaveAsCopy={handleSaveAsCopy}
         isSaving={saving}
         showSaveButton={true}
         documentTitle={documentTitle}
@@ -547,6 +576,52 @@ const EditorPage: React.FC = () => {
                 className="btn btn-primary btn-sm"
               >
                 Apply Style
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Save as Copy Dialog */}
+      {showCopyDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">
+              Save as Copy
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              Create a copy of this document with a new name.
+            </p>
+            <div className="mb-6">
+              <label htmlFor="copy-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                New Document Title
+              </label>
+              <input
+                id="copy-title"
+                type="text"
+                value={copyTitle}
+                onChange={(e) => setCopyTitle(e.target.value)}
+                placeholder="Enter document title..."
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100"
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowCopyDialog(false)
+                  setCopyTitle('')
+                }}
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmSaveAsCopy}
+                disabled={!copyTitle.trim()}
+                className="btn btn-primary btn-sm"
+              >
+                Create Copy
               </button>
             </div>
           </div>

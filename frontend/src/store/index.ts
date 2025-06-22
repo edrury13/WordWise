@@ -18,8 +18,32 @@ export const store = configureStore({
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        ignoredActions: ['editor/setEditorInstance'],
-        ignoredPaths: ['editor.editorInstance'],
+        // Ignore these action types
+        ignoredActions: [
+          'editor/setEditorInstance',
+          'styleProfiles/loadUserDefault/fulfilled',
+          'auth/fetchUser/fulfilled',
+          'documents/fetchDocuments/fulfilled',
+          'documents/createDocument/fulfilled',
+          'documents/updateDocument/fulfilled',
+        ],
+        // Ignore these field paths in all actions
+        ignoredActionPaths: [
+          'meta.arg',
+          'payload.preferences.onboardingCompletedAt',
+          'payload.created_at',
+          'payload.updated_at',
+          'payload.documents',
+        ],
+        // Ignore these paths in the state
+        ignoredPaths: [
+          'editor.editorInstance',
+          'auth.user',
+          'documents.documents',
+          'documents.currentDocument',
+          'styleProfiles.profiles',
+          'onboarding',
+        ],
       },
     }),
 })

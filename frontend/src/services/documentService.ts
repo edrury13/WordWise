@@ -254,5 +254,45 @@ export const documentService = {
       console.error('Error uploading multiple documents:', error)
       throw error
     }
+  },
+
+  async copyDocument(documentId: string, customTitle?: string) {
+    try {
+      // Get the current user
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        throw new Error('User not authenticated')
+      }
+
+      // Get the access token
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        throw new Error('No active session')
+      }
+
+      // Call the backend API to copy the document
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/documents/${documentId}/copy`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          title: customTitle
+        })
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to copy document')
+      }
+
+      const data = await response.json()
+      return data
+    } catch (error) {
+      console.error('Error copying document:', error)
+      throw error
+    }
   }
 } 
