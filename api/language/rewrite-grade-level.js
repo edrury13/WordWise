@@ -164,7 +164,11 @@ async function rewriteGradeLevelWithOpenAI(text, gradeLevel) {
       ],
       temperature: 0.3,
       targetFK: '3-5',
-      targetReadingEase: '80-90'
+      targetReadingEase: '80-90',
+      targetFKMin: 3,
+      targetFKMax: 5,
+      targetEaseMin: 80,
+      targetEaseMax: 90
     },
     'middle-school': {
       instruction: 'Rewrite this text for middle school students (grades 6-8). Use clear language and moderate complexity that pre-teens can understand.',
@@ -199,7 +203,11 @@ async function rewriteGradeLevelWithOpenAI(text, gradeLevel) {
       ],
       temperature: 0.4,
       targetFK: '6-8',
-      targetReadingEase: '70-80'
+      targetReadingEase: '70-80',
+      targetFKMin: 6,
+      targetFKMax: 8,
+      targetEaseMin: 70,
+      targetEaseMax: 80
     },
     'high-school': {
       instruction: 'Rewrite this text for high school students (grades 9-12). Use standard academic language that teenagers can understand.',
@@ -234,7 +242,11 @@ async function rewriteGradeLevelWithOpenAI(text, gradeLevel) {
       ],
       temperature: 0.4,
       targetFK: '9-12',
-      targetReadingEase: '60-70'
+      targetReadingEase: '60-70',
+      targetFKMin: 9,
+      targetFKMax: 12,
+      targetEaseMin: 60,
+      targetEaseMax: 70
     },
     'college': {
       instruction: 'Rewrite this text for college students and adults. Use sophisticated language and complex concepts appropriate for higher education.',
@@ -269,7 +281,11 @@ async function rewriteGradeLevelWithOpenAI(text, gradeLevel) {
       ],
       temperature: 0.5,
       targetFK: '13-16',
-      targetReadingEase: '50-60'
+      targetReadingEase: '50-60',
+      targetFKMin: 13,
+      targetFKMax: 16,
+      targetEaseMin: 50,
+      targetEaseMax: 60
     },
     'graduate': {
       instruction: 'Rewrite this text for graduate-level readers and professionals. Use highly sophisticated language, technical terminology, and complex analytical concepts.',
@@ -304,7 +320,11 @@ async function rewriteGradeLevelWithOpenAI(text, gradeLevel) {
       ],
       temperature: 0.6,
       targetFK: '17+',
-      targetReadingEase: '30-50'
+      targetReadingEase: '30-50',
+      targetFKMin: 17,
+      targetFKMax: 22,
+      targetEaseMin: 30,
+      targetEaseMax: 50
     }
   }
 
@@ -324,8 +344,26 @@ async function rewriteGradeLevelWithOpenAI(text, gradeLevel) {
     temperature: selectedLevel.temperature
   })
 
+  // Iterative refinement approach
+  const MAX_ITERATIONS = 3
+  let currentText = text
+  let bestRewrite = text
+  let bestMetrics = null
+  let iteration = 0
+
   try {
-    const systemPrompt = `You are an expert educational content specialist and linguistic engineer who rewrites text for specific grade levels. Your expertise includes psycholinguistics, readability science, and educational content design.
+    while (iteration < MAX_ITERATIONS) {
+      iteration++
+      
+      console.log(`🔄 Iteration ${iteration} of ${MAX_ITERATIONS} for grade level rewrite`)
+
+      // Create prompt based on iteration
+      let systemPrompt = ''
+      let userPrompt = ''
+
+      if (iteration === 1) {
+        // First iteration - standard prompt
+        systemPrompt = `You are an expert educational content specialist and linguistic engineer who rewrites text for specific grade levels. Your expertise includes psycholinguistics, readability science, and educational content design.
 
 CRITICAL REQUIREMENTS:
 - You MUST rewrite for ${gradeLevel.toUpperCase()} level (Flesch-Kincaid Grade Level: ${selectedLevel.targetFK})
@@ -373,47 +411,140 @@ QUALITY ASSURANCE CHECKLIST:
 
 Your rewrite should demonstrate this level of transformation while meeting all linguistic specifications and targeting the exact grade level metrics.`
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "system",
-          content: systemPrompt
-        },
-        {
-          role: "user",
-          content: `Rewrite this text for ${gradeLevel} grade level (target FK: ${selectedLevel.targetFK}, target Reading Ease: ${selectedLevel.targetReadingEase}):\n\n"${text}"\n\nRemember to follow all linguistic guidelines for sentence length, vocabulary complexity, syllable count, and concept depth specified for this grade level.`
+        userPrompt = `Rewrite this text for ${gradeLevel} grade level (target FK: ${selectedLevel.targetFK}, target Reading Ease: ${selectedLevel.targetReadingEase}):\n\n"${currentText}"\n\nRemember to follow all linguistic guidelines for sentence length, vocabulary complexity, syllable count, and concept depth specified for this grade level.`
+      } else {
+        // Subsequent iterations - refinement prompts with feedback
+        const currentMetrics = calculateReadability(currentText)
+        const fkDiff = currentMetrics.fleschKincaid - ((selectedLevel.targetFKMin + selectedLevel.targetFKMax) / 2)
+        const easeDiff = currentMetrics.fleschReadingEase - ((selectedLevel.targetEaseMin + selectedLevel.targetEaseMax) / 2)
+
+        systemPrompt = `You are an expert educational content specialist performing iterative refinement of text readability. You must adjust the text to precisely hit the target reading metrics.
+
+CURRENT SITUATION:
+- This is iteration ${iteration} of refining the text
+- Current Flesch-Kincaid: ${currentMetrics.fleschKincaid.toFixed(1)} (Target: ${selectedLevel.targetFK})
+- Current Reading Ease: ${currentMetrics.fleschReadingEase.toFixed(1)} (Target: ${selectedLevel.targetReadingEase})
+- FK Difference: ${fkDiff > 0 ? '+' : ''}${fkDiff.toFixed(1)}
+- Ease Difference: ${easeDiff > 0 ? '+' : ''}${easeDiff.toFixed(1)}
+
+REFINEMENT INSTRUCTIONS:
+${fkDiff > 2 ? '- Text is TOO COMPLEX: Simplify vocabulary, shorten sentences, reduce syllables per word' : ''}
+${fkDiff < -2 ? '- Text is TOO SIMPLE: Use more sophisticated vocabulary, lengthen sentences, increase complexity' : ''}
+${Math.abs(fkDiff) <= 2 ? '- FK level is close but needs fine-tuning' : ''}
+
+${easeDiff < -10 ? '- Reading Ease is TOO LOW (too difficult): Use simpler words, shorter sentences' : ''}
+${easeDiff > 10 ? '- Reading Ease is TOO HIGH (too easy): Use more complex vocabulary and sentence structures' : ''}
+
+SPECIFIC ADJUSTMENTS NEEDED:
+${currentMetrics.averageWordsPerSentence > 25 ? '- REDUCE sentence length significantly' : ''}
+${currentMetrics.averageWordsPerSentence < 8 ? '- INCREASE sentence length by combining short sentences' : ''}
+${currentMetrics.averageSyllablesPerWord > 2.0 ? '- Replace polysyllabic words with simpler alternatives' : ''}
+${currentMetrics.averageSyllablesPerWord < 1.3 ? '- Use more sophisticated vocabulary where appropriate' : ''}
+
+TARGET METRICS:
+- Flesch-Kincaid: ${selectedLevel.targetFKMin} to ${selectedLevel.targetFKMax}
+- Reading Ease: ${selectedLevel.targetEaseMin} to ${selectedLevel.targetEaseMax}
+- Average words/sentence: ${selectedLevel.targetFKMin < 6 ? '8-12' : selectedLevel.targetFKMin < 9 ? '12-16' : selectedLevel.targetFKMin < 13 ? '18-22' : '22-30'}
+- Average syllables/word: ${selectedLevel.targetFKMin < 6 ? '1.2-1.4' : selectedLevel.targetFKMin < 9 ? '1.4-1.6' : selectedLevel.targetFKMin < 13 ? '1.6-1.8' : '1.8-2.2'}
+
+Make targeted adjustments to bring the metrics within the acceptable range while preserving all meaning.`
+
+        userPrompt = `Refine this text to achieve ${gradeLevel} grade level metrics (FK: ${selectedLevel.targetFK}, Reading Ease: ${selectedLevel.targetReadingEase}).
+
+Current metrics:
+- FK: ${currentMetrics.fleschKincaid.toFixed(1)} (needs to be ${selectedLevel.targetFKMin}-${selectedLevel.targetFKMax})
+- Reading Ease: ${currentMetrics.fleschReadingEase.toFixed(1)} (needs to be ${selectedLevel.targetEaseMin}-${selectedLevel.targetEaseMax})
+
+Text to refine:
+"${currentText}"
+
+Make specific adjustments to hit the target metrics precisely.`
+      }
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt
+          },
+          {
+            role: "user",
+            content: userPrompt
+          }
+        ],
+        max_tokens: maxTokens,
+        temperature: iteration === 1 ? selectedLevel.temperature : Math.max(0.1, selectedLevel.temperature - 0.1 * (iteration - 1)), // Lower temperature for refinements
+        top_p: 0.95,
+        frequency_penalty: 0.2,
+        presence_penalty: 0.2
+      })
+
+      let rewrittenText = completion.choices[0]?.message?.content?.trim()
+
+      if (!rewrittenText) {
+        console.error(`OpenAI returned empty response for grade level rewrite (iteration ${iteration})`)
+        if (iteration === 1) {
+          throw new Error('OpenAI returned empty response')
+        } else {
+          // If refinement fails, use the best version we have
+          break
         }
-      ],
-      max_tokens: maxTokens,
-      temperature: selectedLevel.temperature,
-      top_p: 0.95,
-      frequency_penalty: 0.2,
-      presence_penalty: 0.2
-    })
+      }
 
-    let rewrittenText = completion.choices[0]?.message?.content?.trim()
+      // Remove quotes if OpenAI wrapped the response in quotes
+      if (rewrittenText.startsWith('"') && rewrittenText.endsWith('"')) {
+        rewrittenText = rewrittenText.slice(1, -1)
+      }
 
-    if (!rewrittenText) {
-      console.error('OpenAI returned empty response for grade level rewrite')
-      throw new Error('OpenAI returned empty response')
+      // Calculate new metrics
+      const newMetrics = calculateReadability(rewrittenText)
+      
+      console.log(`✅ Iteration ${iteration} results:`, {
+        targetFK: `${selectedLevel.targetFKMin}-${selectedLevel.targetFKMax}`,
+        actualFK: newMetrics.fleschKincaid,
+        fkInRange: newMetrics.fleschKincaid >= selectedLevel.targetFKMin && newMetrics.fleschKincaid <= selectedLevel.targetFKMax,
+        targetEase: `${selectedLevel.targetEaseMin}-${selectedLevel.targetEaseMax}`,
+        actualEase: newMetrics.fleschReadingEase,
+        easeInRange: newMetrics.fleschReadingEase >= selectedLevel.targetEaseMin && newMetrics.fleschReadingEase <= selectedLevel.targetEaseMax,
+        tokensUsed: completion.usage?.total_tokens || 'unknown'
+      })
+
+      // Check if this is the best version so far
+      if (!bestMetrics || 
+          (Math.abs(newMetrics.fleschKincaid - ((selectedLevel.targetFKMin + selectedLevel.targetFKMax) / 2)) < 
+           Math.abs(bestMetrics.fleschKincaid - ((selectedLevel.targetFKMin + selectedLevel.targetFKMax) / 2)))) {
+        bestRewrite = rewrittenText
+        bestMetrics = newMetrics
+      }
+
+      // Check if we've hit the target range
+      if (newMetrics.fleschKincaid >= selectedLevel.targetFKMin && 
+          newMetrics.fleschKincaid <= selectedLevel.targetFKMax &&
+          newMetrics.fleschReadingEase >= selectedLevel.targetEaseMin &&
+          newMetrics.fleschReadingEase <= selectedLevel.targetEaseMax) {
+        console.log(`🎯 Target metrics achieved in iteration ${iteration}!`)
+        bestRewrite = rewrittenText
+        bestMetrics = newMetrics
+        break
+      }
+
+      // Update current text for next iteration
+      currentText = rewrittenText
     }
 
-    // Remove quotes if OpenAI wrapped the response in quotes
-    if (rewrittenText.startsWith('"') && rewrittenText.endsWith('"')) {
-      rewrittenText = rewrittenText.slice(1, -1)
-    }
-
-    console.log('✅ Grade Level OpenAI completion successful:', {
-      inputTokens: completion.usage?.prompt_tokens || 'unknown',
-      outputTokens: completion.usage?.completion_tokens || 'unknown',
-      totalTokens: completion.usage?.total_tokens || 'unknown',
-      model: completion.model,
-      targetGradeLevel: gradeLevel,
-      targetFK: selectedLevel.targetFK
+    console.log('🏁 Iterative refinement complete:', {
+      totalIterations: iteration,
+      finalFK: bestMetrics?.fleschKincaid,
+      finalReadingEase: bestMetrics?.fleschReadingEase,
+      targetFK: selectedLevel.targetFK,
+      targetReadingEase: selectedLevel.targetReadingEase,
+      success: bestMetrics && 
+               bestMetrics.fleschKincaid >= selectedLevel.targetFKMin && 
+               bestMetrics.fleschKincaid <= selectedLevel.targetFKMax
     })
 
-    return rewrittenText
+    return bestRewrite
 
   } catch (error) {
     console.error('Grade Level OpenAI API call failed:', {
@@ -421,8 +552,15 @@ Your rewrite should demonstrate this level of transformation while meeting all l
       type: error.constructor.name,
       status: error.status,
       code: error.code,
-      gradeLevel
+      gradeLevel,
+      iteration
     })
+    
+    // If we have a best rewrite from previous iterations, return it
+    if (bestRewrite && bestRewrite !== text) {
+      console.log('Returning best rewrite from completed iterations')
+      return bestRewrite
+    }
     
     throw error
   }

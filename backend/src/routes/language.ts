@@ -2112,6 +2112,7 @@ async function rewriteGradeLevelWithOpenAI(text: string, gradeLevel: string): Pr
     };
     specificInstructions: string[];
     examples: { before: string; after: string }; 
+    additionalExamples: { before: string; after: string }[];
     changes: string[]; 
     temperature: number; 
     targetFK: string;
@@ -2143,6 +2144,20 @@ async function rewriteGradeLevelWithOpenAI(text: string, gradeLevel: string): Pr
         before: "The implementation of this methodology requires significant consideration of various factors.",
         after: "This way of doing things needs us to think about many things first. We must look at each part carefully."
       },
+      additionalExamples: [
+        {
+          before: "The students demonstrated exceptional proficiency in mathematics.",
+          after: "The kids were very good at math."
+        },
+        {
+          before: "It is imperative that we establish clear guidelines.",
+          after: "We need to make rules that are easy to understand."
+        },
+        {
+          before: "The environmental conditions were not conducive to learning.",
+          after: "The room was not good for learning. It was too noisy."
+        }
+      ],
       changes: [
         'Use only simple, common words that elementary students know',
         'Keep sentences under 10-12 words',
@@ -2180,6 +2195,20 @@ async function rewriteGradeLevelWithOpenAI(text: string, gradeLevel: string): Pr
         before: "The implementation of this methodology requires significant consideration of various factors.",
         after: "Using this method means we need to think carefully about several important things. We must consider different factors that could affect the outcome."
       },
+      additionalExamples: [
+        {
+          before: "The students demonstrated exceptional proficiency in mathematics.",
+          after: "The students showed they were really good at math and understood it well."
+        },
+        {
+          before: "It is imperative that we establish clear guidelines.",
+          after: "It's important that we create clear rules that everyone can follow."
+        },
+        {
+          before: "The environmental conditions were not conducive to learning.",
+          after: "The classroom environment made it hard for students to learn effectively."
+        }
+      ],
       changes: [
         'Use clear, straightforward vocabulary',
         'Keep sentences moderate length (12-16 words)',
@@ -2217,6 +2246,20 @@ async function rewriteGradeLevelWithOpenAI(text: string, gradeLevel: string): Pr
         before: "The implementation of this methodology requires significant consideration of various factors.",
         after: "Implementing this approach requires careful consideration of several important factors, which must be analyzed thoroughly before proceeding."
       },
+      additionalExamples: [
+        {
+          before: "The students demonstrated exceptional proficiency in mathematics.",
+          after: "The students displayed outstanding mathematical abilities, achieving high levels of competence in various mathematical concepts."
+        },
+        {
+          before: "It is imperative that we establish clear guidelines.",
+          after: "It is essential that we develop comprehensive guidelines that clearly define expectations and procedures."
+        },
+        {
+          before: "The environmental conditions were not conducive to learning.",
+          after: "The environmental factors present in the classroom negatively impacted students' ability to engage effectively with learning materials."
+        }
+      ],
       changes: [
         'Use standard academic vocabulary',
         'Keep sentences reasonably complex but clear',
@@ -2254,6 +2297,20 @@ async function rewriteGradeLevelWithOpenAI(text: string, gradeLevel: string): Pr
         before: "This way of doing things needs us to think about many things first.",
         after: "The implementation of this methodology requires comprehensive analysis of multiple contributing factors, necessitating systematic evaluation of interdependent variables."
       },
+      additionalExamples: [
+        {
+          before: "The students demonstrated exceptional proficiency in mathematics.",
+          after: "The cohort of students exhibited extraordinary mathematical competencies, demonstrating sophisticated analytical capabilities across multiple quantitative domains."
+        },
+        {
+          before: "It is imperative that we establish clear guidelines.",
+          after: "The establishment of comprehensive regulatory frameworks is imperative to ensure organizational coherence and systematic operational effectiveness."
+        },
+        {
+          before: "The environmental conditions were not conducive to learning.",
+          after: "The pedagogical environment exhibited suboptimal characteristics that significantly impeded cognitive engagement and knowledge acquisition processes."
+        }
+      ],
       changes: [
         'Use advanced vocabulary and terminology',
         'Employ complex sentence structures',
@@ -2291,6 +2348,20 @@ async function rewriteGradeLevelWithOpenAI(text: string, gradeLevel: string): Pr
         before: "This way of doing things needs us to think about many things first.",
         after: "The operationalization of this theoretical framework necessitates a comprehensive, multifaceted evaluation of interdependent variables and their potential ramifications across diverse contextual parameters, requiring systematic methodological consideration of epistemological assumptions."
       },
+      additionalExamples: [
+        {
+          before: "The students demonstrated exceptional proficiency in mathematics.",
+          after: "The academic cohort exhibited paradigmatic excellence in quantitative methodologies, demonstrating metacognitive mastery of advanced mathematical constructs through systematic application of theoretical frameworks to complex problem-solving scenarios."
+        },
+        {
+          before: "It is imperative that we establish clear guidelines.",
+          after: "The instantiation of comprehensive epistemological frameworks constitutes a categorical imperative for ensuring methodological rigor and operational coherence within the organizational paradigm."
+        },
+        {
+          before: "The environmental conditions were not conducive to learning.",
+          after: "The phenomenological characteristics of the pedagogical milieu manifested deleterious effects on cognitive processing mechanisms, thereby inhibiting optimal knowledge construction and metacognitive engagement paradigms."
+        }
+      ],
       changes: [
         'Use highly technical and specialized vocabulary',
         'Employ complex, nuanced sentence structures',
@@ -2410,8 +2481,8 @@ async function rewriteGradeLevelWithOpenAI(text: string, gradeLevel: string): Pr
 
 🎯 MATHEMATICAL MISSION PARAMETERS:
 - TARGET GRADE LEVEL: ${gradeLevel.toUpperCase()}
-- MATHEMATICAL FK TARGET: ${selectedLevel.targetFKRange.min}-${selectedLevel.targetFKRange.max}
-- MATHEMATICAL RE TARGET: ${selectedLevel.targetRERange.min}-${selectedLevel.targetRERange.max}
+- MATHEMATICAL FK TARGET: ${selectedLevel.targetFKRange.min}-${selectedLevel.targetFKRange.max} (MUST achieve exactly ${targetFKCenter.toFixed(1)})
+- MATHEMATICAL RE TARGET: ${selectedLevel.targetRERange.min}-${selectedLevel.targetRERange.max} (MUST achieve exactly ${targetRECenter.toFixed(1)})
 - REQUIRED ACCURACY: 95%+ mathematical compliance
 - SEMANTIC PRESERVATION: 100% meaning retention mandatory
 
@@ -2421,11 +2492,17 @@ CURRENT FK: ${currentFK.toFixed(1)} (target: ${selectedLevel.targetFKRange.min}-
 CURRENT RE: ${currentRE.toFixed(1)} (target: ${selectedLevel.targetRERange.min}-${selectedLevel.targetRERange.max})
 ACCURACY: ${validation ? validation.accuracy : 0}%
 
+⚠️ CRITICAL DIRECTIVE: Your output MUST mathematically achieve a Flesch-Kincaid score between ${selectedLevel.targetFKRange.min} and ${selectedLevel.targetFKRange.max}. This is NOT optional. Use the mathematical formulas:
+- FK = 0.39 × (words/sentence) + 11.8 × (syllables/word) - 15.59
+- RE = 206.835 - 1.015 × (words/sentence) - 84.6 × (syllables/word)
+
 ${adaptivePrompt}
 
 🔬 PRECISION LINGUISTIC SPECIFICATIONS:
 📏 SENTENCE ARCHITECTURE: ${selectedLevel.detailedGuidelines.sentenceLength}
+   → Target: ${selectedLevel.targetFKRange.min < 6 ? '8' : selectedLevel.targetFKRange.min < 9 ? '14' : selectedLevel.targetFKRange.min < 13 ? '20' : '25'} words per sentence EXACTLY
 📚 LEXICAL COMPLEXITY: ${selectedLevel.detailedGuidelines.vocabularyComplexity}
+   → Target: ${selectedLevel.targetFKRange.min < 6 ? '1.3' : selectedLevel.targetFKRange.min < 9 ? '1.5' : selectedLevel.targetFKRange.min < 13 ? '1.7' : '1.9'} syllables per word EXACTLY
 🔤 SYLLABIC TARGETING: ${selectedLevel.detailedGuidelines.syllableCount}
 🧠 COGNITIVE DEPTH: ${selectedLevel.detailedGuidelines.conceptDepth}
 ⚙️ SYNTACTIC ENGINEERING: ${selectedLevel.detailedGuidelines.syntaxComplexity}
@@ -2441,12 +2518,36 @@ ${selectedLevel.specificInstructions.map(instruction => `• ${instruction}`).jo
 🔧 REQUIRED TRANSFORMATIONAL CHANGES:
 ${selectedLevel.changes.map(change => `• ${change}`).join('\n')}
 
-📖 EXEMPLAR TRANSFORMATION PATTERN:
-Input Baseline: "${selectedLevel.examples.before}"
-Target Output: "${selectedLevel.examples.after}"
+📖 TRANSFORMATION EXAMPLES FOR ${gradeLevel.toUpperCase()}:
+Example 1:
+Input: "${selectedLevel.examples.before}"
+Output: "${selectedLevel.examples.after}"
+
+Example 2:
+Input: "The ramifications of this decision will reverberate throughout the organization."
+Output: ${gradeLevel === 'elementary' ? '"This choice will affect everyone in our group."' : 
+         gradeLevel === 'middle-school' ? '"This decision will have effects that spread through the whole organization."' :
+         gradeLevel === 'high-school' ? '"The consequences of this decision will impact the entire organization significantly."' :
+         gradeLevel === 'college' ? '"The ramifications of this decision will propagate throughout the organizational structure, affecting multiple stakeholders."' :
+         '"The multifaceted ramifications of this strategic decision will reverberate throughout the organizational ecosystem, necessitating comprehensive stakeholder analysis."'}
+
+Example 3:
+Input: "We need to fix this problem quickly."
+Output: ${gradeLevel === 'elementary' ? '"We must fix this now."' : 
+         gradeLevel === 'middle-school' ? '"We need to solve this problem as soon as possible."' :
+         gradeLevel === 'high-school' ? '"We must address this issue with urgency and develop an effective solution."' :
+         gradeLevel === 'college' ? '"We must expeditiously remediate this problematic situation through systematic intervention."' :
+         '"The exigent nature of this problematic paradigm necessitates immediate remediation through comprehensive strategic intervention protocols."'}
 
 🎯 MATHEMATICAL COMPLIANCE VERIFICATION:
-Your rewrite MUST demonstrate measurable transformation aligned with the specified mathematical targets while preserving 100% semantic integrity and achieving 95%+ accuracy within the defined readability ranges.`
+✓ EVERY sentence MUST average ${selectedLevel.targetFKRange.min < 6 ? '8±2' : selectedLevel.targetFKRange.min < 9 ? '14±2' : selectedLevel.targetFKRange.min < 13 ? '20±3' : '25±4'} words
+✓ EVERY word MUST average ${selectedLevel.targetFKRange.min < 6 ? '1.3±0.1' : selectedLevel.targetFKRange.min < 9 ? '1.5±0.1' : selectedLevel.targetFKRange.min < 13 ? '1.7±0.1' : '1.9±0.2'} syllables
+✓ The FINAL output MUST score FK: ${selectedLevel.targetFKRange.min}-${selectedLevel.targetFKRange.max}
+✓ The FINAL output MUST score RE: ${selectedLevel.targetRERange.min}-${selectedLevel.targetRERange.max}
+✓ You MUST preserve 100% of the original meaning
+✓ You MUST make the text flow naturally at the target level
+
+REMEMBER: This is a MATHEMATICAL optimization problem. Your output will be measured and must achieve the exact targets specified.`
 
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
@@ -2457,7 +2558,18 @@ Your rewrite MUST demonstrate measurable transformation aligned with the specifi
         },
         {
           role: "user",
-            content: `Rewrite this text for ${gradeLevel} grade level (target FK: ${selectedLevel.targetFK}, target Reading Ease: ${selectedLevel.targetReadingEase}):\n\n"${currentText}"\n\nRemember to follow all linguistic guidelines for sentence length, vocabulary complexity, syllable count, and concept depth specified for this grade level.`
+            content: `Transform this text to EXACTLY ${gradeLevel} grade level (FK MUST be ${selectedLevel.targetFKRange.min}-${selectedLevel.targetFKRange.max}, RE MUST be ${selectedLevel.targetRERange.min}-${selectedLevel.targetRERange.max}):
+
+"${currentText}"
+
+CRITICAL REQUIREMENTS:
+1. Average sentence length MUST be ${selectedLevel.targetFKRange.min < 6 ? '8' : selectedLevel.targetFKRange.min < 9 ? '14' : selectedLevel.targetFKRange.min < 13 ? '20' : '25'} words (±20%)
+2. Average syllables per word MUST be ${selectedLevel.targetFKRange.min < 6 ? '1.3' : selectedLevel.targetFKRange.min < 9 ? '1.5' : selectedLevel.targetFKRange.min < 13 ? '1.7' : '1.9'} (±0.2)
+3. The output MUST mathematically achieve FK: ${selectedLevel.targetFKRange.min}-${selectedLevel.targetFKRange.max}
+4. Every transformation must move the metrics toward the target
+5. Preserve ALL original meaning
+
+Begin your transformation now:`
         }
       ],
       max_tokens: maxTokens,

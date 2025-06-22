@@ -1,10 +1,10 @@
-import express, { Request, Response } from 'express'
-import { requireAuth } from '../middleware/auth'
+import express from 'express'
+import { authMiddleware, AuthenticatedRequest } from '../middleware/auth'
 
 const router = express.Router()
 
 // Get user preferences
-router.get('/', requireAuth, async (req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
     // The user preferences are handled by Supabase directly
     // This route exists for consistency but the frontend uses Supabase client
@@ -19,7 +19,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
 })
 
 // Update user preferences
-router.put('/', requireAuth, async (req: Request, res: Response) => {
+router.put('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
     // The user preferences are handled by Supabase directly
     res.json({ 
