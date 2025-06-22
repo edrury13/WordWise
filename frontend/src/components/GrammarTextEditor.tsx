@@ -552,29 +552,42 @@ const GrammarTextEditor: React.FC = () => {
     
     // Calculate the change offset and delta
     if (oldContent !== newContent) {
-      // Find where the change occurred
-      let changeOffset = 0
-      const minLength = Math.min(oldContent.length, newContent.length)
-      
-      // Find the first character that differs
-      while (changeOffset < minLength && oldContent[changeOffset] === newContent[changeOffset]) {
-        changeOffset++
+      // Find where the change occurred using prefix/suffix matching for accuracy
+      let commonPrefix = 0;
+      while (commonPrefix < oldContent.length && commonPrefix < newContent.length && oldContent[commonPrefix] === newContent[commonPrefix]) {
+          commonPrefix++;
+      }
+
+      let commonSuffix = 0;
+      while (
+        commonSuffix < oldContent.length - commonPrefix && 
+        commonSuffix < newContent.length - commonPrefix && 
+        oldContent[oldContent.length - 1 - commonSuffix] === newContent[newContent.length - 1 - commonSuffix]
+      ) {
+          commonSuffix++;
       }
       
-      // Calculate the delta (positive for insertion, negative for deletion)
-      const delta = newContent.length - oldContent.length
+      const changeOffset = commonPrefix;
+      const removedLength = oldContent.length - commonPrefix - commonSuffix;
+      const addedLength = newContent.length - commonPrefix - commonSuffix;
+      const delta = addedLength - removedLength;
       
+      // The end of the change in the *old* content
+      const changeEndOld = oldContent.length - commonSuffix;
+
       // Update suggestion offsets if there are suggestions and content changed
-      if (suggestions.length > 0 && delta !== 0) {
+      if (suggestions.length > 0 && (removedLength > 0 || addedLength > 0)) {
         console.log('📝 Text change detected:', {
           changeOffset,
           delta,
+          removedLength,
+          addedLength,
+          changeEndOld,
           oldLength: oldContent.length,
-          newLength: newContent.length,
-          changeType: delta > 0 ? 'insertion' : 'deletion'
+          newLength: newContent.length
         })
         
-        dispatch(updateSuggestionOffsets({ changeOffset, delta }))
+        dispatch(updateSuggestionOffsets({ changeOffset, delta, changeEndOld }))
       }
     }
     

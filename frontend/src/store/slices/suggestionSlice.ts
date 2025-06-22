@@ -486,31 +486,31 @@ const suggestionSlice = createSlice({
 
       state.activeSuggestion = null
     },
-    updateSuggestionOffsets: (state, action: PayloadAction<{ changeOffset: number; delta: number }>) => {
-      const { changeOffset, delta } = action.payload
+    updateSuggestionOffsets: (state, action: PayloadAction<{ changeOffset: number; delta: number; changeEndOld: number }>) => {
+      const { changeOffset, delta, changeEndOld } = action.payload
       
-      console.log('Updating suggestion offsets:', { changeOffset, delta, suggestionCount: state.suggestions.length })
+      console.log('Updating suggestion offsets:', { changeOffset, delta, changeEndOld, suggestionCount: state.suggestions.length })
       
-      // Update offsets for all suggestions that come after the change point
       state.suggestions = state.suggestions.map(suggestion => {
-        // If the suggestion is completely after the change point, adjust its offset
-        if (suggestion.offset >= changeOffset) {
+        const suggestionEnd = suggestion.offset + suggestion.length
+
+        // Case 1: Suggestion is completely after the change. Adjust its offset.
+        if (suggestion.offset >= changeEndOld) {
           return {
             ...suggestion,
             offset: suggestion.offset + delta
           }
         }
         
-        // If the suggestion contains the change point, it's likely invalid now
-        // (the text it refers to has been modified)
-        const suggestionEnd = suggestion.offset + suggestion.length
-        if (suggestion.offset < changeOffset && suggestionEnd > changeOffset) {
-          // Mark for removal by returning null (will filter out below)
-          console.log(`Removing suggestion ${suggestion.id} that overlaps with text change`)
+        // Case 2: Suggestion overlaps with the change. Remove it.
+        // Overlap occurs if the suggestion's range intersects with [changeOffset, changeEndOld)
+        const overlaps = suggestion.offset < changeEndOld && suggestionEnd > changeOffset;
+        if (overlaps) {
+          console.log(`Removing suggestion ${suggestion.id} that overlaps with text change at offset ${suggestion.offset}`)
           return null
         }
         
-        // Suggestion is before the change point, no adjustment needed
+        // Case 3: Suggestion is completely before the change. No adjustment needed.
         return suggestion
       }).filter(Boolean) as Suggestion[] // Remove nulls
     },
