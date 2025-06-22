@@ -1858,6 +1858,12 @@ const GrammarTextEditor: React.FC = () => {
     }
   }, [syncOverlayWithTextarea])
 
+  // Add this effect to explicitly re-sync the overlay when content or suggestions change.
+  useEffect(() => {
+    console.log('🔄 Dependencies changed, re-syncing overlay highlights.')
+    syncOverlayWithTextarea()
+  }, [syncOverlayWithTextarea])
+
   return (
     <div className="relative w-full h-full flex flex-col">
       {/* Statistics Bar */}
