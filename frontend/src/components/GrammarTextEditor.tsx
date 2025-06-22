@@ -468,12 +468,13 @@ const GrammarTextEditor: React.FC = () => {
     }
     
     // Ensure scroll sync after content update
-    setTimeout(() => {
+    requestAnimationFrame(() => {
       if (editorRef.current && overlayRef.current) {
+        // Just sync scroll position - dimensions will be synced by useEffect
         overlayRef.current.scrollTop = editorRef.current.scrollTop
         overlayRef.current.scrollLeft = editorRef.current.scrollLeft
       }
-    }, 0)
+    })
 
     console.log('🎨 === STARTING HIGHLIGHT CREATION ===')
     console.log('📄 Content length:', content.length)
@@ -781,7 +782,9 @@ const GrammarTextEditor: React.FC = () => {
         })
         
         // Create the highlight span with escaped content
-      const eventHandlers = `data-suggestion-id="${id}" data-offset="${offset}" data-length="${length}" style="pointer-events: auto;" onmouseenter="window.handleSuggestionHover && window.handleSuggestionHover('${id}', event)" onmouseleave="window.handleSuggestionLeave && window.handleSuggestionLeave()" onclick="window.handleSuggestionClick && window.handleSuggestionClick(${offset}, event)"`
+      // Escape the ID to prevent any potential XSS
+      const escapedId = id.replace(/"/g, '&quot;').replace(/'/g, '&#x27;')
+      const eventHandlers = `data-suggestion-id="${escapedId}" data-offset="${offset}" data-length="${length}" style="pointer-events: auto;" onmouseenter="window.handleSuggestionHover && window.handleSuggestionHover('${escapedId}', event)" onmouseleave="window.handleSuggestionLeave && window.handleSuggestionLeave()" onclick="window.handleSuggestionClick && window.handleSuggestionClick(${offset}, event)"`
       
         const highlightedSpan = `<span class="${className}" ${eventHandlers}>${escapedText}</span>`
       
@@ -974,40 +977,31 @@ const GrammarTextEditor: React.FC = () => {
       // Get fresh computed styles
       const textareaStyles = window.getComputedStyle(editorRef.current)
       
-      // More reliable scrollbar width detection
-      // Create a temporary div to measure scrollbar width
-      const scrollDiv = document.createElement('div')
-      scrollDiv.style.width = '100px'
-      scrollDiv.style.height = '100px'
-      scrollDiv.style.overflow = 'scroll'
-      scrollDiv.style.position = 'absolute'
-      scrollDiv.style.top = '-9999px'
-      document.body.appendChild(scrollDiv)
-      const scrollbarWidth = scrollDiv.offsetWidth - scrollDiv.clientWidth
-      document.body.removeChild(scrollDiv)
+      // Get the actual scrollbar width from the textarea
+      const scrollbarWidth = editorRef.current.offsetWidth - editorRef.current.clientWidth
       
       // Copy all dimensions and styles
       overlayRef.current.style.position = 'absolute'
       overlayRef.current.style.top = '0'
       overlayRef.current.style.left = '0'
-      overlayRef.current.style.width = '100%'
-      overlayRef.current.style.height = '100%'
+      // Use the clientWidth to match the content area (excluding scrollbar)
+      overlayRef.current.style.width = `${editorRef.current.clientWidth}px`
+      overlayRef.current.style.height = `${editorRef.current.clientHeight}px`
       
-      // Copy all padding values
+      // Copy all padding values exactly
       overlayRef.current.style.padding = textareaStyles.padding
       overlayRef.current.style.paddingLeft = textareaStyles.paddingLeft
+      overlayRef.current.style.paddingRight = textareaStyles.paddingRight
       overlayRef.current.style.paddingTop = textareaStyles.paddingTop
       overlayRef.current.style.paddingBottom = textareaStyles.paddingBottom
       
-      // Adjust padding-right to compensate for scrollbar
-      const basePaddingRight = parseFloat(textareaStyles.paddingRight) || 0
-      overlayRef.current.style.paddingRight = `${basePaddingRight + scrollbarWidth}px`
-      
-      // Copy text styles
+      // Copy text styles exactly - including computed values
       overlayRef.current.style.lineHeight = textareaStyles.lineHeight
       overlayRef.current.style.fontSize = textareaStyles.fontSize
       overlayRef.current.style.fontFamily = textareaStyles.fontFamily
       overlayRef.current.style.fontWeight = textareaStyles.fontWeight
+      overlayRef.current.style.fontStyle = textareaStyles.fontStyle
+      overlayRef.current.style.fontVariant = textareaStyles.fontVariant
       overlayRef.current.style.letterSpacing = textareaStyles.letterSpacing
       overlayRef.current.style.wordSpacing = textareaStyles.wordSpacing
       overlayRef.current.style.textAlign = textareaStyles.textAlign
@@ -1015,33 +1009,36 @@ const GrammarTextEditor: React.FC = () => {
       overlayRef.current.style.textTransform = textareaStyles.textTransform
       overlayRef.current.style.whiteSpace = 'pre-wrap'
       overlayRef.current.style.wordWrap = 'break-word'
-      overlayRef.current.style.wordBreak = textareaStyles.wordBreak
-      overlayRef.current.style.overflowWrap = textareaStyles.overflowWrap
+      overlayRef.current.style.wordBreak = textareaStyles.wordBreak || 'normal'
+      overlayRef.current.style.overflowWrap = textareaStyles.overflowWrap || 'break-word'
       overlayRef.current.style.boxSizing = textareaStyles.boxSizing
+      overlayRef.current.style.direction = textareaStyles.direction
+      overlayRef.current.style.unicodeBidi = textareaStyles.unicodeBidi
       
       // Copy border styles to ensure proper box model
       overlayRef.current.style.borderWidth = textareaStyles.borderWidth
       overlayRef.current.style.borderStyle = 'solid'
       overlayRef.current.style.borderColor = 'transparent'
       
-      // Ensure overflow matches
-      overlayRef.current.style.overflowY = 'auto'
-      overlayRef.current.style.overflowX = 'hidden'
+      // Set overflow to hidden since overlay doesn't need its own scrollbar
+      overlayRef.current.style.overflow = 'hidden'
       
       // Sync scroll position
       overlayRef.current.scrollTop = editorRef.current.scrollTop
       overlayRef.current.scrollLeft = editorRef.current.scrollLeft
       
+      // Force a reflow to ensure styles are applied
+      void overlayRef.current.offsetHeight
+      
       // Recreate highlights
       createHighlightedText()
       
-      console.log('📐 Overlay synced with scrollbar compensation:', {
+      console.log('📐 Overlay synced:', {
+        textareaWidth: editorRef.current.offsetWidth,
+        textareaClientWidth: editorRef.current.clientWidth,
         scrollbarWidth,
-        paddingRight: `${basePaddingRight + scrollbarWidth}px`,
-        dimensions: {
-          width: overlayRef.current.style.width,
-          height: overlayRef.current.style.height
-        }
+        overlayWidth: overlayRef.current.style.width,
+        scrollTop: editorRef.current.scrollTop
       })
     }
   }, [createHighlightedText])
@@ -1065,10 +1062,26 @@ const GrammarTextEditor: React.FC = () => {
     })
 
     resizeObserver.observe(editorRef.current)
+    
+    // Also observe style changes on the textarea
+    const mutationObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+          console.log('🎨 Textarea style changed, syncing overlay')
+          syncOverlayWithTextarea()
+        }
+      }
+    })
+    
+    mutationObserver.observe(editorRef.current, {
+      attributes: true,
+      attributeFilter: ['style']
+    })
 
     return () => {
       clearTimeout(resizeTimer)
       resizeObserver.disconnect()
+      mutationObserver.disconnect()
     }
   }, [syncOverlayWithTextarea])
 
@@ -1457,7 +1470,7 @@ const GrammarTextEditor: React.FC = () => {
 
   // Initial sync when component mounts or content changes
   useEffect(() => {
-    if (editorRef.current && overlayRef.current && content) {
+    if (editorRef.current && overlayRef.current) {
       // Ensure styles are loaded before initial sync
       requestAnimationFrame(() => {
         syncOverlayWithTextarea()
@@ -1465,13 +1478,17 @@ const GrammarTextEditor: React.FC = () => {
     }
   }, [content, syncOverlayWithTextarea])
 
-  // Sync scroll position between textarea and overlay
+  // Sync scroll position between textarea and overlay when content changes
   useEffect(() => {
     if (content && editorRef.current && overlayRef.current) {
+      // Re-sync the overlay dimensions and styles
+      syncOverlayWithTextarea()
+      
+      // Ensure scroll position is synced
       overlayRef.current.scrollTop = editorRef.current.scrollTop
       overlayRef.current.scrollLeft = editorRef.current.scrollLeft
     }
-  }, [content, highlightedContent])
+  }, [content, highlightedContent, syncOverlayWithTextarea])
 
   // Force re-render of highlights when sidebar state changes
   useEffect(() => {
@@ -1895,7 +1912,7 @@ const GrammarTextEditor: React.FC = () => {
         {/* Overlay for highlights */}
         <div
           ref={overlayRef}
-          className="grammar-overlay absolute inset-0 p-4 font-serif text-lg leading-relaxed text-transparent z-10 pointer-events-none"
+          className="grammar-overlay font-serif text-lg leading-relaxed text-transparent z-10 pointer-events-none"
           style={{ 
             fontFamily: 'ui-serif, Georgia, serif',
             whiteSpace: 'pre-wrap',
@@ -1903,7 +1920,12 @@ const GrammarTextEditor: React.FC = () => {
             wordBreak: 'normal',
             overflowWrap: 'break-word',
             scrollbarWidth: 'none', // Hide scrollbar for Firefox
-            msOverflowStyle: 'none' // Hide scrollbar for IE and Edge
+            msOverflowStyle: 'none', // Hide scrollbar for IE and Edge
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            padding: '1rem', // Match the p-4 class from textarea
+            color: 'transparent' // Ensure text is transparent except for highlights
           }}
           dangerouslySetInnerHTML={{ __html: highlightedContent }}
         />
