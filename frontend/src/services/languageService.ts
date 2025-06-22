@@ -519,7 +519,7 @@ export const checkGrammarAndSpelling = async (
     
     // Define API URL outside try block for error handling
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')
-    const apiUrl = `${API_BASE_URL}/language/check`
+    const apiUrl = `${API_BASE_URL}/language-check`
 
     // Try Backend API first
     try {
