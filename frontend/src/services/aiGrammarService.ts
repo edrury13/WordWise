@@ -148,7 +148,7 @@ export async function checkGrammarWithAI(options: AIGrammarCheckOptions): Promis
 
     // Make API call
     const apiUrl = process.env.NODE_ENV === 'production' 
-      ? 'https://wordwise-ten.vercel.app/api/language/ai-grammar-check'
+      ? '/api/language/ai-grammar-check'
       : 'http://localhost:5000/api/language/ai-grammar-check'
 
     console.log('🌐 AI API URL:', apiUrl)
@@ -521,7 +521,7 @@ export async function checkGrammarWithAIStream(
 
     // Make API call
     const apiUrl = process.env.NODE_ENV === 'production' 
-      ? 'https://wordwise-ten.vercel.app/api/language/ai-grammar-check-stream'
+      ? '/api/language/ai-grammar-check-stream'
       : 'http://localhost:5000/api/language/ai-grammar-check-stream'
 
     console.log('🌐 AI Streaming API URL:', apiUrl)
