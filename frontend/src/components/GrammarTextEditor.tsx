@@ -14,7 +14,7 @@ import {
   applySuggestion,
   acceptAllSuggestions,
   removeSuggestionsInRange,
-  addStreamingSuggestion
+  replaceSuggestionsInRange
 } from '../store/slices/suggestionSlice'
 import { setContent, setLastSaved, setAutoSave } from '../store/slices/editorSlice'
 import { updateDocument, updateCurrentDocumentContent } from '../store/slices/documentSlice'
@@ -47,6 +47,7 @@ import {
 } from '../store/slices/styleProfileSlice'
 import toast from 'react-hot-toast'
 import { runPartialGrammarCheck } from '../utils/partialGrammarCheck'
+import { extractSentenceWithContext } from '../utils/sentenceExtraction'
 
 const GrammarTextEditor: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -624,25 +625,60 @@ const GrammarTextEditor: React.FC = () => {
     // Update current document content in Redux
     dispatch(updateCurrentDocumentContent(newContent))
     
-    // If the edit inserted ≤200 characters, run an immediate partial check
-    if (explicitRanges && explicitRanges.length === 1 && (explicitRanges[0].end - explicitRanges[0].start) <= 200) {
-      // Remove overlapping suggestions first
-      dispatch(removeSuggestionsInRange(explicitRanges[0]))
-
-      runPartialGrammarCheck(newContent, explicitRanges[0], aiCheckEnabled)
-        .then(partial => {
-          partial.forEach((s, idx) => {
-            dispatch(addStreamingSuggestion({ suggestion: s, count: idx + 1, currentText: newContent }))
-          })
-        })
-        .catch(console.error)
+    // Only run immediate partial check under specific conditions:
+    // 1. User is adding text (not deleting)
+    // 2. Added text is small (1-3 characters - typical typing)
+    // 3. We're at a word boundary or space (completed a word)
+    if (explicitRanges && 
+        explicitRanges.length === 1 && 
+        explicitRanges[0].end - explicitRanges[0].start <= 3 &&
+        explicitRanges[0].end - explicitRanges[0].start > 0) {
+      
+      const insertedText = newContent.substring(explicitRanges[0].start, explicitRanges[0].end)
+      const charAfterInsertion = newContent[explicitRanges[0].end] || ''
+      
+      // Check if we're at a word boundary (space, punctuation, or end of text)
+      const isWordBoundary = /[\s.,!?;:]/.test(charAfterInsertion) || 
+                            explicitRanges[0].end === newContent.length ||
+                            /[\s]/.test(insertedText)
+      
+      // Only run partial check if we completed a word or typed a space
+      if (isWordBoundary) {
+        console.log('🔍 Word boundary detected, running partial grammar check')
+        
+        // Extract the sentence containing the change
+        const sentenceInfo = extractSentenceWithContext(newContent, explicitRanges[0].start)
+        
+        if (sentenceInfo) {
+          // Remove suggestions only within the sentence being checked
+          dispatch(removeSuggestionsInRange({
+            start: sentenceInfo.sentenceStart,
+            end: sentenceInfo.sentenceEnd
+          }))
+          
+          // Run partial check on just the sentence
+          runPartialGrammarCheck(newContent, explicitRanges[0], aiCheckEnabled)
+            .then(partial => {
+              // Replace suggestions for the sentence
+              dispatch(replaceSuggestionsInRange({
+                start: sentenceInfo.sentenceStart,
+                end: sentenceInfo.sentenceEnd,
+                newSuggestions: partial,
+                currentText: newContent
+              }))
+            })
+            .catch(console.error)
+        }
+      } else {
+        console.log('📝 Mid-word typing, deferring grammar check')
+      }
     } else {
-      // Fall back to paragraph-based debounced check
+      // For larger edits or deletions, use the debounced check
       checkGrammarDebounced(newContent, explicitRanges)
     }
-    // checkSentenceStructure(newContent) // Disabled sentence structure check
+    
     autoSave(newContent)
-  }, [content, suggestions, dispatch, autoSave, lastAppliedSuggestion, checkGrammarDebounced]) // Removed checkSentenceStructure dependency
+  }, [content, suggestions, dispatch, autoSave, lastAppliedSuggestion, checkGrammarDebounced, aiCheckEnabled])
 
   // Create highlighted text overlay
   const createHighlightedText = useCallback(() => {
@@ -1017,7 +1053,9 @@ const GrammarTextEditor: React.FC = () => {
   }
 
   // Apply suggestion
-  const handleApplySuggestion = useCallback((suggestion: Suggestion, replacement: string) => {
+  const handleApplySuggestion = useCallback(async (suggestion: Suggestion, replacement: string) => {
+    console.log('Applying suggestion:', { suggestion, replacement })
+    
     // Store the current state for undo
     const originalText = content.substring(suggestion.offset, suggestion.offset + suggestion.length)
     setLastAppliedSuggestion({
@@ -1028,15 +1066,19 @@ const GrammarTextEditor: React.FC = () => {
       fullContentBefore: content
     })
     
-    const newContent = 
-      content.substring(0, suggestion.offset) + 
-      replacement + 
-      content.substring(suggestion.offset + suggestion.length)
+    // Apply the suggestion
+    const before = content.substring(0, suggestion.offset)
+    const after = content.substring(suggestion.offset + suggestion.length)
+    const newContent = before + replacement + after
     
     setContentState(newContent)
     
     if (editorRef.current) {
       editorRef.current.value = newContent
+      // Position cursor after the replacement
+      const cursorPos = suggestion.offset + replacement.length
+      editorRef.current.focus()
+      editorRef.current.setSelectionRange(cursorPos, cursorPos)
     }
     
     // Record this correction for smart learning
@@ -1056,11 +1098,58 @@ const GrammarTextEditor: React.FC = () => {
       length: suggestion.length,
     }))
 
-    // We no longer trigger a full grammar re-check here. The incremental logic and
-    // updated offsets keep the remaining highlights in sync with the edited text.
-
-    // Keep any existing sentence-analysis data; it will be refreshed by the next
-    // scheduled grammar pass.
+    // Extract the sentence containing the change
+    const sentenceInfo = extractSentenceWithContext(newContent, suggestion.offset + replacement.length - 1)
+    
+    if (sentenceInfo) {
+      console.log('📝 Rechecking sentence after accepting suggestion:', {
+        sentence: sentenceInfo.sentence,
+        range: `${sentenceInfo.sentenceStart}-${sentenceInfo.sentenceEnd}`,
+        contextStart: sentenceInfo.contextStart
+      })
+      
+      // Run partial grammar check on the sentence with context
+      try {
+        const sentenceSuggestions = await runPartialGrammarCheck(
+          newContent,
+          { 
+            start: sentenceInfo.contextStart, 
+            end: sentenceInfo.contextStart + sentenceInfo.contextText.length 
+          },
+          aiCheckEnabled
+        )
+        
+        // Filter suggestions to only those within the actual sentence (not the context)
+        const filteredSuggestions = sentenceSuggestions.filter(s => {
+          const suggestionStart = s.offset
+          const suggestionEnd = s.offset + s.length
+          return suggestionStart >= sentenceInfo.sentenceStart && 
+                 suggestionEnd <= sentenceInfo.sentenceEnd
+        })
+        
+        console.log('✅ Sentence recheck complete:', {
+          totalSuggestions: sentenceSuggestions.length,
+          sentenceSuggestions: filteredSuggestions.length,
+          suggestions: filteredSuggestions.map(s => ({
+            type: s.type,
+            message: s.message,
+            offset: s.offset
+          }))
+        })
+        
+        // Replace suggestions in the sentence range
+        dispatch(replaceSuggestionsInRange({
+          start: sentenceInfo.sentenceStart,
+          end: sentenceInfo.sentenceEnd,
+          newSuggestions: filteredSuggestions,
+          currentText: newContent
+        }))
+      } catch (error) {
+        console.error('Error rechecking sentence:', error)
+      }
+    } else {
+      console.log('⚠️ Could not extract sentence for rechecking')
+    }
 
     // Update Redux editor content so other parts of the UI receive the new text
     dispatch(setContent([{ 
@@ -1071,7 +1160,7 @@ const GrammarTextEditor: React.FC = () => {
     // Update current document content
     dispatch(updateCurrentDocumentContent(newContent))
 
-    // Persist change without kicking off another grammar call
+    // Persist change
     autoSave(newContent)
     setShowTooltip(null)
     
@@ -1080,7 +1169,7 @@ const GrammarTextEditor: React.FC = () => {
       replacement,
       offset: suggestion.offset
     })
-  }, [content, dispatch, autoSave]) // Removed checkSentenceStructure dependency
+  }, [content, dispatch, autoSave, aiCheckEnabled]) // Added aiCheckEnabled dependency
 
   // Ignore suggestion
   const handleIgnoreSuggestion = useCallback(async (suggestionId: string) => {

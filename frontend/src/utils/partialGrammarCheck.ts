@@ -5,21 +5,52 @@
 import { checkGrammarWithAI } from '../services/aiGrammarService'
 import { checkGrammarAndSpelling } from '../services/languageService'
 import { Suggestion } from '../store/slices/suggestionSlice'
-
-const CONTEXT = 40 // characters of context kept left & right of the change
+import { extractSentenceWithContext } from './sentenceExtraction'
 
 export async function runPartialGrammarCheck(
   fullText: string,
   range: { start: number; end: number },
   useAI: boolean
 ): Promise<Suggestion[]> {
-  // Clamp & expand range to include context so grammar rules still fire properly
-  const snippetStart = Math.max(0, range.start - CONTEXT)
-  const snippetEnd   = Math.min(fullText.length, range.end + CONTEXT)
-  const snippet      = fullText.slice(snippetStart, snippetEnd)
+  // Instead of fixed context, extract the sentence containing the change
+  // Use the middle of the range to find the sentence
+  const middlePosition = Math.floor((range.start + range.end) / 2)
+  const sentenceInfo = extractSentenceWithContext(fullText, middlePosition, 20) // Small context for better grammar detection
+  
+  if (!sentenceInfo) {
+    // Fallback to just the range if sentence extraction fails
+    const snippet = fullText.slice(range.start, range.end)
+    const suggestions = await checkSnippet(snippet, useAI)
+    return suggestions.map(s => ({
+      ...s,
+      offset: s.offset + range.start
+    }))
+  }
+  
+  // Use the sentence with minimal context as the snippet
+  const snippet = sentenceInfo.contextText
+  const snippetStart = sentenceInfo.contextStart
+  
+  // Check the snippet
+  const suggestions = await checkSnippet(snippet, useAI)
+  
+  // Shift snippet-relative offsets to match global text
+  // and filter to only suggestions within the actual sentence (not the context)
+  return suggestions
+    .map(s => ({
+      ...s,
+      offset: s.offset + snippetStart
+    }))
+    .filter(s => {
+      // Only keep suggestions that are within the actual sentence bounds
+      const suggestionStart = s.offset
+      const suggestionEnd = s.offset + s.length
+      return suggestionStart >= sentenceInfo.sentenceStart && 
+             suggestionEnd <= sentenceInfo.sentenceEnd
+    })
+}
 
-  // Fire the same service your app already uses but only with the snippet
-  let suggestions: Suggestion[]
+async function checkSnippet(snippet: string, useAI: boolean): Promise<Suggestion[]> {
   if (useAI) {
     const res: any = await checkGrammarWithAI({
       text: snippet,
@@ -27,15 +58,9 @@ export async function runPartialGrammarCheck(
       checkType: 'comprehensive',
       enableAI: true
     } as any)
-    suggestions = res.suggestions || []
+    return res.suggestions || []
   } else {
     const res = await checkGrammarAndSpelling(snippet)
-    suggestions = res.suggestions || []
+    return res.suggestions || []
   }
-
-  // Shift snippet-relative offsets so they match the global text again
-  return suggestions.map(s => ({
-    ...s,
-    offset: s.offset + snippetStart
-  }))
 } 

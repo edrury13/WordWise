@@ -559,9 +559,63 @@ const suggestionSlice = createSlice({
     },
     removeSuggestionsInRange: (state, action: PayloadAction<{ start: number; end: number }>) => {
       const { start, end } = action.payload
+      
+      // Remove suggestions that fall within the range
       state.suggestions = state.suggestions.filter(s => {
-        const sEnd = s.offset + s.length
-        return s.offset >= end || sEnd <= start // keep suggestions completely outside the range
+        const suggestionStart = s.offset
+        const suggestionEnd = s.offset + s.length
+        
+        // Keep suggestions that are completely outside the range
+        return suggestionEnd < start || suggestionStart > end
+      })
+    },
+    replaceSuggestionsInRange: (state, action: PayloadAction<{
+      start: number
+      end: number
+      newSuggestions: Suggestion[]
+      currentText: string
+    }>) => {
+      const { start, end, newSuggestions, currentText } = action.payload
+      
+      console.log('Replacing suggestions in range:', { start, end, newCount: newSuggestions.length })
+      
+      // Remove existing suggestions in the range
+      const suggestionsOutsideRange = state.suggestions.filter(s => {
+        const suggestionStart = s.offset
+        const suggestionEnd = s.offset + s.length
+        
+        // Keep suggestions that are completely outside the range
+        return suggestionEnd < start || suggestionStart > end
+      })
+      
+      // Filter new suggestions to ensure they're within the text bounds
+      const validNewSuggestions = newSuggestions.filter(s => {
+        const isValid = s.offset >= 0 && 
+                       s.offset + s.length <= currentText.length &&
+                       s.offset >= start && 
+                       s.offset + s.length <= end
+        if (!isValid) {
+          console.log('Filtering out invalid suggestion:', {
+            offset: s.offset,
+            length: s.length,
+            rangeStart: start,
+            rangeEnd: end,
+            textLength: currentText.length
+          })
+        }
+        return isValid
+      })
+      
+      // Merge with existing suggestions
+      state.suggestions = [...suggestionsOutsideRange, ...validNewSuggestions]
+      
+      // Sort by offset for consistent display
+      state.suggestions.sort((a, b) => a.offset - b.offset)
+      
+      console.log('Updated suggestions after range replacement:', {
+        total: state.suggestions.length,
+        outsideRange: suggestionsOutsideRange.length,
+        newAdded: validNewSuggestions.length
       })
     },
     ignoreAllCurrentSuggestions: (state) => {
@@ -823,6 +877,7 @@ export const {
   completeStreaming,
   streamingError,
   removeSuggestionsInRange,
+  replaceSuggestionsInRange,
 } = suggestionSlice.actions
 
 export default suggestionSlice.reducer 
