@@ -1,8 +1,14 @@
-# WordWise - Intelligent Writing Assistant
+# WordWise - Academic Writing Enhancement Tool
 
-WordWise is a real-time, intelligent text editor that provides grammar and spell checking, style suggestions, and readability analysis. Built with React 18, TypeScript, Node.js, Express, and Supabase.
+WordWise is a sophisticated text editor designed specifically for academic and professional writing. It combines advanced grammar checking, style analysis, and writing assistance features to help users create polished, well-structured documents.
 
-## 🌟 Features
+## 🚀 Live Demo
+
+Visit the live application: [WordWise Editor](https://word-wise-pi.vercel.app)
+
+**Note**: Some features like document copying require the backend API to be deployed. See [Backend Deployment Guide](BACKEND_DEPLOYMENT.md) for instructions.
+
+## ✨ Key Features
 
 - **Real-time Grammar & Spell Checking**: Powered by LanguageTool API
 - **Personalized Onboarding Experience**: 6-step setup to customize writing preferences

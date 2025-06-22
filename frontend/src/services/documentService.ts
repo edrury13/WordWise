@@ -258,6 +258,12 @@ export const documentService = {
 
   async copyDocument(documentId: string, customTitle?: string) {
     try {
+      // Check if we're in production without a backend
+      const apiUrl = import.meta.env.VITE_API_BASE_URL
+      if (!apiUrl || apiUrl.includes('localhost')) {
+        throw new Error('Copy feature is not available in demo mode. Backend API required.')
+      }
+
       // Get the current user
       const { data: { user } } = await supabase.auth.getUser()
       
@@ -272,7 +278,7 @@ export const documentService = {
       }
 
       // Call the backend API to copy the document
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/documents/${documentId}/copy`, {
+      const response = await fetch(`${apiUrl}/documents/${documentId}/copy`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -284,6 +290,9 @@ export const documentService = {
       })
 
       if (!response.ok) {
+        if (response.status === 405 || response.status === 404) {
+          throw new Error('Copy feature requires backend API to be running')
+        }
         const error = await response.json()
         throw new Error(error.error || 'Failed to copy document')
       }
