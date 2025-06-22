@@ -557,6 +557,13 @@ const suggestionSlice = createSlice({
       state.suggestions = state.suggestions.filter(s => !acceptedIds.includes(s.id))
       state.activeSuggestion = null
     },
+    removeSuggestionsInRange: (state, action: PayloadAction<{ start: number; end: number }>) => {
+      const { start, end } = action.payload
+      state.suggestions = state.suggestions.filter(s => {
+        const sEnd = s.offset + s.length
+        return s.offset >= end || sEnd <= start // keep suggestions completely outside the range
+      })
+    },
     ignoreAllCurrentSuggestions: (state) => {
       // Ignore all current suggestions regardless of type
       state.suggestions.forEach(suggestion => {
@@ -815,6 +822,7 @@ export const {
   addStreamingSuggestion,
   completeStreaming,
   streamingError,
+  removeSuggestionsInRange,
 } = suggestionSlice.actions
 
 export default suggestionSlice.reducer 

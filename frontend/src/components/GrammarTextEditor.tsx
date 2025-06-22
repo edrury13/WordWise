@@ -12,7 +12,9 @@ import {
   toggleAICheck,
   updateSuggestionOffsets,
   applySuggestion,
-  acceptAllSuggestions
+  acceptAllSuggestions,
+  removeSuggestionsInRange,
+  addStreamingSuggestion
 } from '../store/slices/suggestionSlice'
 import { setContent, setLastSaved, setAutoSave } from '../store/slices/editorSlice'
 import { updateDocument, updateCurrentDocumentContent } from '../store/slices/documentSlice'
@@ -44,6 +46,8 @@ import {
   loadDocumentProfile
 } from '../store/slices/styleProfileSlice'
 import toast from 'react-hot-toast'
+import { checkGrammarWithAI, checkGrammarAndSpelling } from '../services/languageService' // analyzeSentences commented out - sentence structure feature disabled
+import { runPartialGrammarCheck } from '../utils/partialGrammarCheck'
 
 const GrammarTextEditor: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -621,8 +625,22 @@ const GrammarTextEditor: React.FC = () => {
     // Update current document content in Redux
     dispatch(updateCurrentDocumentContent(newContent))
     
-    // Trigger debounced grammar check for normal typing
-    checkGrammarDebounced(newContent, explicitRanges)
+    // If the edit inserted ≤200 characters, run an immediate partial check
+    if (explicitRanges && explicitRanges.length === 1 && (explicitRanges[0].end - explicitRanges[0].start) <= 200) {
+      // Remove overlapping suggestions first
+      dispatch(removeSuggestionsInRange(explicitRanges[0]))
+
+      runPartialGrammarCheck(newContent, explicitRanges[0], aiCheckEnabled)
+        .then(partial => {
+          partial.forEach((s, idx) => {
+            dispatch(addStreamingSuggestion({ suggestion: s, count: idx + 1, currentText: newContent }))
+          })
+        })
+        .catch(console.error)
+    } else {
+      // Fall back to paragraph-based debounced check
+      checkGrammarDebounced(newContent, explicitRanges)
+    }
     // checkSentenceStructure(newContent) // Disabled sentence structure check
     autoSave(newContent)
   }, [content, suggestions, dispatch, autoSave, lastAppliedSuggestion, checkGrammarDebounced]) // Removed checkSentenceStructure dependency
