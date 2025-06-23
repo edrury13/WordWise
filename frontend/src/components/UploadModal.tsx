@@ -39,7 +39,8 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, userId }) =>
     onDrop,
     accept: {
       'text/plain': ['.txt'],
-      'text/markdown': ['.md', '.markdown']
+      'text/markdown': ['.md', '.markdown'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx']
     },
     maxSize: 10 * 1024 * 1024, // 10MB
     multiple: true
@@ -186,10 +187,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, userId }) =>
                   Drag & drop files here, or click to browse
                 </p>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Supported formats: TXT, Markdown (.md) - max 10MB each
-                </p>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-                  Note: DOCX and PDF files must be converted to text format before uploading
+                  Supported formats: TXT, Markdown (.md), DOCX - max 10MB each
                 </p>
               </>
             )}

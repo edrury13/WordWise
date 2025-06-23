@@ -1,6 +1,7 @@
 import { supabase } from '../config/supabase'
+import * as mammoth from 'mammoth'
 
-export type DownloadFormat = 'txt' | 'markdown'
+export type DownloadFormat = 'txt' | 'markdown' | 'docx'
 
 interface ParsedDocument {
   title: string
@@ -33,6 +34,39 @@ export const documentService = {
           filename = `${document.title.replace(/[^a-z0-9]/gi, '_')}.md`
           mimeType = 'text/markdown'
           break
+        case 'docx':
+          // For DOCX, we need to call the backend API endpoint
+          const authToken = (await supabase.auth.getSession()).data.session?.access_token
+          if (!authToken) {
+            throw new Error('Not authenticated')
+          }
+          
+          const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/documents/${documentId}/download/docx`, {
+            headers: {
+              'Authorization': `Bearer ${authToken}`
+            }
+          })
+          
+          if (!response.ok) {
+            throw new Error('Failed to download document')
+          }
+          
+          const blob = await response.blob()
+          const url = window.URL.createObjectURL(blob)
+          const link = window.document.createElement('a')
+          link.style.display = 'none'
+          link.href = url
+          link.download = `${document.title.replace(/[^a-z0-9]/gi, '_')}.docx`
+          
+          window.document.body.appendChild(link)
+          link.click()
+          
+          setTimeout(() => {
+            window.document.body.removeChild(link)
+            window.URL.revokeObjectURL(url)
+          }, 100)
+          
+          return // Early return for DOCX since we handled it differently
         case 'txt':
         default:
           content = document.content
@@ -144,8 +178,10 @@ export const documentService = {
       case 'md':
       case 'markdown':
         return this.parseTextFile(file)
+      case 'docx':
+        return this.parseDocxFile(file)
       default:
-        throw new Error(`Unsupported file type: .${extension}. Only TXT and Markdown files are supported.`)
+        throw new Error(`Unsupported file type: .${extension}. Only TXT, Markdown, and DOCX files are supported.`)
     }
   },
 
@@ -169,6 +205,21 @@ export const documentService = {
       reader.onerror = () => reject(new Error('Failed to read file'))
       reader.readAsText(file)
     })
+  },
+
+  async parseDocxFile(file: File): Promise<ParsedDocument> {
+    const blob = await file.arrayBuffer()
+    const result = await mammoth.extractRawText({ arrayBuffer: blob })
+    const content = result.value
+    const title = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ')
+    const wordCount = content.split(/\s+/).filter(word => word.length > 0).length
+    
+    return {
+      title,
+      content: content.trim(),
+      wordCount,
+      characterCount: content.length
+    }
   },
 
   async uploadDocument(file: File, customTitle?: string) {

@@ -32,6 +32,12 @@ const DownloadMenu: React.FC<DownloadMenuProps> = ({
       label: 'Markdown', 
       icon: <FileDown className="h-4 w-4" />,
       description: 'Formatted markdown with metadata'
+    },
+    { 
+      value: 'docx', 
+      label: 'Word Document', 
+      icon: <FileText className="h-4 w-4" />,
+      description: 'Microsoft Word document'
     }
   ]
 
